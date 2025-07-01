@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
@@ -55,29 +54,4 @@ export function useUser() {
   }, []);
 
   return { user, loading, error };
-}
-
-export function useSignOut() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      const { error: signOutError } = await supabase.auth.signOut();
-      if (signOutError) throw signOutError;
-      
-      // Redirect to home page after successful sign out
-      router.push('/');
-      router.refresh(); // Ensure the page is refreshed to reflect auth state
-    } catch (err) {
-      console.error('Error signing out:', err);
-      setError(err instanceof Error ? err : new Error('Failed to sign out'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return { signOut, loading, error };
 }

@@ -22,12 +22,28 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
-import { useUser, useSignOut } from "@/hooks/useUser";
+import { useUser } from "@/hooks/useUser";
+import { signOut } from "@/lib/auth";
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
   const { user, loading: userLoading } = useUser();
-  const { signOut, loading: signOutLoading } = useSignOut();
+  const [signOutLoading, setSignOutLoading] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      setSignOutLoading(true);
+      await signOut();
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    } finally {
+      setSignOutLoading(false);
+    }
+  };
 
   const userInitial = user?.email?.[0]?.toUpperCase() || 'U';
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -103,7 +119,7 @@ export default function DashboardPage() {
                 className="w-full cursor-pointer flex items-center"
                 onClick={(e) => {
                   e.preventDefault();
-                  signOut();
+                  handleSignOut();
                 }}
                 disabled={signOutLoading}
               >
