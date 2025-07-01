@@ -56,8 +56,6 @@ export default function DashboardPage() {
         open={isHelpOpen}
         onOpenChange={setIsHelpOpen}
       />
-
-
     </div>
   );
 }
