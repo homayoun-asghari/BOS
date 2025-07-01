@@ -69,8 +69,69 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[80vh] flex p-0 overflow-hidden">
-        <div className="w-64 border-r p-4 flex flex-col">
+      <DialogContent className="sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-screen flex flex-col sm:flex-row p-0 overflow-hidden">
+        {/* Mobile header */}
+        <div className="sm:hidden p-4 border-b">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-medium">
+              {activeTab === 'general' && 'General Settings'}
+              {activeTab === 'notifications' && 'Notifications'}
+              {activeTab === 'account' && 'Account'}
+              {activeTab === 'security' && 'Security'}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        {/* Mobile tab bar */}
+        <div className="sm:hidden flex overflow-x-auto border-b">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === 'general'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <SettingsIcon className="inline-block h-4 w-4 mr-2" />
+            General
+          </button>
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === 'notifications'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Bell className="inline-block h-4 w-4 mr-2" />
+            Notifications
+          </button>
+          <button
+            onClick={() => setActiveTab('account')}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === 'account'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <User className="inline-block h-4 w-4 mr-2" />
+            Account
+          </button>
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === 'security'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Shield className="inline-block h-4 w-4 mr-2" />
+            Security
+          </button>
+        </div>
+
+        {/* Desktop sidebar */}
+        <div className="hidden sm:flex sm:w-64 border-r p-4 flex-col">
           <DialogHeader className="mb-6">
             <DialogTitle className="text-lg font-medium">Settings</DialogTitle>
           </DialogHeader>
@@ -111,20 +172,21 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
           </nav>
         </div>
 
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
           {activeTab === 'general' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold">General Settings</h2>
+              <h2 className="text-lg sm:text-xl font-semibold">General Settings</h2>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
+                  <div className="flex-1">
                     <h3 className="font-medium">Theme</h3>
                     <p className="text-sm text-muted-foreground">Customize your theme</p>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant={theme === 'light' ? 'default' : 'outline'}
                       size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => setTheme('light')}
                     >
                       <Sun className="h-4 w-4 mr-2" /> Light
@@ -132,6 +194,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                     <Button
                       variant={theme === 'dark' ? 'default' : 'outline'}
                       size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => setTheme('dark')}
                     >
                       <Moon className="h-4 w-4 mr-2" /> Dark
@@ -145,7 +208,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                     <select
                       value={formData.language}
                       onChange={(e) => setFormData({...formData, language: e.target.value})}
-                      className="w-full pl-3 pr-8 py-2 border rounded-md appearance-none bg-background"
+                      className="w-full pl-3 pr-8 py-2.5 text-sm border rounded-md appearance-none bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     >
                       <option value="en">English</option>
                       <option value="es">Español</option>
