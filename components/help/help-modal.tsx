@@ -66,10 +66,45 @@ export function HelpModal({ open, onOpenChange }: HelpModalProps) {
   ];
 
 
+  // Get current chapter for mobile header
+  const currentChapter = chapters.find(c => c.id === selectedChapter);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[80vh] flex p-0 overflow-hidden">
-        <div className="w-64 border-r p-6 overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl h-[90vh] sm:h-[80vh] max-h-screen flex flex-col sm:flex-row p-0 overflow-hidden">
+        {/* Mobile header */}
+        <div className="sm:hidden p-4 border-b">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-medium">
+              {selectedArticle ? selectedArticle.title : currentChapter?.title || 'Help Center'}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        {/* Mobile tab bar */}
+        <div className="sm:hidden flex overflow-x-auto border-b">
+          {!selectedChapter ? (
+            chapters.map((chapter) => (
+              <button
+                key={chapter.id}
+                onClick={() => setSelectedChapter(chapter.id)}
+                className="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {chapter.title}
+              </button>
+            ))
+          ) : (
+            <button 
+              onClick={() => setSelectedChapter(null)}
+              className="px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 border-primary text-primary"
+            >
+              Back to Chapters
+            </button>
+          )}
+        </div>
+
+        {/* Desktop sidebar */}
+        <div className="hidden sm:flex sm:w-64 border-r p-6 flex-col overflow-y-auto">
           <DialogHeader className="mb-6 px-0">
             <DialogTitle className="text-lg font-semibold">
               Help Center
@@ -79,23 +114,23 @@ export function HelpModal({ open, onOpenChange }: HelpModalProps) {
           {!selectedChapter ? (
             <div className="space-y-1">
               {chapters.map((chapter) => (
-                <div 
+                <button
                   key={chapter.id}
-                  className="p-2 rounded-md hover:bg-accent cursor-pointer"
+                  className="w-full text-left p-2 rounded-md hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-colors"
                   onClick={() => setSelectedChapter(chapter.id)}
                 >
                   <div className="flex items-center">
                     <chapter.icon className="h-4 w-4 mr-3 text-muted-foreground" />
                     <span className="text-sm font-medium">{chapter.title}</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
             <div className="space-y-1">
               <button 
                 onClick={() => setSelectedChapter(null)}
-                className="w-full flex items-center p-2 text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full flex items-center p-2 text-left text-sm font-medium text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background rounded-md transition-colors"
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Back to Chapters
@@ -104,34 +139,35 @@ export function HelpModal({ open, onOpenChange }: HelpModalProps) {
               {chapters
                 .find(c => c.id === selectedChapter)
                 ?.articles.map((article) => (
-                  <div 
+                  <button
                     key={article.id}
-                    className="p-2 rounded-md hover:bg-accent cursor-pointer"
+                    className="w-full text-left p-2 rounded-md hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-colors"
                     onClick={() => setSelectedArticle(article)}
                   >
                     <h3 className="text-sm font-medium">{article.title}</h3>
-                  </div>
+                  </button>
                 ))}
             </div>
           )}
         </div>
         
         <div className="flex-1 flex flex-col overflow-hidden">
-          <DialogHeader className="border-b p-6">
+          {/* Desktop header */}
+          <DialogHeader className="hidden sm:flex border-b p-6">
             <DialogTitle className="text-lg font-semibold">
               {selectedArticle?.title || 
-               chapters.find(c => c.id === selectedChapter)?.title || 
+               currentChapter?.title || 
                'Welcome to Help Center'}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
             {selectedArticle ? (
-              <div className="prose dark:prose-invert max-w-3xl">
-                <p className="text-muted-foreground text-sm mb-6">
+              <div className="prose dark:prose-invert max-w-3xl w-full">
+                <p className="text-muted-foreground text-sm mb-4 sm:mb-6">
                   {chapters.find(c => c.articles.some(a => a.id === selectedArticle.id))?.title}
                 </p>
-                <h2 className="text-2xl font-semibold mb-6">{selectedArticle.title}</h2>
+                <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6">{selectedArticle.title}</h2>
                 <div className="space-y-4 text-foreground">
                   <p>{selectedArticle.content}</p>
                   <p>
