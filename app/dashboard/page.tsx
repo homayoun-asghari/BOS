@@ -7,16 +7,16 @@ import { HelpModal } from "@/components/help/help-modal";
 import { TheCode } from "@/components/dashboard/TheCode";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { DashboardActionButton } from "@/components/dashboard/DashboardActionButton";
+import { RoadmapModal } from "@/components/roadmap/roadmap-modal";
 
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false); // Used in handleUserMenuOpenChange
   const { user, loading: userLoading } = useUser();
   const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
+  const [isRoadmapOpen, setIsRoadmapOpen] = useState(false);
   
   const handleUserMenuOpenChange = (open: boolean) => {
-    setIsUserMenuOpen(open);
     if (open) {
       // Close the code accordion when user menu opens
       setIsCodeAccordionOpen(false);
@@ -49,12 +49,9 @@ export default function DashboardPage() {
         {/* Empty space that pushes the button down */}
         <div className="flex-1"></div>
         
-        {/* Dashboard Action Button */}
         <DashboardActionButton 
-          onClick={() => {
-            // Handle button click
-            console.log('Dashboard action button clicked');
-          }}
+          onClick={() => setIsRoadmapOpen(true)}
+          tooltip="Create or view your roadmap"
         />
       </main>
 
@@ -69,6 +66,10 @@ export default function DashboardPage() {
       <HelpModal 
         open={isHelpOpen}
         onOpenChange={setIsHelpOpen}
+      />
+      <RoadmapModal 
+        open={isRoadmapOpen} 
+        onOpenChange={setIsRoadmapOpen} 
       />
     </div>
   );
