@@ -60,9 +60,14 @@ export default function DashboardPage() {
               className="flex items-center gap-2 p-1.5 rounded-full hover:bg-accent transition-colors"
               aria-label="User menu"
             >
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 border border-border">
                 {userAvatar ? (
-                  <AvatarImage src={userAvatar} alt={userName} />
+                  <>
+                    <AvatarImage src={userAvatar} alt={userName} className="object-cover" />
+                    <AvatarFallback className="bg-background text-foreground">
+                      {userInitial}
+                    </AvatarFallback>
+                  </>
                 ) : (
                   <AvatarFallback className="bg-primary/10 text-primary">
                     {userInitial}
