@@ -1,12 +1,12 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useState } from 'react';
 import { useUser } from "@/hooks/useUser";
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { HelpModal } from "@/components/help/help-modal";
 import { TheCode } from "@/components/dashboard/TheCode";
 import { UserMenu } from "@/components/dashboard/UserMenu";
+import { DashboardActionButton } from "@/components/dashboard/DashboardActionButton";
 
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -35,16 +35,13 @@ export default function DashboardPage() {
         {/* Empty space that pushes the button down */}
         <div className="flex-1"></div>
         
-        {/* Fixed bottom container */}
-        <div className="sticky bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm">
-          <div className="p-6">
-            <div className="max-w-2xl mx-auto">
-              <Button size="lg" className="w-full py-6 text-lg font-medium">
-                Start
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Dashboard Action Button */}
+        <DashboardActionButton 
+          onClick={() => {
+            // Handle button click
+            console.log('Dashboard action button clicked');
+          }}
+        />
       </main>
 
       {/* Settings Modal */}
