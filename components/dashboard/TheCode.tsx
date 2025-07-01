@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
-import { Textarea } from "../../components/ui/textarea";
-import { supabase } from '@/lib/supabase';
-import { useUser } from '@/hooks/useUser';
+import { useState, useEffect, useRef, useCallback } from "react";
+
+interface TheCodeProps {
+  isOpen?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
+}
 
 interface PersonalCode {
   id: string;
@@ -15,17 +16,34 @@ interface PersonalCode {
   tempContent?: string;
 }
 
-const TheCode: React.FC = () => {
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { Textarea } from "../../components/ui/textarea";
+import { supabase } from '@/lib/supabase';
+import { useUser } from '@/hooks/useUser';
+
+const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) => {
   const { user } = useUser();
-  const [isOpen, setIsOpen] = useState(false);
+
+  const [isOpen, setIsOpen] = useState(propIsOpen || false);
+  
+  // Sync with parent component's state
+  useEffect(() => {
+    if (propIsOpen !== undefined) {
+      setIsOpen(propIsOpen);
+    }
+  }, [propIsOpen]);
+  
+  const handleOpenChange = useCallback((open: boolean) => {
+    setIsOpen(open);
+    onOpenChange?.(open);
+  }, [onOpenChange]);
+
   const [inputValue, setInputValue] = useState('');
   const [codes, setCodes] = useState<PersonalCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-
 
   // Add a new personal code
   const handleAddCode = async (e: React.MouseEvent) => {
@@ -83,14 +101,14 @@ const TheCode: React.FC = () => {
   };
 
   // Cancel editing
-  const cancelEdit = () => {
-    setCodes(codes.map(c => ({
+  const cancelEdit = useCallback(() => {
+    setCodes(currentCodes => currentCodes.map(c => ({
       ...c,
       isEditing: false,
       tempContent: c.content
     })));
     setEditingId(null);
-  };
+  }, []);
 
   // Delete a personal code
   const handleDeleteCode = async (id: string, e: React.MouseEvent) => {
@@ -138,17 +156,55 @@ const TheCode: React.FC = () => {
     fetchPersonalCodesMemoized();
   }, [fetchPersonalCodesMemoized]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside or on user menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      // Don't do anything if dropdown is closed
+      if (!isOpen) return;
+      
+      const target = event.target as HTMLElement;
+      
+      // Close if clicking on user menu or its items
+      const isUserMenu = target.closest('[role="menu"], [role="menuitem"], [data-radix-collection-item], button[aria-haspopup="menu"]');
+      if (isUserMenu) {
+        if (editingId) {
+          cancelEdit();
+        } else {
+          handleOpenChange(false);
+        }
+        return;
+      }
+      
+      // Close if clicking outside the dropdown
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+        if (editingId) {
+          cancelEdit();
+        } else {
+          handleOpenChange(false);
+        }
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    // Handle Escape key to close dropdown
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (editingId) {
+          cancelEdit();
+        } else {
+          handleOpenChange(false);
+        }
+      }
+    };
+
+    // Add event listeners
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('keydown', handleEscape);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, editingId, cancelEdit, handleOpenChange]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -173,8 +229,8 @@ const TheCode: React.FC = () => {
   return (
     <div className="relative flex-1 max-w-[calc(100%-48px)]" ref={dropdownRef}>
       <div className="relative">
-        <button 
-          onClick={() => setIsOpen(!isOpen)}
+        <button
+          onClick={() => handleOpenChange(!isOpen)}
           className="w-full flex items-center justify-between p-2.5 border border-border rounded-lg text-left hover:border-ring/50 transition-colors bg-background h-10"
           aria-expanded={isOpen}
           aria-haspopup="dialog"
@@ -225,7 +281,7 @@ const TheCode: React.FC = () => {
                                 e.preventDefault();
                                 saveEdit(code);
                               } else if (e.key === 'Escape') {
-cancelEdit();
+                                cancelEdit();
                               }
                             }}
                             autoFocus
@@ -311,5 +367,7 @@ cancelEdit();
     </div>
   );
 };
+
+TheCode.displayName = 'TheCode';
 
 export { TheCode };

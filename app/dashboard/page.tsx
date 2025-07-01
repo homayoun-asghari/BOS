@@ -11,7 +11,17 @@ import { DashboardActionButton } from "@/components/dashboard/DashboardActionBut
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false); // Used in handleUserMenuOpenChange
   const { user, loading: userLoading } = useUser();
+  const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
+  
+  const handleUserMenuOpenChange = (open: boolean) => {
+    setIsUserMenuOpen(open);
+    if (open) {
+      // Close the code accordion when user menu opens
+      setIsCodeAccordionOpen(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -19,12 +29,16 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="h-16 flex items-center px-4">
           {/* The Code Component */}
-          <TheCode />
+          <TheCode 
+            isOpen={isCodeAccordionOpen} 
+            onOpenChange={setIsCodeAccordionOpen} 
+          />
 
           {/* User Menu */}
           <UserMenu 
             user={user}
             loading={userLoading}
+            onOpenChange={handleUserMenuOpenChange}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onOpenHelp={() => setIsHelpOpen(true)}
           />

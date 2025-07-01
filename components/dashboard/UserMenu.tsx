@@ -32,11 +32,12 @@ interface UserMenuProps {
     };
   } | null;
   loading: boolean;
+  onOpenChange?: (open: boolean) => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
 }
 
-export function UserMenu({ user, loading, onOpenSettings, onOpenHelp }: UserMenuProps) {
+export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHelp }: UserMenuProps) {
   const router = useRouter();
   const [signOutLoading, setSignOutLoading] = useState(false);
   
@@ -60,7 +61,7 @@ export function UserMenu({ user, loading, onOpenSettings, onOpenHelp }: UserMenu
 
   return (
     <div className="ml-4 flex-shrink-0">
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild>
           <button className="rounded-full hover:bg-accent transition-colors p-1">
             <Avatar className="h-8 w-8 border border-border">
