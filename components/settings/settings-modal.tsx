@@ -141,16 +141,23 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
 
                 <div className="p-4 border rounded-lg">
                   <label className="block mb-2 text-sm font-medium">Language</label>
-                  <select
-                    value={formData.language}
-                    onChange={(e) => setFormData({...formData, language: e.target.value})}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                    <option value="fr">Français</option>
-                    <option value="de">Deutsch</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={formData.language}
+                      onChange={(e) => setFormData({...formData, language: e.target.value})}
+                      className="w-full pl-3 pr-8 py-2 border rounded-md appearance-none bg-background"
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                      <option value="fr">Français</option>
+                      <option value="de">Deutsch</option>
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
