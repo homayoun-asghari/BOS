@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { 
-  ChevronDown, 
   LogOut, 
   HelpCircle, 
   Zap,
@@ -27,11 +26,12 @@ import { useRouter } from 'next/navigation';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { HelpModal } from "@/components/help/help-modal";
+import { TheCode } from "@/components/dashboard/TheCode";
 
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
   const [signOutLoading, setSignOutLoading] = useState(false);
@@ -59,37 +59,8 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="h-16 flex items-center px-4">
-          {/* Dropdown - Takes full available width */}
-          <div className="relative flex-1 max-w-[calc(100%-48px)]">
-            <button 
-              onClick={() => setIsOpen(!isOpen)}
-              className="w-full flex items-center justify-between p-2.5 border border-border rounded-lg text-left hover:border-ring/50 transition-colors bg-background"
-            >
-              <span className="text-muted-foreground text-sm">Who Do You Want To Become?</span>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {isOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                {Array.from({ length: 30 }).map((_, index) => (
-                  <div 
-                    key={index} 
-                    className="p-3 hover:bg-accent cursor-pointer text-foreground border-b border-border/50 last:border-0"
-                    onClick={() => {
-                      // Handle option selection here
-                      console.log(`Selected option ${index + 1}`);
-                      setIsOpen(false);
-                    }}
-                  >
-                    <p className="font-medium">Lorem Ipsum Option {index + 1}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* The Code Component */}
+          <TheCode />
 
           {/* User Menu */}
           <div className="ml-4 flex-shrink-0">
