@@ -129,7 +129,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
               placeholder="What's your ultimate goal?"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              className="min-h-[100px]"
+              className="min-h-[100px] resize-none"
             />
             <div className="mt-2">
               <Popover>
@@ -145,12 +145,27 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                     {goalDeadline ? format(goalDeadline, "PPP") : <span>Pick a deadline</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
                   <Calendar
                     mode="single"
                     selected={goalDeadline}
                     onSelect={setGoalDeadline}
                     initialFocus
+                    className="bg-background"
+                    classNames={{
+                      day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
+                      day_today: 'bg-accent text-accent-foreground',
+                      day_outside: 'text-muted-foreground opacity-50',
+                      caption: 'flex justify-center pt-1 relative items-center',
+                      caption_label: 'text-sm font-medium',
+                      nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+                      table: 'w-full border-collapse space-y-1',
+                      head_row: 'flex',
+                      head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
+                      row: 'flex w-full mt-2',
+                      cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
+                      day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
+                    }}
                   />
                 </PopoverContent>
               </Popover>
@@ -186,7 +201,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                   placeholder="Describe this milestone"
                   value={milestone.title}
                   onChange={(e) => handleMilestoneChange(milestone.id, 'title', e.target.value)}
-                  className="min-h-[80px]"
+                  className="min-h-[80px] resize-none"
                 />
                 
                 <div>
@@ -207,12 +222,27 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
                       <Calendar
                         mode="single"
                         selected={milestone.deadline}
                         onSelect={(date) => handleMilestoneChange(milestone.id, 'deadline', date)}
                         initialFocus
+                        className="bg-background"
+                        classNames={{
+                          day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
+                          day_today: 'bg-accent text-accent-foreground',
+                          day_outside: 'text-muted-foreground opacity-50',
+                          caption: 'flex justify-center pt-1 relative items-center',
+                          caption_label: 'text-sm font-medium',
+                          nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+                          table: 'w-full border-collapse space-y-1',
+                          head_row: 'flex',
+                          head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
+                          row: 'flex w-full mt-2',
+                          cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
+                          day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
+                        }}
                       />
                     </PopoverContent>
                   </Popover>
@@ -255,7 +285,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                         value={subtask.title}
                         onChange={(e) => handleSubtaskChange(milestone.id, subtask.id, e.target.value)}
                         placeholder="Task description"
-                        className="flex-1 min-h-0 h-auto py-1.5"
+                        className="flex-1 min-h-0 h-auto py-1.5 resize-none"
                       />
                       {milestone.subtasks.length > 1 && (
                         <Button
