@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const userAvatar = user?.user_metadata?.avatar_url || '';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="h-16 flex items-center px-4">
@@ -185,17 +185,21 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="p-6">
-        {/* Main Content */}
-        <div className="max-w-2xl mx-auto">
-          {/* Centered Button */}
-          <div className="flex justify-center pt-12">
-            <Button size="lg" className="px-8 py-6 text-lg font-medium">
-              Action Button
-            </Button>
+      <main className="flex-1 flex flex-col">
+        {/* Empty space that pushes the button down */}
+        <div className="flex-1"></div>
+        
+        {/* Fixed bottom container */}
+        <div className="sticky bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm">
+          <div className="p-6">
+            <div className="max-w-2xl mx-auto">
+              <Button size="lg" className="w-full py-6 text-lg font-medium">
+                Start
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Settings Modal */}
       <SettingsModal 
