@@ -9,7 +9,7 @@ import {
   Zap,
   ChevronRight,
   Mail,
-  User as UserIcon
+  Loader2
 } from "lucide-react";
 import { useState } from 'react';
 import { 
@@ -22,9 +22,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
+import { useUser, useSignOut } from "@/hooks/useUser";
 
 export default function DashboardPage() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, loading: userLoading } = useUser();
+  const { signOut, loading: signOutLoading } = useSignOut();
+
+  const userInitial = user?.email?.[0]?.toUpperCase() || 'U';
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userEmail = user?.email || '';
+  const userAvatar = user?.user_metadata?.avatar_url || '';
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -37,21 +45,32 @@ export default function DashboardPage() {
               aria-label="User menu"
             >
               <Avatar className="h-8 w-8">
-                <AvatarImage src="/placeholder-user.jpg" alt="User" />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <UserIcon className="h-4 w-4" />
-                </AvatarFallback>
+                {userAvatar ? (
+                  <AvatarImage src={userAvatar} alt={userName} />
+                ) : (
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {userInitial}
+                  </AvatarFallback>
+                )}
               </Avatar>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-64" align="end">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">John Doe</p>
-                <p className="text-xs leading-none text-muted-foreground flex items-center">
-                  <Mail className="h-3 w-3 mr-1" />
-                  john@example.com
-                </p>
+                {userLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <p className="text-sm font-medium leading-none">{userName}</p>
+                    {userEmail && (
+                      <p className="text-xs leading-none text-muted-foreground flex items-center">
+                        <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">{userEmail}</span>
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -80,9 +99,25 @@ export default function DashboardPage() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <button className="w-full cursor-pointer">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign out</span>
+              <button 
+                className="w-full cursor-pointer flex items-center"
+                onClick={(e) => {
+                  e.preventDefault();
+                  signOut();
+                }}
+                disabled={signOutLoading}
+              >
+                {signOutLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span>Signing out...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign out</span>
+                  </>
+                )}
               </button>
             </DropdownMenuItem>
           </DropdownMenuContent>
