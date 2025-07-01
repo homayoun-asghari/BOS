@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useUser } from '@/hooks/useUser';
+import { supabase } from '@/lib/supabase';
 import { Calendar as CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -108,17 +110,77 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     }));
   };
 
-  const handleSave = (): void => {
-    // TODO: Implement save logic with Supabase
-    console.log('Saving roadmap:', { goal, goalDeadline, milestones });
-    onOpenChange(false);
-  };
+  const { user } = useUser();
+
+  const handleSave = useCallback(async (): Promise<void> => {
+    if (!user) {
+      console.error('User not authenticated');
+      return;
+    }
+
+    try {
+      // Start a transaction
+      const { data: roadmap, error: roadmapError } = await supabase
+        .from('roadmaps')
+        .insert({
+          user_id: user.id,
+          title: 'My Roadmap',
+          final_goal: goal,
+          start_date: new Date().toISOString(),
+          end_date: goalDeadline?.toISOString(),
+          status: 'in_progress'
+        })
+        .select('id')
+        .single();
+
+      if (roadmapError) throw roadmapError;
+
+      // Save each milestone
+      for (const milestone of milestones) {
+        const { data: savedMilestone, error: milestoneError } = await supabase
+          .from('milestones')
+          .insert({
+            roadmap_id: roadmap.id,
+            title: milestone.title || 'Untitled Milestone',
+            due_date: milestone.deadline?.toISOString(),
+            status: 'pending',
+            order_index: milestones.indexOf(milestone)
+          })
+          .select('id')
+          .single();
+
+        if (milestoneError) throw milestoneError;
+
+        // Save each subtask for the milestone
+        const tasksToInsert = milestone.subtasks.map((subtask, index) => ({
+          milestone_id: savedMilestone.id,
+          title: subtask.title || 'Untitled Task',
+          status: subtask.completed ? 'done' : 'todo',
+          priority: 'medium',
+          order_index: index
+        }));
+
+        if (tasksToInsert.length > 0) {
+          const { error: tasksError } = await supabase
+            .from('tasks')
+            .insert(tasksToInsert);
+
+          if (tasksError) throw tasksError;
+        }
+      }
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error saving roadmap:', error);
+      // You might want to show an error message to the user here
+    }
+  }, [user, goal, goalDeadline, milestones, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Your Roadmap to Success</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">What you want?</DialogTitle>
         </DialogHeader>
 
         {/* Goal Section */}
