@@ -211,12 +211,17 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                   </div>
                 </div>
 
-                <div className="p-4 border border-destructive rounded-lg">
-                  <h3 className="font-medium text-destructive">Danger Zone</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
+                <div className="p-4 border-2 border-red-200 dark:border-red-900 rounded-lg bg-red-50 dark:bg-red-950/30">
+                  <h3 className="font-medium text-red-700 dark:text-red-400">Danger Zone</h3>
+                  <p className="text-sm text-red-600 dark:text-red-400/80 mb-4">
                     Once you delete your account, there is no going back. Please be certain.
                   </p>
-                  <Button variant="destructive" size="sm" onClick={() => {}}>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={() => {}}
+                    className="font-medium bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 transition-colors"
+                  >
                     Delete Account
                   </Button>
                 </div>
