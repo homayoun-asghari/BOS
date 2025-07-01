@@ -65,15 +65,28 @@ export default function DashboardPage() {
               onClick={() => setIsOpen(!isOpen)}
               className="w-full flex items-center justify-between p-2.5 border border-border rounded-lg text-left hover:border-ring/50 transition-colors bg-background"
             >
-              <span className="text-muted-foreground text-sm">Select an option</span>
+              <span className="text-muted-foreground text-sm">Who Do You Want To Become?</span>
               <ChevronDown className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             
             {isOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg">
-                <div className="p-2 hover:bg-accent cursor-pointer text-foreground">Option 1</div>
-                <div className="p-2 hover:bg-accent cursor-pointer text-foreground">Option 2</div>
-                <div className="p-2 hover:bg-accent cursor-pointer text-foreground">Option 3</div>
+              <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                {Array.from({ length: 30 }).map((_, index) => (
+                  <div 
+                    key={index} 
+                    className="p-3 hover:bg-accent cursor-pointer text-foreground border-b border-border/50 last:border-0"
+                    onClick={() => {
+                      // Handle option selection here
+                      console.log(`Selected option ${index + 1}`);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <p className="font-medium">Lorem Ipsum Option {index + 1}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
