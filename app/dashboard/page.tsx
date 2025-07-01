@@ -26,9 +26,11 @@ import { signOut } from "@/lib/auth";
 import { useRouter } from 'next/navigation';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { SettingsModal } from "@/components/settings/settings-modal";
+import { HelpModal } from "@/components/help/help-modal";
 
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
@@ -104,11 +106,12 @@ export default function DashboardPage() {
               <SettingsIcon className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/help" className="w-full cursor-pointer">
-                <HelpCircle className="mr-2 h-4 w-4" />
-                <span>Help & Support</span>
-              </Link>
+            <DropdownMenuItem 
+              className="w-full cursor-pointer"
+              onClick={() => setIsHelpOpen(true)}
+            >
+              <HelpCircle className="mr-2 h-4 w-4" />
+              <span>Help & Support</span>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/upgrade" className="w-full cursor-pointer">
@@ -153,6 +156,12 @@ export default function DashboardPage() {
         open={isSettingsOpen} 
         onOpenChange={setIsSettingsOpen} 
         user={user} 
+      />
+      
+      {/* Help Modal */}
+      <HelpModal 
+        open={isHelpOpen}
+        onOpenChange={setIsHelpOpen}
       />
 
       {/* Main Content */}
