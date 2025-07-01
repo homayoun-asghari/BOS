@@ -3,11 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { motion, Variants } from "framer-motion";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+
+import { AuthModal } from "@/components/auth/AuthModal";
 
 export function AnimatedHero() {
   const [mounted, setMounted] = useState(false);
-  const router = useRouter();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -73,7 +74,7 @@ export function AnimatedHero() {
         <Button 
           size="lg" 
           className="text-2xl px-10 py-7 rounded-full bg-foreground text-background hover:bg-primary hover:scale-105 hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 transform-gpu group-hover:rotate-1"
-          onClick={() => router.push('/auth')}
+          onClick={() => setIsAuthModalOpen(true)}
         >
           <span className="relative">
             <span className="absolute inset-0 bg-gradient-to-r from-primary to-foreground opacity-0 group-hover:opacity-100 blur-md transition-opacity duration-300"></span>
@@ -81,6 +82,8 @@ export function AnimatedHero() {
           </span>
         </Button>
       </motion.div>
+      
+      <AuthModal open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen} />
       
       <style jsx global>{`
         @keyframes gradient {
