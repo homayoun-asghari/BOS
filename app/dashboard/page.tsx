@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { 
   ChevronDown, 
   LogOut, 
-  Settings, 
   HelpCircle, 
   Zap,
   ChevronRight,
@@ -25,8 +24,11 @@ import Link from "next/link";
 import { useUser } from "@/hooks/useUser";
 import { signOut } from "@/lib/auth";
 import { useRouter } from 'next/navigation';
+import { Settings as SettingsIcon } from 'lucide-react';
+import { SettingsModal } from "@/components/settings/settings-modal";
 
 export default function DashboardPage() {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
@@ -95,11 +97,12 @@ export default function DashboardPage() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/settings" className="w-full cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </Link>
+            <DropdownMenuItem 
+              className="w-full cursor-pointer"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <SettingsIcon className="mr-2 h-4 w-4" />
+              <span>Settings</span>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/help" className="w-full cursor-pointer">
@@ -144,6 +147,13 @@ export default function DashboardPage() {
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
+
+      {/* Settings Modal */}
+      <SettingsModal 
+        open={isSettingsOpen} 
+        onOpenChange={setIsSettingsOpen} 
+        user={user} 
+      />
 
       {/* Main Content */}
       <div className="max-w-2xl mx-auto">
