@@ -86,6 +86,8 @@
 
 
 ## naming conventions
+they must be conceptual and meaningful and follow these:
+
 | Thing                 | Convention        | Example                     |
 | --------------------- | ----------------- | --------------------------- |
 | Files/Folders         | `kebab-case`      | `auth-modal.tsx`            |

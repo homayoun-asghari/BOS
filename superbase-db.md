@@ -181,7 +181,8 @@ CREATE TABLE public.milestones (
   roadmap_id uuid NOT NULL REFERENCES public.roadmaps(id) ON DELETE CASCADE,
   title text NOT NULL,
   description text,
-  due_date date,
+  start_date date,
+  end_date date,
   status text DEFAULT 'pending', -- e.g., 'pending', 'in_progress', 'completed'
   order_index int, -- For displaying milestones in a specific order
   created_at timestamptz DEFAULT now(),

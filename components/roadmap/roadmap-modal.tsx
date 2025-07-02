@@ -60,7 +60,15 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
         if (m.id === milestoneId) {
           return {
             ...m,
-            subtasks: [...m.subtasks, { id: Date.now().toString(), title: '', completed: false }]
+            subtasks: [
+              ...m.subtasks, 
+              { 
+                id: Date.now().toString(), 
+                title: '', 
+                completed: false,
+                priority: 'medium'
+              }
+            ]
           };
         }
         return m;
@@ -110,11 +118,20 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     })));
   };
 
-  const handleTaskToggleComplete = (milestoneId: string, taskId: string, completed: boolean) => {
+  const handleTaskDueDateChange = (milestoneId: string, taskId: string, dueDate?: Date) => {
     setMilestones(milestones.map(m => ({
       ...m,
       subtasks: m.id === milestoneId
-        ? m.subtasks.map(t => t.id === taskId ? { ...t, completed } : t)
+        ? m.subtasks.map(t => t.id === taskId ? { ...t, dueDate } : t)
+        : m.subtasks
+    })));
+  };
+
+  const handleTaskPriorityChange = (milestoneId: string, taskId: string, priority: 'low' | 'medium' | 'high') => {
+    setMilestones(milestones.map(m => ({
+      ...m,
+      subtasks: m.id === milestoneId
+        ? m.subtasks.map(t => t.id === taskId ? { ...t, priority } : t)
         : m.subtasks
     })));
   };
@@ -232,7 +249,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                 onAddTask={addSubtask}
                 onRemoveTask={removeSubtask}
                 onTaskTitleChange={handleTaskTitleChange}
-                onTaskToggleComplete={handleTaskToggleComplete}
+                onTaskDueDateChange={handleTaskDueDateChange}
+                onTaskPriorityChange={handleTaskPriorityChange}
                 onRemove={removeMilestone}
                 subtasks={milestone.subtasks}
                 index={index}

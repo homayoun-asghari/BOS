@@ -9,6 +9,8 @@ export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
+  dueDate?: Date;
+  priority?: 'low' | 'medium' | 'high';
 }
 
 interface MilestoneItemProps {
@@ -25,7 +27,8 @@ interface MilestoneItemProps {
   onAddTask: (milestoneId: string) => void;
   onRemoveTask: (milestoneId: string, taskId: string) => void;
   onTaskTitleChange: (milestoneId: string, taskId: string, title: string) => void;
-  onTaskToggleComplete: (milestoneId: string, taskId: string, completed: boolean) => void;
+  onTaskDueDateChange: (milestoneId: string, taskId: string, dueDate?: Date) => void;
+  onTaskPriorityChange: (milestoneId: string, taskId: string, priority: 'low' | 'medium' | 'high') => void;
   onRemove: (id: string) => void;
 }
 
@@ -43,7 +46,8 @@ export function MilestoneItem({
   onAddTask,
   onRemoveTask,
   onTaskTitleChange,
-  onTaskToggleComplete,
+  onTaskDueDateChange,
+  onTaskPriorityChange,
   onRemove,
 }: MilestoneItemProps) {
   // Set default start date if not already set
@@ -114,9 +118,11 @@ export function MilestoneItem({
               key={subtask.id}
               id={subtask.id}
               title={subtask.title}
-              completed={subtask.completed}
+              dueDate={subtask.dueDate}
+              priority={subtask.priority || 'medium'}
               onTitleChange={(taskId, newTitle) => onTaskTitleChange(id, taskId, newTitle)}
-              onToggleComplete={(taskId, completed) => onTaskToggleComplete(id, taskId, completed)}
+              onDueDateChange={(taskId, dueDate) => onTaskDueDateChange(id, taskId, dueDate)}
+              onPriorityChange={(taskId, priority) => onTaskPriorityChange(id, taskId, priority)}
               onRemove={(taskId) => onRemoveTask(id, taskId)}
               showRemove={subtasks.length > 1}
             />
