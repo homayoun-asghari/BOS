@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "@/hooks/useUser";
+import { supabase } from "@/lib/supabase";
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { HelpModal } from "@/components/help/help-modal";
 import { TheCode } from "@/components/dashboard/TheCode";
@@ -17,6 +18,34 @@ export default function DashboardPage() {
   const { user, loading: userLoading } = useUser();
   const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
   const [isRoadmapOpen, setIsRoadmapOpen] = useState(false);
+  const [hasRoadmap, setHasRoadmap] = useState(false);
+  const [loadingRoadmap, setLoadingRoadmap] = useState(true);
+
+  useEffect(() => {
+    const checkRoadmap = async () => {
+      if (!user) {
+        setLoadingRoadmap(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('roadmaps')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        if (error) throw error;
+        setHasRoadmap(!!(data && data.length > 0));
+      } catch (error) {
+        console.error('Error checking for roadmap:', error);
+      } finally {
+        setLoadingRoadmap(false);
+      }
+    };
+
+    checkRoadmap();
+  }, [user]);
 
   const handleUserMenuOpenChange = (open: boolean) => {
     if (open) {
@@ -51,14 +80,18 @@ export default function DashboardPage() {
           </div>
         </main>
 
-        <div className="sticky bottom-4 z-30 w-full px-4">
-          <div className="max-w-4xl mx-auto">
-            <DashboardActionButton
-              onClick={() => setIsRoadmapOpen(true)}
-              tooltip="Create or view your roadmap"
-            />
+        {!loadingRoadmap && !hasRoadmap && (
+          <div className="sticky bottom-4 z-30 w-full px-4">
+            <div className="max-w-4xl mx-auto">
+              <DashboardActionButton
+                onClick={() => setIsRoadmapOpen(true)}
+                tooltip="Create your roadmap"
+              >
+                Create Roadmap
+              </DashboardActionButton>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Modals */}

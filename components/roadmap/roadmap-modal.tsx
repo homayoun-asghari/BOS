@@ -21,14 +21,60 @@ interface Milestone {
 interface RoadmapModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  roadmap?: {
+    id: string;
+    final_goal: string;
+    start_date: string;
+    end_date: string;
+    milestones: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      order_index: number;
+      tasks: Array<{
+        id: string;
+        title: string;
+        description: string;
+        due_date: string | null;
+        status: 'todo' | 'in_progress' | 'completed' | 'done';
+        priority: 'low' | 'medium' | 'high';
+        order_index: number;
+      }>;
+    }>;
+  } | null;
 }
 
-export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
-  const [goal, setGoal] = useState('');
-  const [goalStartDate, setGoalStartDate] = useState<Date | undefined>(new Date());
-  const [goalEndDate, setGoalEndDate] = useState<Date | undefined>();
-  const [milestones, setMilestones] = useState<Milestone[]>([
-    {
+export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps) {
+  const [goal, setGoal] = useState(roadmap?.final_goal || '');
+  const [goalStartDate, setGoalStartDate] = useState<Date | undefined>(
+    roadmap?.start_date ? new Date(roadmap.start_date) : new Date()
+  );
+  const [goalEndDate, setGoalEndDate] = useState<Date | undefined>(
+    roadmap?.end_date ? new Date(roadmap.end_date) : undefined
+  );
+  
+  const [milestones, setMilestones] = useState<Milestone[]>(() => {
+    if (roadmap?.milestones?.length) {
+      return roadmap.milestones.map(milestone => ({
+        id: milestone.id,
+        title: milestone.title,
+        startDate: milestone.start_date ? new Date(milestone.start_date) : undefined,
+        endDate: milestone.end_date ? new Date(milestone.end_date) : undefined,
+        subtasks: milestone.tasks?.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          completed: task.status === 'completed' || task.status === 'done',
+          priority: task.priority,
+          dueDate: task.due_date ? new Date(task.due_date) : undefined
+        })) || []
+      }));
+    }
+    
+    // Default empty milestone if no roadmap or milestones
+    return [{
       id: '1',
       title: '',
       startDate: undefined,
@@ -40,8 +86,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
         priority: 'medium' as const,
         dueDate: undefined 
       }]
-    }
-  ]);
+    }];
+  });
 
   const addMilestone = useCallback(() => {
     setMilestones(prevMilestones => [
