@@ -8,6 +8,7 @@ import { TheCode } from "@/components/dashboard/TheCode";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { DashboardActionButton } from "@/components/dashboard/DashboardActionButton";
 import { RoadmapModal } from "@/components/roadmap/roadmap-modal";
+import { RoadmapVisualization } from "@/components/dashboard/roadmap-visualization";
 
 export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -46,8 +47,13 @@ export default function DashboardPage() {
       </header>
 
       <main className="flex-1 flex flex-col">
-        {/* Empty space that pushes the button down */}
-        <div className="flex-1"></div>
+        <div className="flex-1 flex items-start justify-center overflow-hidden p-4">
+          <div className="w-full max-w-4xl h-full overflow-y-auto rounded-lg border border-border shadow-sm">
+            <div className="p-4">
+              <RoadmapVisualization />
+            </div>
+          </div>
+        </div>
         
         <DashboardActionButton 
           onClick={() => setIsRoadmapOpen(true)}
