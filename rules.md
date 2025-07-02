@@ -83,3 +83,14 @@
 ```tsx
 <div className="bg-white text-black dark:bg-black dark:text-white" />
 
+
+
+## naming conventions
+| Thing                 | Convention        | Example                     |
+| --------------------- | ----------------- | --------------------------- |
+| Files/Folders         | `kebab-case`      | `auth-modal.tsx`            |
+| React Components      | `PascalCase`      | `AuthModal.tsx`             |
+| Functions/Variables   | `camelCase`       | `getUserData`, `isLoggedIn` |
+| Environment Variables | `SCREAMING_SNAKE` | `SUPABASE_URL`              |
+ 
+

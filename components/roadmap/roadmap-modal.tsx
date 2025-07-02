@@ -188,7 +188,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Create Your Roadmap</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">What Do You Want?</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
