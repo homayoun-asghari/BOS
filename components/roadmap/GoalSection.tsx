@@ -30,7 +30,7 @@ export function GoalSection({
     }
   }, [onStartDateChange, startDate]);
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="relative">
         <Textarea
           placeholder="Add Your Final Goal"
@@ -40,30 +40,29 @@ export function GoalSection({
               onGoalChange(e.target.value);
             }
           }}
-          className="min-h-[40px] max-h-[40px] resize-none pr-16"
+          className="min-h-[40px] max-h-[40px] resize-none pr-16 text-sm sm:text-base"
         />
         <div className="absolute right-2 bottom-2 text-xs text-muted-foreground">
           {goal.length}/{MAX_GOAL_LENGTH}
         </div>
       </div>
       
-      
-        <div className="grid grid-cols-2 gap-4 pt-2">
-          <DatePicker
-            date={startDate}
-            onSelect={onStartDateChange}
-            label="Start Date"
-            placeholder="Pick start date"
-          />
-          <DatePicker
-            date={endDate}
-            onSelect={onEndDateChange}
-            label="End Date"
-            placeholder="Pick end date"
-            fromDate={startDate}
-            disabled={(date) => startDate ? date < startDate : false}
-          />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
+        <DatePicker
+          date={startDate}
+          onSelect={onStartDateChange}
+          label="Start Date"
+          placeholder="Pick start date"
+        />
+        <DatePicker
+          date={endDate}
+          onSelect={onEndDateChange}
+          label="End Date"
+          placeholder="Pick end date"
+          fromDate={startDate}
+          disabled={(date) => startDate ? date < startDate : false}
+        />
+      </div>
 
     </div>
   );

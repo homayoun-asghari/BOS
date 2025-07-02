@@ -273,9 +273,9 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold mb-3">What Do You Want?</DialogTitle>
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] sm:max-h-[80vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader className="px-1">
+          <DialogTitle className="text-xl sm:text-2xl font-bold mb-2 sm:mb-3">What Do You Want?</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -288,10 +288,10 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
             onEndDateChange={setGoalEndDate}
           />
 
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Milestones</h3>
-              <Button size="sm" variant="outline" onClick={addMilestone}>
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
+              <h3 className="text-base sm:text-lg font-medium">Milestones</h3>
+              <Button size="sm" variant="outline" onClick={addMilestone} className="w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-1" /> Add Milestone
               </Button>
             </div>
@@ -319,11 +319,13 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
             ))}
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="mt-2 sm:mt-0">
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Roadmap</Button>
+            <Button onClick={handleSave} className="w-full sm:w-auto">
+              Save Roadmap
+            </Button>
           </div>
         </div>
       </DialogContent>

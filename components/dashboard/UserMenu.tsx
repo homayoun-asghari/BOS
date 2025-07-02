@@ -80,7 +80,7 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHe
             </Avatar>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64" align="end">
+        <DropdownMenuContent className="w-64 bg-background border-border shadow-lg" align="end">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               {loading ? (

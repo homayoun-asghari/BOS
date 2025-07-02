@@ -58,17 +58,17 @@ export function MilestoneItem({
   }, [id, onStartDateChange, startDate]);
   
   return (
-    <div className="border rounded-lg p-4 space-y-4">
-      <div className="flex justify-between items-start">
-        <h4 className="font-medium">Milestone {index + 1}</h4>
+    <div className="border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+      <div className="flex justify-between items-start gap-2">
+        <h4 className="font-medium text-sm sm:text-base">Milestone {index + 1}</h4>
         {showRemove && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-6 w-6 flex-shrink-0"
             onClick={() => onRemove(id)}
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
           </Button>
         )}
       </div>
@@ -77,11 +77,11 @@ export function MilestoneItem({
         placeholder="Describe this milestone"
         value={title}
         onChange={(e) => onTitleChange(id, e.target.value)}
-        className="h-9"
+        className="h-9 text-sm sm:text-base"
       />
 
-      <div className="space-y-4 pt-2">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-3 sm:space-y-4 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <DatePicker
             date={startDate}
             onSelect={(date) => onStartDateChange(id, date)}
