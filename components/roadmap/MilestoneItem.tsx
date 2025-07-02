@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TaskItem } from './TaskItem';
 
@@ -13,12 +14,14 @@ export interface Subtask {
 interface MilestoneItemProps {
   id: string;
   title: string;
-  deadline: Date | null;
+  startDate?: Date;
+  endDate?: Date;
+  onStartDateChange: (id: string, date?: Date) => void;
+  onEndDateChange: (id: string, date?: Date) => void;
   subtasks: Subtask[];
   index: number;
   showRemove: boolean;
   onTitleChange: (id: string, title: string) => void;
-  onDeadlineChange: (id: string, deadline: Date | null) => void;
   onAddTask: (milestoneId: string) => void;
   onRemoveTask: (milestoneId: string, taskId: string) => void;
   onTaskTitleChange: (milestoneId: string, taskId: string, title: string) => void;
@@ -29,18 +32,27 @@ interface MilestoneItemProps {
 export function MilestoneItem({
   id,
   title,
-  deadline,
+  startDate,
+  endDate,
+  onStartDateChange,
+  onEndDateChange,
   subtasks,
   index,
   showRemove,
   onTitleChange,
-  onDeadlineChange,
   onAddTask,
   onRemoveTask,
   onTaskTitleChange,
   onTaskToggleComplete,
   onRemove,
 }: MilestoneItemProps) {
+  // Set default start date if not already set
+  useEffect(() => {
+    if (!startDate) {
+      onStartDateChange(id, new Date());
+    }
+  }, [id, onStartDateChange, startDate]);
+  
   return (
     <div className="border rounded-lg p-4 space-y-4">
       <div className="flex justify-between items-start">
@@ -57,19 +69,31 @@ export function MilestoneItem({
         )}
       </div>
 
-      <Textarea
+      <Input
         placeholder="Describe this milestone"
         value={title}
         onChange={(e) => onTitleChange(id, e.target.value)}
-        className="min-h-[80px] resize-none"
+        className="h-9"
       />
 
-      <DatePicker
-        date={deadline || undefined}
-        onSelect={(date) => onDeadlineChange(id, date || null)}
-        label="Deadline"
-        placeholder="Pick a deadline"
-      />
+      <div className="space-y-4 pt-2">
+        <div className="grid grid-cols-2 gap-4">
+          <DatePicker
+            date={startDate}
+            onSelect={(date) => onStartDateChange(id, date)}
+            label="Start Date"
+            placeholder="Pick start date"
+          />
+          <DatePicker
+            date={endDate}
+            onSelect={(date) => onEndDateChange(id, date)}
+            label="End Date"
+            placeholder="Pick end date"
+            fromDate={startDate}
+            disabled={(date) => startDate ? date < startDate : false}
+          />
+        </div>
+      </div>
 
       <div className="space-y-2 mt-4">
         <div className="flex justify-between items-center">
@@ -84,18 +108,20 @@ export function MilestoneItem({
           </Button>
         </div>
 
-        {subtasks.map((subtask) => (
-          <TaskItem
-            key={subtask.id}
-            id={subtask.id}
-            title={subtask.title}
-            completed={subtask.completed}
-            onTitleChange={(taskId, newTitle) => onTaskTitleChange(id, taskId, newTitle)}
-            onToggleComplete={(taskId, completed) => onTaskToggleComplete(id, taskId, completed)}
-            onRemove={(taskId) => onRemoveTask(id, taskId)}
-            showRemove={subtasks.length > 1}
-          />
-        ))}
+        <div className="space-y-2">
+          {subtasks.map((subtask) => (
+            <TaskItem
+              key={subtask.id}
+              id={subtask.id}
+              title={subtask.title}
+              completed={subtask.completed}
+              onTitleChange={(taskId, newTitle) => onTaskTitleChange(id, taskId, newTitle)}
+              onToggleComplete={(taskId, completed) => onTaskToggleComplete(id, taskId, completed)}
+              onRemove={(taskId) => onRemoveTask(id, taskId)}
+              showRemove={subtasks.length > 1}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

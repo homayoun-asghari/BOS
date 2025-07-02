@@ -13,7 +13,8 @@ import type { Subtask } from './MilestoneItem';
 interface Milestone {
   id: string;
   title: string;
-  deadline: Date | null;
+  startDate?: Date;
+  endDate?: Date;
   subtasks: Subtask[];
 }
 
@@ -30,7 +31,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     {
       id: '1',
       title: '',
-      deadline: null,
+      startDate: undefined,
+      endDate: undefined,
       subtasks: [{ id: Date.now().toString(), title: '', completed: false }]
     }
   ]);
@@ -41,7 +43,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
       {
         id: Date.now().toString(),
         title: '',
-        deadline: null,
+        startDate: undefined,
+        endDate: undefined,
         subtasks: [{ id: Date.now().toString(), title: '', completed: false }]
       }
     ]);
@@ -86,9 +89,15 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     ));
   };
 
-  const handleMilestoneDeadlineChange = (id: string, deadline: Date | null) => {
+  const handleMilestoneStartDateChange = (id: string, startDate?: Date) => {
     setMilestones(milestones.map(m => 
-      m.id === id ? { ...m, deadline } : m
+      m.id === id ? { ...m, startDate } : m
+    ));
+  };
+
+  const handleMilestoneEndDateChange = (id: string, endDate?: Date) => {
+    setMilestones(milestones.map(m => 
+      m.id === id ? { ...m, endDate } : m
     ));
   };
 
@@ -152,7 +161,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
           .insert({
             roadmap_id: roadmap.id,
             title: milestone.title || 'Untitled Milestone',
-            due_date: milestone.deadline ? formatDateForDB(milestone.deadline) : null,
+            start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
+            end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
             status: 'pending',
             order_index: milestones.indexOf(milestone)
           })
@@ -188,7 +198,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">What Do You Want?</DialogTitle>
+          <DialogTitle className="text-2xl font-bold mb-3">What Do You Want?</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -214,17 +224,19 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                 key={milestone.id}
                 id={milestone.id}
                 title={milestone.title}
-                deadline={milestone.deadline}
-                subtasks={milestone.subtasks}
-                index={index}
-                showRemove={milestones.length > 1}
+                startDate={milestone.startDate}
+                endDate={milestone.endDate}
                 onTitleChange={handleMilestoneTitleChange}
-                onDeadlineChange={handleMilestoneDeadlineChange}
+                onStartDateChange={handleMilestoneStartDateChange}
+                onEndDateChange={handleMilestoneEndDateChange}
                 onAddTask={addSubtask}
                 onRemoveTask={removeSubtask}
                 onTaskTitleChange={handleTaskTitleChange}
                 onTaskToggleComplete={handleTaskToggleComplete}
                 onRemove={removeMilestone}
+                subtasks={milestone.subtasks}
+                index={index}
+                showRemove={milestones.length > 1}
               />
             ))}
           </div>

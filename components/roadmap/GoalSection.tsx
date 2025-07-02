@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 
@@ -22,6 +23,12 @@ export function GoalSection({
   endDate,
   onEndDateChange,
 }: GoalSectionProps) {
+  // Set default start date if not already set
+  useEffect(() => {
+    if (!startDate) {
+      onStartDateChange(new Date());
+    }
+  }, [onStartDateChange, startDate]);
   return (
     <div className="space-y-4">
       <div className="relative">
@@ -40,22 +47,24 @@ export function GoalSection({
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        <DatePicker
-          date={startDate}
-          onSelect={onStartDateChange}
-          label="Start Date"
-          placeholder="Pick start date"
-        />
-        <DatePicker
-          date={endDate}
-          onSelect={onEndDateChange}
-          label="End Date"
-          placeholder="Pick end date"
-          fromDate={startDate}
-          disabled={(date) => startDate ? date < startDate : false}
-        />
-      </div>
+      
+        <div className="grid grid-cols-2 gap-4 pt-2">
+          <DatePicker
+            date={startDate}
+            onSelect={onStartDateChange}
+            label="Start Date"
+            placeholder="Pick start date"
+          />
+          <DatePicker
+            date={endDate}
+            onSelect={onEndDateChange}
+            label="End Date"
+            placeholder="Pick end date"
+            fromDate={startDate}
+            disabled={(date) => startDate ? date < startDate : false}
+          />
+        </div>
+
     </div>
   );
 }
