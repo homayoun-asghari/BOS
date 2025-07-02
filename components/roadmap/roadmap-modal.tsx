@@ -3,25 +3,17 @@
 import { useState, useCallback } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { supabase } from '@/lib/supabase';
-import { Calendar as CalendarIcon, Plus, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-
-interface Subtask {
-  id: string;
-  title: string;
-  completed: boolean;
-}
+import { GoalSection } from './GoalSection';
+import { MilestoneItem } from './MilestoneItem';
+import type { Subtask } from './MilestoneItem';
 
 interface Milestone {
   id: string;
   title: string;
-  deadline: Date | undefined;
+  deadline: Date | null;
   subtasks: Subtask[];
 }
 
@@ -38,82 +30,89 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     {
       id: '1',
       title: '',
-      deadline: undefined,
-      subtasks: [{ id: '1-1', title: '', completed: false }]
+      deadline: null,
+      subtasks: [{ id: Date.now().toString(), title: '', completed: false }]
     }
   ]);
 
-  const addMilestone = () => {
-    const newId = Date.now().toString();
-    setMilestones([
-      ...milestones,
+  const addMilestone = useCallback(() => {
+    setMilestones(prevMilestones => [
+      ...prevMilestones,
       {
-        id: newId,
+        id: Date.now().toString(),
         title: '',
-        deadline: undefined,
-        subtasks: [{ id: `${newId}-1`, title: '', completed: false }]
+        deadline: null,
+        subtasks: [{ id: Date.now().toString(), title: '', completed: false }]
       }
     ]);
-  };
+  }, []);
 
-  const removeMilestone = (id: string) => {
-    if (milestones.length > 1) {
-      setMilestones(milestones.filter(m => m.id !== id));
-    }
-  };
+  const removeMilestone = useCallback((id: string) => {
+    setMilestones((prevMilestones) => prevMilestones.filter((m) => m.id !== id));
+  }, []);
 
-  const addSubtask = (milestoneId: string) => {
-    setMilestones(milestones.map(m => {
-      if (m.id === milestoneId) {
-        return {
-          ...m,
-          subtasks: [
-            ...m.subtasks,
-            { id: `${milestoneId}-${Date.now()}`, title: '', completed: false }
-          ]
-        };
-      }
-      return m;
-    }));
-  };
-
-  const removeSubtask = (milestoneId: string, subtaskId: string) => {
-    setMilestones(milestones.map(m => {
-      if (m.id === milestoneId) {
-        const newSubtasks = m.subtasks.filter(s => s.id !== subtaskId);
-        // Ensure at least one subtask remains
-        if (newSubtasks.length === 0) {
-          newSubtasks.push({ id: `${milestoneId}-${Date.now()}`, title: '', completed: false });
+  const addSubtask = useCallback((milestoneId: string) => {
+    setMilestones((prevMilestones) =>
+      prevMilestones.map((m) => {
+        if (m.id === milestoneId) {
+          return {
+            ...m,
+            subtasks: [...m.subtasks, { id: Date.now().toString(), title: '', completed: false }]
+          };
         }
-        return { ...m, subtasks: newSubtasks };
-      }
-      return m;
-    }));
-  };
+        return m;
+      })
+    );
+  }, []);
 
-  const handleMilestoneChange = (id: string, field: 'title' | 'deadline', value: string | Date | undefined) => {
+  const removeSubtask = useCallback((milestoneId: string, subtaskId: string) => {
+    setMilestones((prevMilestones) =>
+      prevMilestones.map((m) => {
+        if (m.id === milestoneId) {
+          const newSubtasks = m.subtasks.filter((s) => s.id !== subtaskId);
+          if (newSubtasks.length === 0) {
+            newSubtasks.push({ id: Date.now().toString(), title: '', completed: false });
+          }
+          return { ...m, subtasks: newSubtasks };
+        }
+        return m;
+      })
+    );
+  }, []);
+
+  const handleMilestoneTitleChange = (id: string, title: string) => {
     setMilestones(milestones.map(m => 
-      m.id === id ? { ...m, [field]: value } : m
+      m.id === id ? { ...m, title } : m
     ));
   };
 
-  const handleSubtaskChange = (milestoneId: string, subtaskId: string, value: string): void => {
-    setMilestones(milestones.map(m => {
-      if (m.id === milestoneId) {
-        return {
-          ...m,
-          subtasks: m.subtasks.map(s => 
-            s.id === subtaskId ? { ...s, title: value } : s
-          )
-        };
-      }
-      return m;
-    }));
+  const handleMilestoneDeadlineChange = (id: string, deadline: Date | null) => {
+    setMilestones(milestones.map(m => 
+      m.id === id ? { ...m, deadline } : m
+    ));
+  };
+
+  const handleTaskTitleChange = (milestoneId: string, taskId: string, title: string) => {
+    setMilestones(milestones.map(m => ({
+      ...m,
+      subtasks: m.id === milestoneId 
+        ? m.subtasks.map(t => t.id === taskId ? { ...t, title } : t)
+        : m.subtasks
+    })));
+  };
+
+  const handleTaskToggleComplete = (milestoneId: string, taskId: string, completed: boolean) => {
+    setMilestones(milestones.map(m => ({
+      ...m,
+      subtasks: m.id === milestoneId
+        ? m.subtasks.map(t => t.id === taskId ? { ...t, completed } : t)
+        : m.subtasks
+    })));
   };
 
   const { user } = useUser();
 
-  const handleSave = useCallback(async (): Promise<void> => {
+  const handleSave = useCallback(async () => {
     if (!user) {
       console.error('User not authenticated');
       return;
@@ -125,7 +124,6 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     }
 
     try {
-      // Format dates to YYYY-MM-DD to avoid timezone issues
       const formatDateForDB = (date: Date): string => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -133,7 +131,6 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
         return `${year}-${month}-${day}`;
       };
 
-      // Start a transaction
       const { data: roadmap, error: roadmapError } = await supabase
         .from('roadmaps')
         .insert({
@@ -149,7 +146,6 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
 
       if (roadmapError) throw roadmapError;
 
-      // Save each milestone
       for (const milestone of milestones) {
         const { data: savedMilestone, error: milestoneError } = await supabase
           .from('milestones')
@@ -165,7 +161,6 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
 
         if (milestoneError) throw milestoneError;
 
-        // Save each subtask for the milestone
         const tasksToInsert = milestone.subtasks.map((subtask, index) => ({
           milestone_id: savedMilestone.id,
           title: subtask.title || 'Untitled Task',
@@ -186,7 +181,6 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving roadmap:', error);
-      // You might want to show an error message to the user here
     }
   }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange]);
 
@@ -194,103 +188,19 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">What you want?</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">Create Your Roadmap</DialogTitle>
         </DialogHeader>
 
-        {/* Goal Section */}
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-medium mb-2">Final Goal</h3>
-            <Textarea
-              placeholder="What's your ultimate goal?"
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              className="min-h-[100px] resize-none"
-            />
-            <div className="mt-4">
-              <label className="text-sm font-medium mb-1 block">Start Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !goalStartDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {goalStartDate ? format(goalStartDate, "PPP") : <span>Pick start date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={goalStartDate}
-                    onSelect={setGoalStartDate}
-                    initialFocus
-                    className="bg-background"
-                    classNames={{
-                      day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
-                      day_today: 'bg-accent text-accent-foreground',
-                      day_outside: 'text-muted-foreground opacity-50',
-                      caption: 'flex justify-center pt-1 relative items-center',
-                      caption_label: 'text-sm font-medium',
-                      nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
-                      table: 'w-full border-collapse space-y-1',
-                      head_row: 'flex',
-                      head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
-                      row: 'flex w-full mt-2',
-                      cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
-                      day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="mt-4">
-              <label className="text-sm font-medium mb-1 block">End Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !goalEndDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {goalEndDate ? format(goalEndDate, "PPP") : <span>Pick end date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={goalEndDate}
-                    onSelect={setGoalEndDate}
-                    initialFocus
-                    className="bg-background"
-                    disabled={(date) => goalStartDate ? date < goalStartDate : false}
-                    classNames={{
-                      day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
-                      day_today: 'bg-accent text-accent-foreground',
-                      day_outside: 'text-muted-foreground opacity-50',
-                      caption: 'flex justify-center pt-1 relative items-center',
-                      caption_label: 'text-sm font-medium',
-                      nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
-                      table: 'w-full border-collapse space-y-1',
-                      head_row: 'flex',
-                      head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
-                      row: 'flex w-full mt-2',
-                      cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
-                      day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+        <div className="space-y-6">
+          <GoalSection
+            goal={goal}
+            onGoalChange={setGoal}
+            startDate={goalStartDate}
+            onStartDateChange={setGoalStartDate}
+            endDate={goalEndDate}
+            onEndDateChange={setGoalEndDate}
+          />
 
-          {/* Milestones */}
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Milestones</h3>
@@ -300,136 +210,31 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
             </div>
 
             {milestones.map((milestone, index) => (
-              <div key={milestone.id} className="border rounded-lg p-4 space-y-4">
-                <div className="flex justify-between items-start">
-                  <h4 className="font-medium">Milestone {index + 1}</h4>
-                  {milestones.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => removeMilestone(milestone.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-                
-                <Textarea
-                  placeholder="Describe this milestone"
-                  value={milestone.title}
-                  onChange={(e) => handleMilestoneChange(milestone.id, 'title', e.target.value)}
-                  className="min-h-[80px] resize-none"
-                />
-                
-                <div>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !milestone.deadline && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {milestone.deadline ? (
-                          format(milestone.deadline, "PPP")
-                        ) : (
-                          <span>Pick a deadline</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={milestone.deadline}
-                        onSelect={(date) => handleMilestoneChange(milestone.id, 'deadline', date)}
-                        initialFocus
-                        className="bg-background"
-                        classNames={{
-                          day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
-                          day_today: 'bg-accent text-accent-foreground',
-                          day_outside: 'text-muted-foreground opacity-50',
-                          caption: 'flex justify-center pt-1 relative items-center',
-                          caption_label: 'text-sm font-medium',
-                          nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
-                          table: 'w-full border-collapse space-y-1',
-                          head_row: 'flex',
-                          head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
-                          row: 'flex w-full mt-2',
-                          cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
-                          day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
-                        }}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Subtasks */}
-                <div className="space-y-2 mt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Tasks</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => addSubtask(milestone.id)}
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Add Task
-                    </Button>
-                  </div>
-                  
-                  {milestone.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={subtask.completed}
-                        onChange={(e) => {
-                          const updatedSubtasks = milestone.subtasks.map(s => 
-                            s.id === subtask.id 
-                              ? { ...s, completed: e.target.checked } 
-                              : s
-                          );
-                          setMilestones(milestones.map(m => 
-                            m.id === milestone.id 
-                              ? { ...m, subtasks: updatedSubtasks } 
-                              : m
-                          ));
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <Textarea
-                        value={subtask.title}
-                        onChange={(e) => handleSubtaskChange(milestone.id, subtask.id, e.target.value)}
-                        placeholder="Task description"
-                        className="flex-1 min-h-0 h-auto py-1.5 resize-none"
-                      />
-                      {milestone.subtasks.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => removeSubtask(milestone.id, subtask.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <MilestoneItem
+                key={milestone.id}
+                id={milestone.id}
+                title={milestone.title}
+                deadline={milestone.deadline}
+                subtasks={milestone.subtasks}
+                index={index}
+                showRemove={milestones.length > 1}
+                onTitleChange={handleMilestoneTitleChange}
+                onDeadlineChange={handleMilestoneDeadlineChange}
+                onAddTask={addSubtask}
+                onRemoveTask={removeSubtask}
+                onTaskTitleChange={handleTaskTitleChange}
+                onTaskToggleComplete={handleTaskToggleComplete}
+                onRemove={removeMilestone}
+              />
             ))}
           </div>
-        </div>
 
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>
-            Save Roadmap
-          </Button>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>Save Roadmap</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
