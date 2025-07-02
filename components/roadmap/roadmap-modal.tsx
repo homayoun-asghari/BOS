@@ -32,7 +32,8 @@ interface RoadmapModalProps {
 
 export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
   const [goal, setGoal] = useState('');
-  const [goalDeadline, setGoalDeadline] = useState<Date | undefined>(new Date());
+  const [goalStartDate, setGoalStartDate] = useState<Date | undefined>(new Date());
+  const [goalEndDate, setGoalEndDate] = useState<Date | undefined>();
   const [milestones, setMilestones] = useState<Milestone[]>([
     {
       id: '1',
@@ -118,7 +119,20 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
       return;
     }
 
+    if (!goalStartDate || !goalEndDate) {
+      console.error('Both start and end dates are required');
+      return;
+    }
+
     try {
+      // Format dates to YYYY-MM-DD to avoid timezone issues
+      const formatDateForDB = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       // Start a transaction
       const { data: roadmap, error: roadmapError } = await supabase
         .from('roadmaps')
@@ -126,8 +140,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
           user_id: user.id,
           title: 'My Roadmap',
           final_goal: goal,
-          start_date: new Date().toISOString(),
-          end_date: goalDeadline?.toISOString(),
+          start_date: formatDateForDB(goalStartDate),
+          end_date: formatDateForDB(goalEndDate),
           status: 'in_progress'
         })
         .select('id')
@@ -142,7 +156,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
           .insert({
             roadmap_id: roadmap.id,
             title: milestone.title || 'Untitled Milestone',
-            due_date: milestone.deadline?.toISOString(),
+            due_date: milestone.deadline ? formatDateForDB(milestone.deadline) : null,
             status: 'pending',
             order_index: milestones.indexOf(milestone)
           })
@@ -174,7 +188,7 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
       console.error('Error saving roadmap:', error);
       // You might want to show an error message to the user here
     }
-  }, [user, goal, goalDeadline, milestones, onOpenChange]);
+  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,27 +207,69 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
               onChange={(e) => setGoal(e.target.value)}
               className="min-h-[100px] resize-none"
             />
-            <div className="mt-2">
+            <div className="mt-4">
+              <label className="text-sm font-medium mb-1 block">Start Date</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal",
-                      !goalDeadline && "text-muted-foreground"
+                      !goalStartDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {goalDeadline ? format(goalDeadline, "PPP") : <span>Pick a deadline</span>}
+                    {goalStartDate ? format(goalStartDate, "PPP") : <span>Pick start date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
                   <Calendar
                     mode="single"
-                    selected={goalDeadline}
-                    onSelect={setGoalDeadline}
+                    selected={goalStartDate}
+                    onSelect={setGoalStartDate}
                     initialFocus
                     className="bg-background"
+                    classNames={{
+                      day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
+                      day_today: 'bg-accent text-accent-foreground',
+                      day_outside: 'text-muted-foreground opacity-50',
+                      caption: 'flex justify-center pt-1 relative items-center',
+                      caption_label: 'text-sm font-medium',
+                      nav_button: 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+                      table: 'w-full border-collapse space-y-1',
+                      head_row: 'flex',
+                      head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
+                      row: 'flex w-full mt-2',
+                      cell: 'h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
+                      day: 'h-9 w-9 p-0 font-normal aria-selected:opacity-100',
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="mt-4">
+              <label className="text-sm font-medium mb-1 block">End Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !goalEndDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {goalEndDate ? format(goalEndDate, "PPP") : <span>Pick end date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={goalEndDate}
+                    onSelect={setGoalEndDate}
+                    initialFocus
+                    className="bg-background"
+                    disabled={(date) => goalStartDate ? date < goalStartDate : false}
                     classNames={{
                       day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
                       day_today: 'bg-accent text-accent-foreground',
