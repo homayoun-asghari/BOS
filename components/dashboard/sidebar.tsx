@@ -10,7 +10,11 @@ type SidebarItem = {
   icon: React.ReactNode;
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  className?: string;
+}
+
+export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
   
   const items: SidebarItem[] = [
@@ -29,9 +33,9 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex w-64 flex-col">
-          <div className="flex h-0 flex-1 flex-col border-r border-border">
+      <div className={`hidden md:flex md:flex-shrink-0 ${className || ''}`}>
+        <div className="flex w-64 flex-col border-r border-border">
+          <div className="flex h-0 flex-1 flex-col">
             <div className="flex flex-1 flex-col overflow-y-auto pt-5">
               <div className="flex-1 space-y-1 px-3">
                 {items.map((item) => {
