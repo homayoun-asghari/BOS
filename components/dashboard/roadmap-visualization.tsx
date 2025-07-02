@@ -165,8 +165,8 @@ export function RoadmapVisualization() {
   });
 
   return (
-    <div className="p-4">
-      <div className="mb-8 space-y-2">
+    <div className="p-4 flex flex-col h-full " >
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm pb-4 pt-2 -mx-4 px-4 border-b border-border/50 mb-4 space-y-2">
         <h2 className="text-2xl font-bold text-foreground">{roadmap.title}</h2>
         {roadmap.description && <p className="text-foreground/80">{roadmap.description}</p>}
         <div className="flex justify-between text-sm text-muted-foreground">

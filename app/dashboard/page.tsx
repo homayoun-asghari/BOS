@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import { useUser } from "@/hooks/useUser";
 import { SettingsModal } from "@/components/settings/settings-modal";
 import { HelpModal } from "@/components/help/help-modal";
@@ -16,27 +16,23 @@ export default function DashboardPage() {
   const { user, loading: userLoading } = useUser();
   const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
   const [isRoadmapOpen, setIsRoadmapOpen] = useState(false);
-  
+
   const handleUserMenuOpenChange = (open: boolean) => {
     if (open) {
-      // Close the code accordion when user menu opens
       setIsCodeAccordionOpen(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen overflow-hidden bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="h-16 flex items-center px-4">
-          {/* The Code Component */}
-          <TheCode 
-            isOpen={isCodeAccordionOpen} 
-            onOpenChange={setIsCodeAccordionOpen} 
+          <TheCode
+            isOpen={isCodeAccordionOpen}
+            onOpenChange={setIsCodeAccordionOpen}
           />
-
-          {/* User Menu */}
-          <UserMenu 
+          <UserMenu
             user={user}
             loading={userLoading}
             onOpenChange={handleUserMenuOpenChange}
@@ -46,37 +42,29 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col">
-        <div className="flex-1 flex items-start justify-center overflow-hidden p-4">
-          <div className="w-full max-w-4xl h-full overflow-y-auto rounded-lg border border-border shadow-sm">
-            <div className="p-4">
-              <RoadmapVisualization />
-            </div>
+      {/* Main content with scrollable Roadmap */}
+      <main className="flex-1 flex items-start justify-center overflow-hidden">
+        <div className="w-full max-w-4xl h-full overflow-hidden rounded-lg border border-border shadow-sm m-4">
+          <div className="h-full overflow-y-auto p-4">
+            <RoadmapVisualization />
           </div>
         </div>
-        
-        <DashboardActionButton 
-          onClick={() => setIsRoadmapOpen(true)}
-          tooltip="Create or view your roadmap"
-        />
       </main>
 
-      {/* Settings Modal */}
-      <SettingsModal 
-        open={isSettingsOpen} 
-        onOpenChange={setIsSettingsOpen} 
-        user={user} 
+      {/* Floating action button (fixed) */}
+      <DashboardActionButton
+        onClick={() => setIsRoadmapOpen(true)}
+        tooltip="Create or view your roadmap"
       />
-      
-      {/* Help Modal */}
-      <HelpModal 
-        open={isHelpOpen}
-        onOpenChange={setIsHelpOpen}
+
+      {/* Modals */}
+      <SettingsModal
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        user={user}
       />
-      <RoadmapModal 
-        open={isRoadmapOpen} 
-        onOpenChange={setIsRoadmapOpen} 
-      />
+      <HelpModal open={isHelpOpen} onOpenChange={setIsHelpOpen} />
+      <RoadmapModal open={isRoadmapOpen} onOpenChange={setIsRoadmapOpen} />
     </div>
   );
 }
