@@ -33,7 +33,13 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
       title: '',
       startDate: undefined,
       endDate: undefined,
-      subtasks: [{ id: Date.now().toString(), title: '', completed: false }]
+      subtasks: [{ 
+        id: Date.now().toString(), 
+        title: '', 
+        completed: false,
+        priority: 'medium' as const,
+        dueDate: undefined 
+      }]
     }
   ]);
 
@@ -66,7 +72,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
                 id: Date.now().toString(), 
                 title: '', 
                 completed: false,
-                priority: 'medium'
+                priority: 'medium' as const,
+                dueDate: undefined
               }
             ]
           };
@@ -82,7 +89,13 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
         if (m.id === milestoneId) {
           const newSubtasks = m.subtasks.filter((s) => s.id !== subtaskId);
           if (newSubtasks.length === 0) {
-            newSubtasks.push({ id: Date.now().toString(), title: '', completed: false });
+            newSubtasks.push({ 
+              id: Date.now().toString(), 
+              title: '', 
+              completed: false,
+              priority: 'medium' as const,
+              dueDate: undefined 
+            });
           }
           return { ...m, subtasks: newSubtasks };
         }
@@ -192,7 +205,8 @@ export function RoadmapModal({ open, onOpenChange }: RoadmapModalProps) {
           milestone_id: savedMilestone.id,
           title: subtask.title || 'Untitled Task',
           status: subtask.completed ? 'done' : 'todo',
-          priority: 'medium',
+          priority: subtask.priority || 'medium',
+          due_date: subtask.dueDate ? formatDateForDB(subtask.dueDate) : null,
           order_index: index
         }));
 

@@ -48,7 +48,8 @@ export function TaskItem({
             date={dueDate}
             onSelect={(date) => onDueDateChange(id, date)}
             placeholder="Due date"
-            className="h-8 [&_button]:h-8 [&_button]:text-xs [&_button]:w-full [&_button]:justify-start [&_button]:truncate"
+            className="h-8 [&_button]:h-8 [&_button]:text-xs [&_button]:w-full [&_button]:justify-start [&_button]:px-2"
+            dateFormat="MMM d, yyyy"
             label=""
           />
         </div>

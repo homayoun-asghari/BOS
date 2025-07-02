@@ -33,6 +33,7 @@ interface DatePickerProps {
   className?: string;
   fromDate?: Date;
   toDate?: Date;
+  dateFormat?: string;
 }
 
 export function DatePicker({
@@ -44,6 +45,7 @@ export function DatePicker({
   className,
   fromDate,
   toDate,
+  dateFormat = 'PPP',
 }: DatePickerProps) {
   return (
     <div className={cn('space-y-1', className)}>
@@ -53,12 +55,14 @@ export function DatePicker({
           <Button
             variant="outline"
             className={cn(
-              'w-full justify-start text-left font-normal',
+              'w-full justify-start text-left font-normal overflow-hidden',
               !date && 'text-muted-foreground'
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, 'PPP') : <span>{placeholder}</span>}
+            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+            <span className="truncate flex-1 text-left">
+              {date ? format(date, dateFormat) : <span>{placeholder}</span>}
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-background rounded-md shadow-lg border border-border" align="start">
