@@ -515,7 +515,7 @@ export function EnhancedRoadmapTimeline({
   }
 
   return (
-    <div className="h-[700px] w-full border rounded-lg shadow-md">
+    <div className="h-[700px] w-full">
       <ReactFlow
         nodes={reactFlowNodes}
         edges={reactFlowEdges}
@@ -527,10 +527,11 @@ export function EnhancedRoadmapTimeline({
         panOnScroll={false} // Disable panning with scroll wheel for better UX with checklists
         zoomOnScroll={false} // Disable zooming with scroll wheel
         zoomOnPinch={false} // Disable zooming with pinch gestures
+        zoomOnDoubleClick={false} // Disable zooming on double click
         nodesDraggable={false} // Prevent all nodes from being dragged
         proOptions={{ hideAttribution: true }} // Hide React Flow attribution in production
       >
-        <Background /> {/* Default background grid */}
+        <Background style={{ backgroundColor: 'transparent' }} color="transparent" />
         <Controls showInteractive={false} /> {/* Hide built-in interactive controls (zoom, pan buttons) */}
       </ReactFlow>
     </div>
