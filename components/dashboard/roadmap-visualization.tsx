@@ -77,10 +77,6 @@ export function RoadmapVisualization() {
     );
   }
 
-  // Timeline calculations - using the dates from the roadmap
-  const startDate = new Date(roadmap.start_date || new Date().toISOString());
-  const endDate = new Date(roadmap.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
-
   // Calculate progress
   const calculateProgress = () => {
     if (!roadmap?.milestones) return { totalTasks: 0, completedTasks: 0, progress: 0 };
@@ -177,8 +173,6 @@ export function RoadmapVisualization() {
       {/* Roadmap Content */}
       <div className="mt-6">
         <EnhancedRoadmapTimeline 
-          startDate={startDate}
-          endDate={endDate}
           milestones={roadmap.milestones}
           onTaskStatusChange={handleTaskStatusChange}
         />

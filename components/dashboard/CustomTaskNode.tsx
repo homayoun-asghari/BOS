@@ -22,19 +22,22 @@ interface CustomTaskNodeData {
 const CustomTaskNode: React.FC<NodeProps<CustomTaskNodeData>> = ({ data }) => {
   const { task, onTaskStatusChange } = data;
 
-  const handleCheckboxClick = async (e: React.MouseEvent) => {
+  const handleCheckboxChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // Stop the event from propagating up to the ReactFlow node handler
     e.stopPropagation();
     
-    // Toggle between 'done' and 'todo'
-    const newStatus = task.status === 'done' ? 'todo' : 'done';
-    console.log('Checkbox clicked:', { taskId: task.id, currentStatus: task.status, newStatus });
+    // Toggle between 'done' and 'todo' based on the checkbox's new checked state
+    const newStatus = e.target.checked ? 'done' : 'todo';
+    console.log('Checkbox changed:', { taskId: task.id, currentStatus: task.status, newStatus });
     
     try {
-      const success = await onTaskStatusChange(task.id, newStatus);
-      console.log('Status update result:', success);
+      // Call the parent's onTaskStatusChange with the new status
+      await onTaskStatusChange(task.id, newStatus);
+      // Note: We don't need to update local state here as the parent component
+      // will handle the state update through props
     } catch (error) {
       console.error('Error updating task status:', error);
+      // The parent component will handle reverting the UI state if the update fails
     }
   };
 
@@ -94,8 +97,7 @@ const CustomTaskNode: React.FC<NodeProps<CustomTaskNodeData>> = ({ data }) => {
       <input
         type="checkbox"
         checked={task.status === 'done'}
-        onChange={() => {}}
-        onClick={handleCheckboxClick}
+        onChange={handleCheckboxChange}
         className={`h-4 w-4 flex-shrink-0 cursor-pointer border rounded ${checkbox}`}
       />
       <div className="flex-1 min-w-0">

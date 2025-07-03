@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -53,6 +53,7 @@ export const useRoadmapData = () => {
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadRef = useRef(false);
 
   const safeSetRoadmap = useCallback((data: Partial<Roadmap> | null) => {
     if (!data || !data.user_id) {
@@ -78,7 +79,13 @@ export const useRoadmapData = () => {
     });
   }, []);
 
-  const fetchRoadmapData = useCallback(async () => {
+  const fetchRoadmapData = useCallback(async (forceRefresh = false) => {
+    // If we already have data and this isn't a force refresh, don't fetch again
+    const currentRoadmap = roadmap; // Capture current value in closure
+    if (initialLoadRef.current && !forceRefresh && currentRoadmap) {
+      return;
+    }
+
     if (!user?.id) {
       setLoading(false);
       safeSetRoadmap(null);
@@ -255,7 +262,7 @@ export const useRoadmapData = () => {
     }
   }, [user?.id, safeSetRoadmap]);
 
-  const deleteRoadmap = async (roadmapId?: string) => {
+  const deleteRoadmap = useCallback(async (roadmapId?: string) => {
     if (!roadmapId) {
       console.error('No roadmap ID provided for deletion');
       toast.error('No roadmap selected for deletion');
@@ -279,10 +286,11 @@ export const useRoadmapData = () => {
       toast.error(errorMessage);
       return false;
     }
-  };
+  }, [safeSetRoadmap]);
 
-  const updateTaskStatus = async (taskId?: string, status?: Task['status']) => {
-    if (!roadmap || !taskId || status === undefined) {
+  const updateTaskStatus = useCallback(async (taskId?: string, status?: Task['status']) => {
+    const currentRoadmap = roadmap; // Capture current roadmap value
+    if (!currentRoadmap || !taskId || status === undefined) {
       console.error('Missing required parameters for updateTaskStatus');
       return false;
     }
@@ -296,7 +304,7 @@ export const useRoadmapData = () => {
       if (error) throw error;
 
       // Update local state
-      setRoadmap(prev => {
+      setRoadmap((prev: Roadmap | null) => {
         if (!prev) return null;
         
         const updatedMilestones = (prev.milestones || []).map(milestone => ({
@@ -328,18 +336,45 @@ export const useRoadmapData = () => {
       toast.error('Failed to update task status. Please try again.');
       return false;
     }
-  };
+  }, [roadmap]); // Keep the dependency to ensure we have the latest roadmap
 
-  useEffect(() => {
-    fetchRoadmapData();
+  // Stable reference for the effect
+  const stableFetchRoadmapData = useCallback(() => {
+    fetchRoadmapData().then(() => {
+      initialLoadRef.current = true;
+    });
   }, [fetchRoadmapData]);
 
-  return {
+  useEffect(() => {
+    // Only fetch if we haven't loaded yet or if the user changes
+    if (!initialLoadRef.current || (user?.id && (!roadmap || roadmap.user_id !== user.id))) {
+      stableFetchRoadmapData();
+    }
+    
+    // Cleanup function to reset the ref if the component unmounts
+    return () => {
+      // Keep the ref true to prevent re-fetching on tab switches
+      initialLoadRef.current = true;
+    };
+  }, [user?.id, stableFetchRoadmapData, roadmap?.user_id]); // Include all dependencies
+
+  // Create a stable refresh function that forces a re-fetch
+  const refresh = useCallback(async () => {
+    initialLoadRef.current = false;
+    return fetchRoadmapData(true);
+  }, [fetchRoadmapData]);
+  
+  // Memoize the return value to prevent unnecessary re-renders
+  const result = useMemo(() => ({
     roadmap,
     loading,
     error,
-    refresh: fetchRoadmapData,
+    refresh,
     deleteRoadmap,
     updateTaskStatus,
-  };
+  }), [roadmap, loading, error, refresh, deleteRoadmap, updateTaskStatus]);
+  
+  return result;
+
+
 };
