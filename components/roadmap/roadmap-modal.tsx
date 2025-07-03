@@ -216,26 +216,55 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
         return `${year}-${month}-${day}`;
       };
 
-      const { data: roadmap, error: roadmapError } = await supabase
-        .from('roadmaps')
-        .insert({
-          user_id: user.id,
-          title: 'My Roadmap',
-          final_goal: goal,
-          start_date: formatDateForDB(goalStartDate),
-          end_date: formatDateForDB(goalEndDate),
-          status: 'in_progress'
-        })
-        .select('id')
-        .single();
+      // Check if we're updating an existing roadmap or creating a new one
+      let roadmapId = roadmap?.id;
+      
+      if (roadmapId) {
+        // Update existing roadmap
+        const { error: roadmapError } = await supabase
+          .from('roadmaps')
+          .update({
+            final_goal: goal,
+            start_date: formatDateForDB(goalStartDate),
+            end_date: formatDateForDB(goalEndDate),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', roadmapId);
 
-      if (roadmapError) throw roadmapError;
+        if (roadmapError) throw roadmapError;
 
+        // Delete existing milestones and tasks to replace them
+        const { error: deleteError } = await supabase
+          .from('milestones')
+          .delete()
+          .eq('roadmap_id', roadmapId);
+
+        if (deleteError) throw deleteError;
+      } else {
+        // Create new roadmap
+        const { data: newRoadmap, error: roadmapError } = await supabase
+          .from('roadmaps')
+          .insert({
+            user_id: user.id,
+            title: 'My Roadmap',
+            final_goal: goal,
+            start_date: formatDateForDB(goalStartDate),
+            end_date: formatDateForDB(goalEndDate),
+            status: 'in_progress'
+          })
+          .select('id')
+          .single();
+
+        if (roadmapError) throw roadmapError;
+        roadmapId = newRoadmap.id;
+      }
+
+      // Process all milestones
       for (const milestone of milestones) {
         const { data: savedMilestone, error: milestoneError } = await supabase
           .from('milestones')
           .insert({
-            roadmap_id: roadmap.id,
+            roadmap_id: roadmapId,
             title: milestone.title || 'Untitled Milestone',
             start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
             end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
@@ -269,7 +298,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
     } catch (error) {
       console.error('Error saving roadmap:', error);
     }
-  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange]);
+  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange, roadmap?.id]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
