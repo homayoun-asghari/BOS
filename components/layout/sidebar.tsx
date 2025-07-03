@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -61,23 +61,29 @@ export function Sidebar({ className }: SidebarProps) {
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden">
-        {items.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex flex-col items-center justify-center p-2 text-xs ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
-              <span className="mb-1">{item.icon}</span>
-              <span className="text-xs">{item.name}</span>
-            </Link>
-          );
-        })}
+      {/* Mobile Bottom Navigation - Floating Capsule */}
+      <div className="fixed z-50 w-full max-w-xs -translate-x-1/2 bg-background/95 backdrop-blur-sm border border-border rounded-full bottom-4 left-1/2 dark:bg-card/80 shadow-lg md:hidden">
+        <div className="grid h-16 grid-cols-2 mx-auto">
+          {items.map((item, index) => {
+            const isActive = pathname === item.href;
+            const isFirst = index === 0;
+            
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`inline-flex flex-col items-center justify-center hover:bg-accent/30 transition-colors duration-200 ${
+                  isFirst ? 'rounded-l-full' : 'rounded-r-full'
+                } ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+              >
+                <span className="h-5 w-5 flex items-center justify-center">
+                  {item.icon}
+                </span>
+                <span className="text-[10px] mt-0.5">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </>
   );

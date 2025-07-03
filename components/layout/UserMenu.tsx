@@ -99,29 +99,41 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHe
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            className="w-full cursor-pointer"
-            onClick={onOpenSettings}
-          >
-            <SettingsIcon className="mr-2 h-4 w-4" />
-            <span>Settings</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="w-full cursor-pointer"
-            onClick={onOpenHelp}
-          >
-            <HelpCircle className="mr-2 h-4 w-4" />
-            <span>Help & Support</span>
+          <DropdownMenuItem asChild>
+            <button 
+              className="w-full cursor-pointer flex items-center"
+              onClick={(e) => {
+                e.preventDefault();
+                onOpenSettings();
+              }}
+            >
+              <SettingsIcon className="mr-2 h-4 w-4" />
+              <span>Settings</span>
+            </button>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/upgrade" className="w-full cursor-pointer">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center">
-                  <Zap className="mr-2 h-4 w-4 text-yellow-500" />
-                  <span>Upgrade Plan</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <button 
+              className="w-full cursor-pointer flex items-center"
+              onClick={(e) => {
+                e.preventDefault();
+                onOpenHelp();
+              }}
+            >
+              <HelpCircle className="mr-2 h-4 w-4" />
+              <span>Help & Support</span>
+            </button>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link 
+              href="/upgrade" 
+              className="w-full cursor-pointer flex items-center justify-between"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center">
+                <Zap className="mr-2 h-4 w-4 text-yellow-500" />
+                <span>Upgrade Plan</span>
               </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />

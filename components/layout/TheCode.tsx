@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from '@/lib/supabase';
+import { useUser } from '@/hooks/useUser';
 
 interface TheCodeProps {
   isOpen?: boolean;
@@ -15,11 +19,6 @@ interface PersonalCode {
   isEditing?: boolean;
   tempContent?: string;
 }
-
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
-import { Textarea } from "../../components/ui/textarea";
-import { supabase } from '@/lib/supabase';
-import { useUser } from '@/hooks/useUser';
 
 const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) => {
   const { user } = useUser();
@@ -227,8 +226,8 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
   };
 
   return (
-    <div className="relative flex-1 max-w-[calc(100%-48px)]" ref={dropdownRef}>
-      <div className="relative">
+    <div className="w-full" ref={dropdownRef}>
+      <div className="relative w-full">
         <button
           onClick={() => handleOpenChange(!isOpen)}
           className="w-full flex items-center justify-between p-2.5 border border-border rounded-lg text-left hover:border-ring/50 transition-colors bg-background h-10"
@@ -236,7 +235,7 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
           aria-haspopup="dialog"
           type="button"
         >
-          <span className="text-muted-foreground text-sm truncate pr-2">
+          <span className="text-muted-foreground text-sm truncate pr-2 flex-1 text-left">
             {isLoading ? 'Loading...' : codes.length > 0 ? codes[0].content.substring(0, 50) + (codes[0].content.length > 50 ? '...' : '') : 'Who Do You Want To Become?'}
           </span>
           <ChevronDown 
