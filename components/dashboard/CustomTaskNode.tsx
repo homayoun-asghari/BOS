@@ -5,7 +5,7 @@ import { NodeProps, Handle, Position } from 'reactflow'; // Handle and Position 
 interface Task {
   id: string;
   title: string;
-  status: 'todo' | 'in_progress' | 'completed' | 'done';
+  status: 'todo' | 'in_progress' | 'done';
   milestone_id: string;
   order_index: number;
   due_date?: string | null;
@@ -22,15 +22,25 @@ interface CustomTaskNodeData {
 const CustomTaskNode: React.FC<NodeProps<CustomTaskNodeData>> = ({ data }) => {
   const { task, onTaskStatusChange } = data;
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
+  const handleCheckboxClick = async (e: React.MouseEvent) => {
     // Stop the event from propagating up to the ReactFlow node handler
     e.stopPropagation();
-    onTaskStatusChange(task.id, task.status);
+    
+    // Toggle between 'done' and 'todo'
+    const newStatus = task.status === 'done' ? 'todo' : 'done';
+    console.log('Checkbox clicked:', { taskId: task.id, currentStatus: task.status, newStatus });
+    
+    try {
+      const success = await onTaskStatusChange(task.id, newStatus);
+      console.log('Status update result:', success);
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    }
   };
 
   // Get styles based on priority and completion status
   const getTaskStyles = () => {
-    if (task.status === 'completed') {
+    if (task.status === 'done') {
       return {
         container: 'border-border bg-muted/50',
         text: 'text-muted-foreground',
@@ -83,7 +93,7 @@ const CustomTaskNode: React.FC<NodeProps<CustomTaskNodeData>> = ({ data }) => {
 
       <input
         type="checkbox"
-        checked={task.status === 'completed'}
+        checked={task.status === 'done'}
         onChange={() => {}}
         onClick={handleCheckboxClick}
         className={`h-4 w-4 flex-shrink-0 cursor-pointer border rounded ${checkbox}`}

@@ -80,7 +80,7 @@ export function EnhancedRoadmapTimeline() {
   interface Task {
     id: string;
     title: string;
-    status: 'todo' | 'in_progress' | 'completed' | 'done';
+    status: 'todo' | 'in_progress' | 'done';
     milestone_id: string;
     order_index: number;
     due_date?: string | null;
@@ -89,44 +89,90 @@ export function EnhancedRoadmapTimeline() {
   // Function to fetch tasks for a specific milestone
   const fetchTasks = useCallback(async (milestoneId: string) => {
     if (!user) return;
-    setLoading(true); // Indicate loading while fetching tasks
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('milestone_id', milestoneId)
-      .order('order_index', { ascending: true });
+    setLoading(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('milestone_id', milestoneId)
+        .order('order_index', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching tasks:', error);
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        return;
+      }
+
+      if (data) {
+        // Update the tasks state with the fresh data from the database
+        setTasks(prev => ({
+          ...prev,
+          [milestoneId]: data.map(task => ({
+            ...task,
+            // Ensure status is one of the expected values
+            status: ['todo', 'in_progress', 'done'].includes(task.status) 
+              ? task.status 
+              : 'todo'
+          }))
+        }));
+      }
+    } catch (err) {
+      console.error('Error in fetchTasks:', err);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (data) {
-      setTasks((prev) => ({ ...prev, [milestoneId]: data }));
-    }
-    setLoading(false);
   }, [user]);
 
   // Function to handle toggling task status (passed to custom node)
-  const toggleTaskStatus = useCallback(async (taskId: string, currentStatus: string) => {
-    if (!user || !selectedMilestone) return; // Ensure selectedMilestone is active
-    const newStatus = currentStatus === 'completed' ? 'todo' : 'completed';
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
-
-    if (error) {
-      console.error('Error updating task status:', error);
-      return;
+  const toggleTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
+    console.log('toggleTaskStatus called with:', { taskId, newStatus, user, selectedMilestone });
+    
+    if (!user || !selectedMilestone) {
+      console.error('Cannot update task: User or milestone not selected');
+      return false;
     }
+    
+    // Save the current state for potential rollback
+    const previousTasks = JSON.parse(JSON.stringify(tasks)) as Record<string, Task[]>;
+    
+    try {
+      // Update the status in the database first
+      console.log('Updating task in database:', { taskId, newStatus });
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId)
+        .select();
 
-    // Optimistically update UI
-    setTasks(prev => ({
-      ...prev,
-      [selectedMilestone]: prev[selectedMilestone].map(task =>
-        task.id === taskId ? { ...task, status: newStatus as 'todo' | 'completed' } : task
-      )
-    }));
-  }, [user, selectedMilestone]); // Dependency on selectedMilestone is important
+      console.log('Database response:', { data, error });
+
+      if (error) {
+        console.error('Error updating task status:', error);
+        return false;
+      }
+      
+      // Only update local state after successful database update
+      setTasks(prev => {
+        const updatedTasks = { ...prev };
+        if (updatedTasks[selectedMilestone]) {
+          updatedTasks[selectedMilestone] = updatedTasks[selectedMilestone].map(task => 
+            task.id === taskId ? { 
+              ...task, 
+              status: newStatus as 'todo' | 'in_progress' | 'done' 
+            } : task
+          );
+        }
+        return updatedTasks;
+      });
+      
+      return true;
+    } catch (err) {
+      console.error('Error in toggleTaskStatus:', err);
+      // Revert to previous state on error
+      setTasks(previousTasks);
+      return false;
+    }
+  }, [user, selectedMilestone, tasks]);
 
   // Handle click on a main roadmap node
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
@@ -298,6 +344,11 @@ export function EnhancedRoadmapTimeline() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+  
+  // Debug effect to log when toggleTaskStatus changes
+  useEffect(() => {
+    console.log('toggleTaskStatus function updated');
+  }, [toggleTaskStatus]);
 
   // Effect to update ReactFlow nodes/edges when selectedMilestone or tasks change
   useEffect(() => {
@@ -317,22 +368,36 @@ export function EnhancedRoadmapTimeline() {
     const startX = (milestoneNode?.position?.x ?? 0) + (nodeWidth / 2) + 150; // Offset to the right of milestone
     const startY = (milestoneNode?.position?.y ?? 0) - (taskList.length * 70) / 2 + 35; // Center vertically on milestone
 
-    const taskNodes: Node[] = taskList.map((task, index) => ({
-      id: `task-${task.id}`,
-      type: 'taskNode', // Use your custom node type
-      position: { x: startX, y: startY + index * 70 }, // 70px spacing between tasks
-      data: {
-        task: task, // Pass the full task object
-        onTaskStatusChange: toggleTaskStatus, // Pass the toggle function
-      },
-      // You can define a width/height here for Dagre layout if taskNode has a fixed width
-      // otherwise, let CustomTaskNode manage its own size.
-      // Make sure these match CustomTaskNode.tsx's internal width/height for accurate layout.
-      width: 240, // Match the width in CustomTaskNode.tsx
-      height: 60, // Approximate height for layout, CustomTaskNode.tsx will render actual height
-      draggable: false, // Task nodes shouldn't be draggable
-      selectable: false, // Task nodes shouldn't be selectable in the React Flow sense
-    }));
+    const taskNodes: Node[] = taskList.map((task, index) => {
+      console.log('Creating task node:', { 
+        taskId: task.id, 
+        status: task.status, 
+        hasToggleFn: !!toggleTaskStatus 
+      });
+      
+      // Create a stable reference to toggleTaskStatus
+      const handleStatusChange = (taskId: string, newStatus: string) => {
+        console.log('Task status change requested:', { taskId, newStatus });
+        toggleTaskStatus(taskId, newStatus);
+      };
+      
+      return {
+        id: `task-${task.id}`,
+        type: 'taskNode',
+        position: { x: startX, y: startY + index * 70 }, // 70px spacing between tasks
+        data: {
+          task: task,
+          onTaskStatusChange: handleStatusChange,
+        },
+        // You can define a width/height here for Dagre layout if taskNode has a fixed width
+        // otherwise, let CustomTaskNode manage its own size.
+        // Make sure these match CustomTaskNode.tsx's internal width/height for accurate layout.
+        width: 240, // Match the width in CustomTaskNode.tsx
+        height: 60, // Approximate height for layout, CustomTaskNode.tsx will render actual height
+        draggable: false, // Task nodes shouldn't be draggable
+        selectable: false, // Task nodes shouldn't be selectable in the React Flow sense
+      };
+    });
 
     const taskEdges: Edge[] = [];
     if (taskNodes.length > 0 && milestoneNode) {

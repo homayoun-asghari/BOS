@@ -12,7 +12,7 @@ export interface TaskType {
   title: string;
   description: string;
   due_date: string | null;
-  status: 'todo' | 'in_progress' | 'completed' | 'done';
+  status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
   order_index: number;
   milestone_id: string;
@@ -91,7 +91,7 @@ export function RoadmapVisualization() {
     roadmap.milestones.forEach((milestone) => {
       milestone.tasks?.forEach((task) => {
         total++;
-        if (task.status === 'completed' || task.status === 'done') {
+        if (task.status === 'done') {
           completed++;
         }
       });
