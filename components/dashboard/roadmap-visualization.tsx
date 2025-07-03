@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
-import { RoadmapTimeline } from './RoadmapTimeline';
+import { EnhancedRoadmapTimeline } from './EnhancedRoadmapTimeline';
 import { toast } from 'sonner';
 
 export interface TaskType {
@@ -175,12 +175,14 @@ export function RoadmapVisualization() {
       )}
       
       {/* Roadmap Content */}
-      <RoadmapTimeline 
-        startDate={startDate}
-        endDate={endDate}
-        milestones={roadmap.milestones}
-        onTaskStatusChange={handleTaskStatusChange}
-      />
+      <div className="mt-6">
+        <EnhancedRoadmapTimeline 
+          startDate={startDate}
+          endDate={endDate}
+          milestones={roadmap.milestones}
+          onTaskStatusChange={handleTaskStatusChange}
+        />
+      </div>
     </div>
   );
 }
