@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
-import { EnhancedRoadmapTimeline } from './EnhancedRoadmapTimeline';
+import { BackupRoadmapTimeline } from './BackupRoadmapTimeline';
 import { toast } from 'sonner';
 
 export interface TaskType {
@@ -188,10 +188,15 @@ export function RoadmapVisualization() {
       
       {/* Roadmap Content */}
       <div className="mt-6">
-        <EnhancedRoadmapTimeline 
+        <BackupRoadmapTimeline 
           milestones={roadmap.milestones}
           onTaskStatusChange={handleTaskStatusChange}
         />
+        {/* Uncomment the line below to switch back to the original timeline */}
+        {/* <EnhancedRoadmapTimeline 
+          milestones={roadmap.milestones}
+          onTaskStatusChange={handleTaskStatusChange}
+        /> */}
       </div>
     </div>
   );
