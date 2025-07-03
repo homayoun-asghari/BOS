@@ -217,7 +217,7 @@ export function EnhancedRoadmapTimeline() {
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
         type: 'default',
-        className: 'border border-border bg-muted/30 text-muted-foreground dark:bg-muted/30 dark:border-border/50 dark:text-muted-foreground',
+        className: 'border border-border bg-muted/30 text-muted-foreground dark:bg-muted/30 dark:border-border/50 dark:text-muted-foreground transition-all duration-200 hover:shadow-md hover:bg-muted/50 dark:hover:bg-muted/50 cursor-pointer',
         style: { 
           width: '200px',
           height: 'auto',
