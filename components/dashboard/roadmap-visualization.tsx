@@ -104,14 +104,30 @@ export function RoadmapVisualization() {
     if (!roadmap) return false;
     
     try {
+      // Optimistically update the local state
+      const updatedMilestones = roadmap.milestones.map(milestone => ({
+        ...milestone,
+        tasks: milestone.tasks.map(task => 
+          task.id === taskId ? { ...task, status } : task
+        )
+      }));
+      
+      // Create a new roadmap object with the updated milestones
+      Object.assign(roadmap, { milestones: updatedMilestones });
+      
+      // Update the server
       const success = await updateTaskStatus(taskId, status);
-      if (success) {
+      
+      // If the server update fails, revert the optimistic update
+      if (!success) {
         await fetchRoadmapData();
-        return true;
       }
-      return false;
+      
+      return success;
     } catch (error) {
       console.error('Error updating task status:', error);
+      // On error, refetch to ensure consistency
+      await fetchRoadmapData();
       return false;
     }
   };
