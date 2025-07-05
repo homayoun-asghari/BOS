@@ -21,6 +21,7 @@ interface Milestone {
 interface RoadmapModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave?: () => void;
   roadmap?: {
     id: string;
     final_goal: string;
@@ -46,7 +47,7 @@ interface RoadmapModalProps {
   } | null;
 }
 
-export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps) {
+export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapModalProps) {
   const [goal, setGoal] = useState(roadmap?.final_goal || '');
   const [goalStartDate, setGoalStartDate] = useState<Date | undefined>(
     roadmap?.start_date ? new Date(roadmap.start_date) : new Date()
@@ -294,11 +295,12 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
         }
       }
 
+      onSave?.();
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving roadmap:', error);
     }
-  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange, roadmap?.id]);
+  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange, roadmap?.id, onSave]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -318,34 +320,40 @@ export function RoadmapModal({ open, onOpenChange, roadmap }: RoadmapModalProps)
           />
 
           <div className="space-y-4 sm:space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
-              <h3 className="text-base sm:text-lg font-medium">Milestones</h3>
-              <Button size="sm" variant="outline" onClick={addMilestone} className="w-full sm:w-auto">
+            <h3 className="text-base sm:text-lg font-medium">Milestones</h3>
+            
+            <div className="space-y-4">
+              {milestones.map((milestone, index) => (
+                <MilestoneItem
+                  key={milestone.id}
+                  id={milestone.id}
+                  title={milestone.title}
+                  startDate={milestone.startDate}
+                  endDate={milestone.endDate}
+                  onTitleChange={handleMilestoneTitleChange}
+                  onStartDateChange={handleMilestoneStartDateChange}
+                  onEndDateChange={handleMilestoneEndDateChange}
+                  onAddTask={addSubtask}
+                  onRemoveTask={removeSubtask}
+                  onTaskTitleChange={handleTaskTitleChange}
+                  onTaskDueDateChange={handleTaskDueDateChange}
+                  onTaskPriorityChange={handleTaskPriorityChange}
+                  onRemove={removeMilestone}
+                  subtasks={milestone.subtasks}
+                  index={index}
+                  showRemove={milestones.length > 1}
+                />
+              ))}
+              
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={addMilestone} 
+                className="w-full mt-2"
+              >
                 <Plus className="h-4 w-4 mr-1" /> Add Milestone
               </Button>
             </div>
-
-            {milestones.map((milestone, index) => (
-              <MilestoneItem
-                key={milestone.id}
-                id={milestone.id}
-                title={milestone.title}
-                startDate={milestone.startDate}
-                endDate={milestone.endDate}
-                onTitleChange={handleMilestoneTitleChange}
-                onStartDateChange={handleMilestoneStartDateChange}
-                onEndDateChange={handleMilestoneEndDateChange}
-                onAddTask={addSubtask}
-                onRemoveTask={removeSubtask}
-                onTaskTitleChange={handleTaskTitleChange}
-                onTaskDueDateChange={handleTaskDueDateChange}
-                onTaskPriorityChange={handleTaskPriorityChange}
-                onRemove={removeMilestone}
-                subtasks={milestone.subtasks}
-                index={index}
-                showRemove={milestones.length > 1}
-              />
-            ))}
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">

@@ -100,18 +100,8 @@ export function MilestoneItem({
       </div>
 
       <div className="space-y-2 mt-4">
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-medium">Tasks</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => onAddTask(id)}
-          >
-            <Plus className="h-3 w-3 mr-1" /> Add Task
-          </Button>
-        </div>
-
+        <h4 className="text-sm font-medium">Tasks</h4>
+        
         <div className="space-y-2">
           {subtasks.map((subtask) => (
             <TaskItem
@@ -127,6 +117,15 @@ export function MilestoneItem({
               showRemove={subtasks.length > 1}
             />
           ))}
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs w-full mt-2"
+            onClick={() => onAddTask(id)}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Add Task
+          </Button>
         </div>
       </div>
     </div>

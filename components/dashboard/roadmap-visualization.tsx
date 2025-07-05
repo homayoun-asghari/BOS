@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
@@ -56,6 +56,18 @@ export function RoadmapVisualization() {
     deleteRoadmap,
     updateTaskStatus,
   } = useRoadmapData();
+
+  // Handle successful roadmap save
+  const handleRoadmapSaved = useCallback(async () => {
+    try {
+      // Force refresh the roadmap data
+      await fetchRoadmapData(true);
+      // Close the modal after a short delay to allow the data to refresh
+      setTimeout(() => setIsEditModalOpen(false), 300);
+    } catch (error) {
+      console.error('Error refreshing roadmap data:', error);
+    }
+  }, [fetchRoadmapData]);
 
   // Type assertion with proper type checking
   const roadmap = (roadmapFromHook as unknown as RoadmapType) || null;
@@ -180,16 +192,18 @@ export function RoadmapVisualization() {
       />
 
       {/* Edit Roadmap Modal */}
-      {localRoadmap && (
+      {localRoadmap && isEditModalOpen && (
         <RoadmapModal 
           open={isEditModalOpen} 
           onOpenChange={setIsEditModalOpen}
+          onSave={handleRoadmapSaved}
           roadmap={{
             ...localRoadmap,
             start_date: localRoadmap.start_date || new Date().toISOString(),
             end_date: localRoadmap.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             milestones: localRoadmap.milestones || []
           }}
+          key={localRoadmap.id} // Add key to force re-render when roadmap changes
         />
       )}
       
