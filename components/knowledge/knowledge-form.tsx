@@ -1,229 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/browser';
-import { Bold, Italic, List, ListOrdered, Quote, ChevronDown, Plus, Tag, Eye, Code, Link as LinkIcon, Image as ImageIcon, Table, Type } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
+import { ChevronDown, Plus, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
-
-
-interface ToolbarButtonProps {
-  icon: React.ReactNode;
-  onClick: () => void;
-  isActive?: boolean;
-  disabled?: boolean;
-  title: string;
-}
-
-const ToolbarButton = ({ icon, onClick, isActive, disabled, title }: ToolbarButtonProps) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    className={cn(
-      "p-1.5 rounded-md hover:bg-muted transition-colors",
-      isActive && "bg-muted",
-      disabled && "opacity-40 cursor-not-allowed"
-    )}
-    title={title}
-  >
-    {icon}
-  </button>
-);
-
-// Simple rich text editor component
-const RichTextEditor = ({ 
-  value, 
-  onChange,
-  isSubmitting = false 
-}: { 
-  value: string, 
-  onChange: (value: string) => void,
-  isSubmitting?: boolean
-}) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('edit');
-
-
-  const insertAtCursor = (before: string, after = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = value.substring(start, end);
-    const beforeText = value.substring(0, start);
-    const afterText = value.substring(end);
-    
-    let newValue = beforeText + before + selected + after + afterText;
-    let newCursorPos = start + before.length;
-    
-    // If no text was selected and we're wrapping with something (like **), add cursor in the middle
-    if (start === end && after) {
-      newValue = beforeText + before + after + afterText;
-      newCursorPos = start + before.length;
-    }
-    
-    onChange(newValue);
-    
-    // Set cursor position after the inserted text
-    setTimeout(() => {
-      if (textarea) {
-        textarea.selectionStart = newCursorPos + selected.length;
-        textarea.selectionEnd = newCursorPos + selected.length;
-        textarea.focus();
-      }
-    }, 0);
-  };
-
-  const handleTextSelection = () => {
-    // This handler can be used for future text selection features
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-  };
-
-  const renderEditor = () => (
-    <Textarea
-      ref={textareaRef}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onSelect={handleTextSelection}
-      className={cn(
-        'min-h-[calc(100vh-200px)] border-0 p-4 text-base focus-visible:ring-0 focus-visible:ring-offset-0 resize-none',
-        viewMode === 'split' && 'w-1/2 border-r border-border'
-      )}
-      disabled={isSubmitting}
-      placeholder="Start writing in Markdown..."
-    />
-  );
-
-  const renderPreview = () => (
-    <div className={cn(
-      'min-h-[calc(100vh-200px)] p-4 overflow-auto prose dark:prose-invert max-w-none',
-      viewMode === 'split' && 'w-1/2'
-    )}>
-      <MarkdownRenderer content={value || '*No content to preview*'} />
-    </div>
-  );
-
-  return (
-    <div className="relative">
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background px-3 py-1.5 rounded-full shadow-lg border border-border z-10">
-        <div className="flex items-center mr-2 border-r border-border pr-2">
-          <ToolbarButton
-            icon={<Type className="h-4 w-4" />}
-            onClick={() => insertAtCursor('# ', '')}
-            disabled={isSubmitting}
-            title="Heading 1"
-          />
-          <ToolbarButton
-            icon={<span className="text-sm">H1</span>}
-            onClick={() => insertAtCursor('## ', '')}
-            disabled={isSubmitting}
-            title="Heading 2"
-          />
-          <ToolbarButton
-            icon={<span className="text-xs">H2</span>}
-            onClick={() => insertAtCursor('### ', '')}
-            disabled={isSubmitting}
-            title="Heading 3"
-          />
-        </div>
-        
-        <div className="flex items-center border-r border-border pr-2">
-          <ToolbarButton
-            icon={<Bold className="h-4 w-4" />}
-            onClick={() => insertAtCursor('**', '**')}
-            disabled={isSubmitting}
-            title="Bold"
-          />
-          <ToolbarButton
-            icon={<Italic className="h-4 w-4" />}
-            onClick={() => insertAtCursor('*', '*')}
-            disabled={isSubmitting}
-            title="Italic"
-          />
-          <ToolbarButton
-            icon={<LinkIcon className="h-4 w-4" />}
-            onClick={() => insertAtCursor('[', '](url)')}
-            disabled={isSubmitting}
-            title="Link"
-          />
-          <ToolbarButton
-            icon={<ImageIcon className="h-4 w-4" />}
-            onClick={() => insertAtCursor('![alt text](', ')')}
-            disabled={isSubmitting}
-            title="Image"
-          />
-          <ToolbarButton
-            icon={<Code className="h-4 w-4" />}
-            onClick={() => insertAtCursor('`', '`')}
-            disabled={isSubmitting}
-            title="Inline Code"
-          />
-        </div>
-
-        <div className="flex items-center border-r border-border pr-2">
-          <ToolbarButton
-            icon={<List className="h-4 w-4" />}
-            onClick={() => insertAtCursor('\n- ', '')}
-            disabled={isSubmitting}
-            title="Bullet List"
-          />
-          <ToolbarButton
-            icon={<ListOrdered className="h-4 w-4" />}
-            onClick={() => insertAtCursor('\n1. ', '')}
-            disabled={isSubmitting}
-            title="Numbered List"
-          />
-          <ToolbarButton
-            icon={<Table className="h-4 w-4" />}
-            onClick={() => insertAtCursor('\n| Header | Description |\n|--------|-------------|\n| Cell   | Cell        |\n', '')}
-            disabled={isSubmitting}
-            title="Table"
-          />
-          <ToolbarButton
-            icon={<Quote className="h-4 w-4" />}
-            onClick={() => insertAtCursor('\n> ', '')}
-            disabled={isSubmitting}
-            title="Quote"
-          />
-        </div>
-
-        <div className="flex items-center">
-          <ToolbarButton
-            icon={<Eye className="h-4 w-4" />}
-            onClick={() => setViewMode('preview')}
-            isActive={viewMode === 'preview'}
-            disabled={isSubmitting}
-            title="Preview"
-          />
-          <ToolbarButton
-            icon={<span className="text-xs">A</span>}
-            onClick={() => setViewMode('edit')}
-            isActive={viewMode === 'edit'}
-            disabled={isSubmitting}
-            title="Edit"
-          />
-          <ToolbarButton
-            icon={<span className="text-xs">A|B</span>}
-            onClick={() => setViewMode('split')}
-            isActive={viewMode === 'split'}
-            disabled={isSubmitting}
-            title="Split View"
-          />
-        </div>
-      </div>
-
-      <div className="flex">
-        {(viewMode === 'edit' || viewMode === 'split') && renderEditor()}
-        {(viewMode === 'preview' || viewMode === 'split') && renderPreview()}
-      </div>
-    </div>
-  );
-};
+import { TipTapEditor } from '../editor/TipTapEditor';
 
 // Custom dropdown component
 const Dropdown = ({ 
@@ -333,57 +115,128 @@ export function KnowledgeForm() {
   
   // Save note to database (non-blocking)
   const saveNote = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found. Cannot save note.');
+      throw new Error('No user found');
+    }
     
     const saveData = async () => {
       try {
         const now = new Date();
-        const noteData = {
+        const noteData: Record<string, unknown> = {
           title: 'Untitled', // Default title since we removed the title input
-          content: debouncedContent,
+          content: debouncedContent || '',
           user_id: user.id,
-          updated_at: now.toISOString(),
-          ...(createdAt ? {} : { created_at: now.toISOString() })
+          updated_at: now.toISOString()
         };
+
+        // Only add these fields if they have values
+        if (selectedType) noteData.type = selectedType;
+        if (selectedStatus) noteData.status = selectedStatus;
+        if (!createdAt) noteData.created_at = now.toISOString();
+        
+        console.log('Saving note with data:', noteData);
         
         if (noteId) {
           // Update existing note
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from('notes')
             .update(noteData)
-            .eq('id', noteId);
+            .eq('id', noteId)
+            .select()
+            .single();
             
-          if (error) throw error;
+          if (error) {
+            console.error('Error updating note:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
+            throw error;
+          }
+          
+          console.log('Note updated successfully:', data);
           setUpdatedAt(now);
           if (!createdAt) setCreatedAt(now);
+          return data;
         } else if (debouncedContent) {
           // Create new note only if there's content
           const { data, error } = await supabase
             .from('notes')
-            .insert([noteData])
+            .insert(noteData)
             .select()
             .single();
             
-          if (error) throw error;
+          if (error) {
+            console.error('Error creating note:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code,
+              noteData
+            });
+            throw error;
+          }
+          
+          console.log('Note created successfully:', data);
           setNoteId(data.id);
           setCreatedAt(now);
           setUpdatedAt(now);
+          return data;
         }
       } catch (error) {
-        console.error('Error saving note:', error);
+        console.error('Error in saveNote:', {
+          error,
+          errorString: String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        throw error; // Re-throw to be caught by the outer catch
       }
     };
     
-    // Don't wait for save to complete
-    saveData();
-  }, [user, debouncedContent, noteId, supabase, createdAt]);
+    // Don't wait for save to complete but ensure errors are caught
+    return saveData().catch(error => {
+      console.error('Unhandled error in saveData:', error);
+      throw error; // Re-throw to be caught by the error boundary
+    });
+  }, [user, debouncedContent, noteId, supabase, createdAt, selectedType, selectedStatus]);
   
   // Auto-save when content changes (debounced)
-  useEffect(() => {
-    if (debouncedContent) {
-      saveNote();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Memoize the save function to prevent unnecessary re-renders
+  const handleSave = useCallback(async () => {
+    if (!debouncedContent) return;
+    
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+      await saveNote();
+    } catch (error) {
+      console.error('Failed to save note:', error);
+      setSaveError('Failed to save note. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   }, [debouncedContent, saveNote]);
+  
+  // Clear error after 5 seconds when it changes
+  useEffect(() => {
+    if (!saveError) return;
+    
+    const timer = setTimeout(() => {
+      setSaveError(null);
+    }, 5000);
+    
+    return () => clearTimeout(timer);
+  }, [saveError]);
+  
+  // Auto-save effect
+  useEffect(() => {
+    handleSave();
+  }, [handleSave]);
   
   // Handle content changes
   const handleContentChange = (value: string) => {
@@ -415,6 +268,26 @@ export function KnowledgeForm() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
+      {/* Status Bar */}
+      <div className="border-b border-border px-4 py-1 text-xs text-muted-foreground bg-muted/50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {isSaving && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span>Saving...</span>
+            </span>
+          )}
+          {saveError && (
+            <span className="text-red-500 flex items-center gap-1">
+              <span>⚠️ {saveError}</span>
+            </span>
+          )}
+        </div>
+        {updatedAt && (
+          <span>Last saved: {formatDate(updatedAt)}</span>
+        )}
+      </div>
+      
       {/* Toolbar */}
       <div className="border-b border-border px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -515,7 +388,7 @@ export function KnowledgeForm() {
         )}
         
         <div className="flex-1 overflow-auto px-6 pb-6">
-          <RichTextEditor 
+          <TipTapEditor 
             value={content}
             onChange={handleContentChange}
           />
