@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface TheCodeHandles {
+  updateShuffleInterval: (interval: number) => void;
+}
 
 interface TheCodeProps {
   isOpen?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  componentRef?: React.RefObject<TheCodeHandles>;
 }
 
 interface PersonalCode {
@@ -20,7 +26,7 @@ interface PersonalCode {
   tempContent?: string;
 }
 
-const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) => {
+const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, onOpenChange }, ref) => {
   const { user } = useUser();
 
   const [isOpen, setIsOpen] = useState(propIsOpen || false);
@@ -41,8 +47,31 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
   const [codes, setCodes] = useState<PersonalCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [currentCodeIndex, setCurrentCodeIndex] = useState(0);
+  const [shuffleInterval, setShuffleInterval] = useState(30000); // 30 seconds default
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const shuffleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    updateShuffleInterval: (newInterval: number) => {
+      setShuffleInterval(newInterval);
+      
+      // Restart the interval with new duration
+      if (codes.length > 1) {
+        if (shuffleTimerRef.current) {
+          clearInterval(shuffleTimerRef.current);
+        }
+        
+        shuffleTimerRef.current = setInterval(() => {
+          setCurrentCodeIndex(prevIndex => (prevIndex + 1) % codes.length);
+        }, newInterval);
+      }
+    }
+  }));
+
+
 
   // Add a new personal code
   const handleAddCode = async (e: React.MouseEvent) => {
@@ -150,9 +179,45 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
     }
   }, [user]);
 
+  // Set up shuffle interval when codes change
+  useEffect(() => {
+    if (codes.length <= 1) return;
+    
+    // Clear any existing interval
+    if (shuffleTimerRef.current) {
+      clearInterval(shuffleTimerRef.current);
+    }
+    
+    // Set up new interval
+    const rotateCode = () => {
+      setCurrentCodeIndex(prevIndex => (prevIndex + 1) % codes.length);
+    };
+    
+    // Initial delay before starting the rotation
+    const initialDelay = 2000; // 2 seconds
+    
+    const timeoutId = setTimeout(() => {
+      rotateCode();
+      shuffleTimerRef.current = setInterval(rotateCode, shuffleInterval);
+    }, initialDelay);
+    
+    // Clean up on unmount or when codes/shuffleInterval changes
+    return () => {
+      clearTimeout(timeoutId);
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+      }
+    };
+  }, [codes.length, shuffleInterval]);
+  
   // Fetch codes when component mounts or user changes
   useEffect(() => {
     fetchPersonalCodesMemoized();
+    return () => {
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+      }
+    };
   }, [fetchPersonalCodesMemoized]);
 
   // Close dropdown when clicking outside or on user menu
@@ -235,9 +300,21 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
           aria-haspopup="dialog"
           type="button"
         >
-          <span className="text-muted-foreground text-sm truncate pr-2 flex-1 text-left">
-            {isLoading ? 'Loading...' : codes.length > 0 ? codes[0].content.substring(0, 50) + (codes[0].content.length > 50 ? '...' : '') : 'Who Do You Want To Become?'}
-          </span>
+          <div className="relative h-5 overflow-hidden flex-1 max-w-[calc(100%-24px)]">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={currentCodeIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="absolute inset-0 text-muted-foreground text-sm truncate pr-2 text-left"
+                title={codes.length > 0 ? codes[currentCodeIndex]?.content : ''}
+              >
+                {isLoading ? 'Loading...' : codes.length > 0 ? codes[currentCodeIndex]?.content : 'Who Do You Want To Become?'}
+              </motion.span>
+            </AnimatePresence>
+          </div>
           <ChevronDown 
             className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''} flex-shrink-0`} 
             aria-hidden="true"
@@ -365,7 +442,7 @@ const TheCode: React.FC<TheCodeProps> = ({ isOpen: propIsOpen, onOpenChange }) =
       </div>
     </div>
   );
-};
+});
 
 TheCode.displayName = 'TheCode';
 
