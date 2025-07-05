@@ -62,7 +62,7 @@ export function RoadmapHeader({
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="font-medium">
-            {completedTasks} of {totalTasks} tasks completed
+            {completedTasks} of {totalTasks} milestones completed
           </span>
           <span className="text-muted-foreground">{progress}%</span>
         </div>

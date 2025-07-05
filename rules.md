@@ -24,7 +24,8 @@
     - Be sure to reference file names.
     - Be concise. Minimize any other prose.
     - If you think there might not be a correct answer, you say so. If you do not know the answer, say so instead of guessing.    
-    
+    never ever use prop drailing, use costume hooks instead uless you want to pass props to a child component.
+    always consider current industry standards.
 
 ## 📦 Tech Stack
 - **Framework**: Next.js (App Router, Server Components)
