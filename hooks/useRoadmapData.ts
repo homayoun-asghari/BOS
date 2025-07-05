@@ -1,7 +1,23 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+
+// Simple cache implementation with proper typing
+type CacheEntry<T> = { data: T; timestamp: number };
+const cache = new Map<string, CacheEntry<unknown>>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+const getCachedData = <T>(key: string): T | null => {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  const isExpired = Date.now() - cached.timestamp > CACHE_DURATION;
+  return isExpired ? null : cached.data as T;
+};
+
+const setCachedData = <T>(key: string, data: T): void => {
+  cache.set(key, { data, timestamp: Date.now() });
+};
 
 // Type definitions with strict null checks
 type Task = {
@@ -53,7 +69,6 @@ export const useRoadmapData = () => {
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const initialLoadRef = useRef(false);
 
   const safeSetRoadmap = useCallback((data: Partial<Roadmap> | null) => {
     if (!data || !data.user_id) {
@@ -80,112 +95,65 @@ export const useRoadmapData = () => {
   }, []);
 
   const fetchRoadmapData = useCallback(async (forceRefresh = false) => {
-    // If we already have data and this isn't a force refresh, don't fetch again
-    const currentRoadmap = roadmap; // Capture current value in closure
-    if (initialLoadRef.current && !forceRefresh && currentRoadmap) {
-      return;
-    }
-
     if (!user?.id) {
       setLoading(false);
       safeSetRoadmap(null);
       return;
     }
 
+    const cacheKey = `roadmap-${user.id}`;
+    
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh) {
+      const cachedData = getCachedData(cacheKey);
+      if (cachedData) {
+        safeSetRoadmap(cachedData);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      // First check if the user has any roadmap
+      // Fetch roadmap with milestones and tasks in a single query
       const { data: roadmapData, error: roadmapError } = await supabase
         .from('roadmaps')
-        .select('id')
+        .select('*')
         .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (roadmapError) throw roadmapError;
+        .single();
       
-      // If no roadmap exists, set to null and return early
+      if (roadmapError) throw roadmapError;
       if (!roadmapData) {
         safeSetRoadmap(null);
         setLoading(false);
         return;
       }
-      
-      // If we get here, fetch the full roadmap data
-      const { data: fullRoadmap, error: fullRoadmapError } = await supabase
-        .from('roadmaps')
-        .select('*')
-        .eq('id', roadmapData.id)
-        .single();
-        
-      if (fullRoadmapError) throw fullRoadmapError;
-      
-      // If no full roadmap data, set to null and return
-      if (!fullRoadmap) {
-        safeSetRoadmap(null);
-        setLoading(false);
-        return;
-      }
 
-      // Fetch milestones for the roadmap
-      const { data: milestones = [], error: milestonesError } = await supabase
+      // Fetch milestones with tasks
+      const { data: milestonesData, error: milestonesError } = await supabase
         .from('milestones')
-        .select('*')
-        .eq('roadmap_id', fullRoadmap.id)
+        .select(`
+          *,
+          tasks(*)
+        `)
+        .eq('roadmap_id', roadmapData.id)
         .order('order_index', { ascending: true });
-
+      
       if (milestonesError) throw milestonesError;
 
-      // If no milestones exist, set an empty array and return
-      if (!milestones || milestones.length === 0) {
-        safeSetRoadmap({
-          ...roadmapData,
-          milestones: [],
-        });
-        return;
-      }
-
-      // Fetch tasks for each milestone
-      const milestonesWithTasks = await Promise.all(
-        milestones.map(async (milestone) => {
-          if (!milestone?.id) return null;
-          
-          try {
-            const { data: tasks = [], error: tasksError } = await supabase
-              .from('tasks')
-              .select('*')
-              .eq('milestone_id', milestone.id)
-              .order('order_index', { ascending: true });
-
-            if (tasksError) throw tasksError;
-
-            return {
-              ...milestone,
-              tasks: Array.isArray(tasks) ? tasks : [],
-            };
-          } catch (taskError) {
-            console.error(`Error fetching tasks for milestone ${milestone.id}:`, taskError);
-            return {
-              ...milestone,
-              tasks: [],
-            };
-          }
-        })
-      );
-
-      // Filter out any null milestones and ensure all fields exist
-      const validMilestones = milestonesWithTasks
-        .filter((milestone): milestone is Milestone => milestone !== null)
-        .map(milestone => ({
+      // Process and cache the data
+      const processedData: Roadmap = {
+        ...roadmapData,
+        milestones: (milestonesData || []).map(milestone => ({
           ...milestone,
           tasks: Array.isArray(milestone.tasks) ? milestone.tasks : []
-        }));
+        }))
+      };
 
-      safeSetRoadmap({
-        ...fullRoadmap,
-        milestones: validMilestones,
-      });
+      setCachedData<Roadmap>(cacheKey, processedData);
+      safeSetRoadmap(processedData);
     } catch (error: unknown) {
       // Type-safe error handling
       const errorObj = error as Error & { code?: string };
@@ -288,12 +256,8 @@ export const useRoadmapData = () => {
     }
   }, [safeSetRoadmap]);
 
-  const updateTaskStatus = useCallback(async (taskId?: string, status?: Task['status']) => {
-    const currentRoadmap = roadmap; // Capture current roadmap value
-    if (!currentRoadmap || !taskId || status === undefined) {
-      console.error('Missing required parameters for updateTaskStatus');
-      return false;
-    }
+  const updateTaskStatus = useCallback(async (taskId: string, status: Task['status']) => {
+    if (!user?.id) return false;
 
     try {
       const { error } = await supabase
@@ -303,78 +267,43 @@ export const useRoadmapData = () => {
 
       if (error) throw error;
 
-      // Update local state
-      setRoadmap((prev: Roadmap | null) => {
-        if (!prev) return null;
-        
-        const updatedMilestones = (prev.milestones || []).map(milestone => ({
-          ...milestone,
-          tasks: (milestone.tasks || []).map(task => 
-            task.id === taskId ? { ...task, status } : task
-          )
-        }));
-
-        return {
-          ...prev,
-          milestones: updatedMilestones
-        };
-      });
-
+      // Invalidate cache
+      const cacheKey = `roadmap-${user.id}`;
+      cache.delete(cacheKey);
+      
+      // Refresh data
+      await fetchRoadmapData(true);
       return true;
-    } catch (error: unknown) {
-      // Safely extract error details without passing the error object directly
-      const errorDetails = {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        name: error instanceof Error ? error.name : 'Error',
-        stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
-      };
-      
-      // Log error details safely
-      console.error('Error updating task status:', JSON.stringify(errorDetails, null, 2));
-      
-      // Show user-friendly error message
-      toast.error('Failed to update task status. Please try again.');
+    } catch (error) {
+      console.error('Error updating task status:', error);
       return false;
     }
-  }, [roadmap]); // Keep the dependency to ensure we have the latest roadmap
+  }, [user?.id, fetchRoadmapData]);
 
-  // Stable reference for the effect
-  const stableFetchRoadmapData = useCallback(() => {
-    fetchRoadmapData().then(() => {
-      initialLoadRef.current = true;
-    });
-  }, [fetchRoadmapData]);
-
+  // Effect to handle data fetching
   useEffect(() => {
-    // Only fetch if we haven't loaded yet or if the user changes
-    if (!initialLoadRef.current || (user?.id && (!roadmap || roadmap.user_id !== user.id))) {
-      stableFetchRoadmapData();
+    if (!user?.id) {
+      setLoading(false);
+      setRoadmap(null);
+      return;
     }
     
-    // Cleanup function to reset the ref if the component unmounts
-    return () => {
-      // Keep the ref true to prevent re-fetching on tab switches
-      initialLoadRef.current = true;
-    };
-  }, [user?.id, stableFetchRoadmapData, roadmap?.user_id]); // Include all dependencies
+    // Only fetch if we don't have data or if the user ID changed
+    if (!roadmap || roadmap.user_id !== user.id) {
+      fetchRoadmapData();
+    }
+    // We intentionally omit 'roadmap' from deps to prevent infinite loops
+    // The fetchRoadmapData callback is stable and handles the actual data fetching
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, roadmap?.user_id, fetchRoadmapData]);
 
-  // Create a stable refresh function that forces a re-fetch
-  const refresh = useCallback(async () => {
-    initialLoadRef.current = false;
-    return fetchRoadmapData(true);
-  }, [fetchRoadmapData]);
-  
-  // Memoize the return value to prevent unnecessary re-renders
-  const result = useMemo(() => ({
+  // Return the API methods and state
+  return {
     roadmap,
     loading,
     error,
-    refresh,
+    refresh: fetchRoadmapData,
     deleteRoadmap,
     updateTaskStatus,
-  }), [roadmap, loading, error, refresh, deleteRoadmap, updateTaskStatus]);
-  
-  return result;
-
-
-};
+  };
+}

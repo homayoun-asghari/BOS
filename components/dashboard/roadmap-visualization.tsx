@@ -77,27 +77,24 @@ export function RoadmapVisualization() {
     );
   }
 
-  // Calculate progress
+  // Calculate progress based on milestones
   const calculateProgress = () => {
-    if (!roadmap?.milestones) return { totalTasks: 0, completedTasks: 0, progress: 0 };
+    if (!roadmap?.milestones || roadmap.milestones.length === 0) {
+      return { totalMilestones: 0, completedMilestones: 0, progress: 0 };
+    }
     
-    let total = 0;
-    let completed = 0;
+    const totalMilestones = roadmap.milestones.length;
+    const completedMilestones = roadmap.milestones.filter(milestone => {
+      // A milestone is considered complete if it has at least one task and all tasks are done
+      return milestone.tasks && milestone.tasks.length > 0 && 
+             milestone.tasks.every(task => task.status === 'done');
+    }).length;
     
-    roadmap.milestones.forEach((milestone) => {
-      milestone.tasks?.forEach((task) => {
-        total++;
-        if (task.status === 'done') {
-          completed++;
-        }
-      });
-    });
-    
-    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { totalTasks: total, completedTasks: completed, progress };
+    const progress = Math.round((completedMilestones / totalMilestones) * 100);
+    return { totalMilestones, completedMilestones, progress };
   };
   
-  const { totalTasks, completedTasks, progress } = calculateProgress();
+  const { totalMilestones, completedMilestones, progress } = calculateProgress();
   
   // Handle task status update
   const handleTaskStatusChange = async (taskId: string, status: TaskType['status']) => {
@@ -162,8 +159,8 @@ export function RoadmapVisualization() {
       <RoadmapHeader
         roadmap={roadmap}
         progress={progress}
-        totalTasks={totalTasks}
-        completedTasks={completedTasks}
+        totalTasks={totalMilestones}
+        completedTasks={completedMilestones}
         isDeleteDialogOpen={isDeleteDialogOpen}
         isDeleting={isDeleting}
         onEditClick={() => setIsEditModalOpen(true)}

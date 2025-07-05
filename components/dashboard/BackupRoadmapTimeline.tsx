@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, Circle, Clock, Diamond, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Diamond, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TaskType {
@@ -176,18 +176,38 @@ export function BackupRoadmapTimeline({
               <div className="absolute -start-2 -translate-y-1/2">
                 <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
               </div>
-              <div className="flex flex-col">
-                <div 
-                  className="flex items-center cursor-pointer group"
-                  onClick={() => toggleMilestone(milestone.id)}
-                >
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
-                    {milestone.title}
-                  </h3>
-                  {expandedMilestones[milestone.id] ? (
-                    <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
-                  ) : (
-                    <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+              <div className="flex flex-col w-full">
+                <div className="flex justify-between items-center w-full">
+                  <div 
+                    className="flex items-center cursor-pointer group flex-1"
+                    onClick={() => toggleMilestone(milestone.id)}
+                  >
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
+                      {milestone.title}
+                    </h3>
+                    {expandedMilestones[milestone.id] ? (
+                      <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+                    )}
+                  </div>
+                  {milestone.tasks && milestone.tasks.length > 0 && (
+                    <div className={`flex items-center text-sm ${
+                      milestone.tasks.every(t => t.status === 'done') 
+                        ? 'text-green-500 dark:text-green-400' 
+                        : 'text-gray-500 dark:text-gray-400'
+                    } bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md space-x-1`}>
+                      {milestone.tasks.every(t => t.status === 'done') ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>All done</span>
+                        </>
+                      ) : (
+                        <span>
+                          {milestone.tasks.filter(t => t.status === 'done').length}/{milestone.tasks.length} done
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 {milestone.description && (
