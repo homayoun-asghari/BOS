@@ -23,8 +23,8 @@ const ToolbarButton = ({ icon, onClick, isActive, disabled, title }: ToolbarButt
     onClick={onClick}
     disabled={disabled}
     className={cn(
-      "p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors",
-      isActive && "bg-gray-200 dark:bg-gray-700",
+      "p-1.5 rounded-md hover:bg-muted transition-colors",
+      isActive && "bg-muted",
       disabled && "opacity-40 cursor-not-allowed"
     )}
     title={title}
@@ -92,7 +92,7 @@ const RichTextEditor = ({
       onSelect={handleTextSelection}
       className={cn(
         'min-h-[calc(100vh-200px)] border-0 p-4 text-base focus-visible:ring-0 focus-visible:ring-offset-0 resize-none',
-        viewMode === 'split' && 'w-1/2 border-r border-gray-200 dark:border-gray-700'
+        viewMode === 'split' && 'w-1/2 border-r border-border'
       )}
       disabled={isSubmitting}
       placeholder="Start writing in Markdown..."
@@ -110,8 +110,8 @@ const RichTextEditor = ({
 
   return (
     <div className="relative">
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white dark:bg-gray-900 px-3 py-1.5 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-        <div className="flex items-center mr-2 border-r border-gray-200 dark:border-gray-700 pr-2">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background px-3 py-1.5 rounded-full shadow-lg border border-border z-10">
+        <div className="flex items-center mr-2 border-r border-border pr-2">
           <ToolbarButton
             icon={<Type className="h-4 w-4" />}
             onClick={() => insertAtCursor('# ', '')}
@@ -132,7 +132,7 @@ const RichTextEditor = ({
           />
         </div>
         
-        <div className="flex items-center border-r border-gray-200 dark:border-gray-700 pr-2">
+        <div className="flex items-center border-r border-border pr-2">
           <ToolbarButton
             icon={<Bold className="h-4 w-4" />}
             onClick={() => insertAtCursor('**', '**')}
@@ -165,7 +165,7 @@ const RichTextEditor = ({
           />
         </div>
 
-        <div className="flex items-center border-r border-gray-200 dark:border-gray-700 pr-2">
+        <div className="flex items-center border-r border-border pr-2">
           <ToolbarButton
             icon={<List className="h-4 w-4" />}
             onClick={() => insertAtCursor('\n- ', '')}
@@ -243,7 +243,7 @@ const Dropdown = ({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-md hover:bg-muted transition-colors"
     >
       <Tag className="h-3.5 w-3.5" />
       {label}
@@ -251,7 +251,7 @@ const Dropdown = ({
     </button>
     
     {isOpen && (
-      <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+      <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-popover shadow-lg ring-1 ring-border focus:outline-none">
         <div className="py-1">
           {children}
         </div>
@@ -273,8 +273,8 @@ const DropdownItem = ({
   <button
     onClick={onClick}
     className={cn(
-      "w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
-      isActive && "bg-gray-100 dark:bg-gray-700"
+      "w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted",
+      isActive && "bg-muted"
     )}
   >
     {children}
@@ -414,9 +414,9 @@ export function KnowledgeForm() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white dark:bg-gray-900">
+    <div className="h-screen flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between">
+      <div className="border-b border-border px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Dropdown 
             label={selectedType ? types.find(t => t.id === selectedType)?.name || 'Type' : 'Type'}
@@ -468,7 +468,7 @@ export function KnowledgeForm() {
               e.stopPropagation();
               setShowTagInput(true);
             }}
-            className="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-md hover:bg-muted transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Tag
