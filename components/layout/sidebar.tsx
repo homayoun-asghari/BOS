@@ -30,29 +30,32 @@ export function Sidebar({ className }: SidebarProps) {
     },
   ];
 
+  // Navigation is handled by Next.js Link component
+
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className={`hidden md:flex md:flex-shrink-0 ${className || ''}`}>
-        <div className="flex w-64 flex-col border-r border-border">
-          <div className="flex h-0 flex-1 flex-col">
-            <div className="flex flex-1 flex-col overflow-y-auto pt-5">
+      <div className={`hidden md:flex h-full ${className || ''}`} style={{ position: 'relative', zIndex: 1000 }}>
+        <div className="flex w-64 flex-col border-r border-border h-full bg-background relative z-50">
+          <div className="flex flex-1 flex-col h-full">
+            <div className="flex-1 flex flex-col overflow-y-auto pt-5">
               <div className="flex-1 space-y-1 px-3">
                 {items.map((item) => {
                   const isActive = pathname === item.href;
                   return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={`group flex items-center rounded-md px-3 py-2 text-sm font-medium ${
-                        isActive
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
-                      }`}
-                    >
-                      <span className="mr-3">{item.icon}</span>
-                      {item.name}
-                    </Link>
+                    <div key={item.name} className="relative">
+                      <Link
+                        href={item.href}
+                        className={`group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+                        }`}
+                      >
+                        <span className="mr-3">{item.icon}</span>
+                        {item.name}
+                      </Link>
+                    </div>
                   );
                 })}
               </div>
