@@ -87,26 +87,26 @@ export default function KnowledgePage() {
                 </div>
 
                 {/* Search and Filters */}
-                <div className="space-y-3">
-                  {/* Search Bar */}
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  {/* Search Bar - Takes most of the space */}
+                  <div className="relative flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       placeholder="Search knowledge base..."
-                      className="pl-10"
+                      className="pl-10 w-full"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                   
-                  {/* Filters Row */}
-                  <div className="flex flex-wrap gap-2">
-                    <div className="flex-1 min-w-[140px]">
+                  {/* Filters - Full width on mobile, fixed width on larger screens */}
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="w-1/2 sm:w-36">
                       <Select value={typeFilter} onValueChange={(value: KnowledgeType) => setTypeFilter(value)}>
                         <SelectTrigger className="w-full">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 truncate">
                             <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                            <SelectValue placeholder="Type" />
+                            <SelectValue placeholder="Type" className="truncate" />
                           </div>
                         </SelectTrigger>
                         <SelectContent>
@@ -119,12 +119,12 @@ export default function KnowledgePage() {
                       </Select>
                     </div>
 
-                    <div className="flex-1 min-w-[140px]">
+                    <div className="w-1/2 sm:w-36">
                       <Select value={statusFilter} onValueChange={(value: KnowledgeStatus) => setStatusFilter(value)}>
                         <SelectTrigger className="w-full">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 truncate">
                             <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                            <SelectValue placeholder="Status" />
+                            <SelectValue placeholder="Status" className="truncate" />
                           </div>
                         </SelectTrigger>
                         <SelectContent>
