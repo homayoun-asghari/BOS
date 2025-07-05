@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
@@ -46,6 +46,7 @@ export function RoadmapVisualization() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [localRoadmap, setLocalRoadmap] = useState<RoadmapType | null>(null);
   
   const {
     roadmap: roadmapFromHook,
@@ -57,11 +58,18 @@ export function RoadmapVisualization() {
   } = useRoadmapData();
 
   // Type assertion with proper type checking
-  const roadmap = roadmapFromHook as unknown as RoadmapType;
+  const roadmap = (roadmapFromHook as unknown as RoadmapType) || null;
+  
+  // Update localRoadmap when roadmap changes
+  useEffect(() => {
+    if (roadmap) {
+      setLocalRoadmap(roadmap);
+    }
+  }, [roadmap]);
 
 
 
-  if (loading) {
+  if (loading && !localRoadmap) {
     return <div className="p-4 text-foreground/80">Loading roadmap...</div>;
   }
 
@@ -69,7 +77,7 @@ export function RoadmapVisualization() {
     return <div className="p-4 text-destructive">{error}</div>;
   }
 
-  if (!roadmap) {
+  if (!localRoadmap) {
     return (
       <div className="flex h-64 items-center justify-center text-foreground/60">
         No roadmap found. Create one to get started!
@@ -79,52 +87,54 @@ export function RoadmapVisualization() {
 
   // Calculate progress based on milestones
   const calculateProgress = () => {
-    if (!roadmap?.milestones || roadmap.milestones.length === 0) {
+    if (!localRoadmap?.milestones || localRoadmap.milestones.length === 0) {
       return { totalMilestones: 0, completedMilestones: 0, progress: 0 };
     }
     
-    const totalMilestones = roadmap.milestones.length;
-    const completedMilestones = roadmap.milestones.filter(milestone => {
+    const totalMilestones = localRoadmap.milestones.length;
+    const completedMilestones = localRoadmap.milestones.filter(milestone => {
       // A milestone is considered complete if it has at least one task and all tasks are done
       return milestone.tasks && milestone.tasks.length > 0 && 
              milestone.tasks.every(task => task.status === 'done');
     }).length;
     
-    const progress = Math.round((completedMilestones / totalMilestones) * 100);
+    const progress = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
     return { totalMilestones, completedMilestones, progress };
   };
   
   const { totalMilestones, completedMilestones, progress } = calculateProgress();
   
-  // Handle task status update
   const handleTaskStatusChange = async (taskId: string, status: TaskType['status']) => {
-    if (!roadmap) return false;
+    if (!localRoadmap) return false;
     
     try {
       // Optimistically update the local state
-      const updatedMilestones = roadmap.milestones.map(milestone => ({
+      const updatedMilestones = localRoadmap.milestones.map(milestone => ({
         ...milestone,
         tasks: milestone.tasks.map(task => 
           task.id === taskId ? { ...task, status } : task
         )
       }));
       
-      // Create a new roadmap object with the updated milestones
-      Object.assign(roadmap, { milestones: updatedMilestones });
+      // Update local state
+      setLocalRoadmap({
+        ...localRoadmap,
+        milestones: updatedMilestones
+      });
       
-      // Update the server
-      const success = await updateTaskStatus(taskId, status);
+      // Update the server in the background
+      updateTaskStatus(taskId, status).then(success => {
+        if (!success) {
+          // If server update fails, refetch data
+          fetchRoadmapData().catch(console.error);
+        }
+      }).catch(console.error);
       
-      // If the server update fails, revert the optimistic update
-      if (!success) {
-        await fetchRoadmapData();
-      }
-      
-      return success;
+      return true; // Optimistic update was successful
     } catch (error) {
       console.error('Error updating task status:', error);
       // On error, refetch to ensure consistency
-      await fetchRoadmapData();
+      fetchRoadmapData().catch(console.error);
       return false;
     }
   };
@@ -157,7 +167,7 @@ export function RoadmapVisualization() {
   return (
     <div className="w-full">
       <RoadmapHeader
-        roadmap={roadmap}
+        roadmap={localRoadmap}
         progress={progress}
         totalTasks={totalMilestones}
         completedTasks={completedMilestones}
@@ -170,15 +180,15 @@ export function RoadmapVisualization() {
       />
 
       {/* Edit Roadmap Modal */}
-      {roadmap && (
+      {localRoadmap && (
         <RoadmapModal 
           open={isEditModalOpen} 
           onOpenChange={setIsEditModalOpen}
           roadmap={{
-            ...roadmap,
-            start_date: roadmap.start_date || new Date().toISOString(),
-            end_date: roadmap.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            milestones: roadmap.milestones || []
+            ...localRoadmap,
+            start_date: localRoadmap.start_date || new Date().toISOString(),
+            end_date: localRoadmap.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            milestones: localRoadmap.milestones || []
           }}
         />
       )}
@@ -186,12 +196,12 @@ export function RoadmapVisualization() {
       {/* Roadmap Content */}
       <div className="mt-6">
         <BackupRoadmapTimeline 
-          milestones={roadmap.milestones}
+          milestones={localRoadmap.milestones}
           onTaskStatusChange={handleTaskStatusChange}
         />
         {/* Uncomment the line below to switch back to the original timeline */}
         {/* <EnhancedRoadmapTimeline 
-          milestones={roadmap.milestones}
+          milestones={localRoadmap.milestones}
           onTaskStatusChange={handleTaskStatusChange}
         /> */}
       </div>

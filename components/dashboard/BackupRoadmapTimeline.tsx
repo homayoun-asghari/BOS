@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, Circle, Clock, Diamond, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -122,19 +122,19 @@ export function BackupRoadmapTimeline({
     }));
   };
 
-  const handleTaskStatusChange = async (taskId: string, currentStatus: 'todo' | 'in_progress' | 'done') => {
+  const handleTaskStatusChange = useCallback(async (taskId: string, currentStatus: 'todo' | 'in_progress' | 'done') => {
     try {
       const newStatus = currentStatus === 'done' ? 'todo' : 'done';
-      await onTaskStatusChange(taskId, newStatus);
-      return true;
+      const success = await onTaskStatusChange(taskId, newStatus);
+      return success;
     } catch (error) {
       console.error('Error updating task status:', error);
       return false;
     }
-  };
+  }, [onTaskStatusChange]);
 
 
-  const getStatusIcon = (status: 'todo' | 'in_progress' | 'done', priority?: 'low' | 'medium' | 'high') => {
+  const getStatusIcon = useCallback((status: 'todo' | 'in_progress' | 'done', priority?: 'low' | 'medium' | 'high') => {
     const priorityColor = priority === 'high' ? 'text-red-500' : 
                          priority === 'medium' ? 'text-amber-500' : 
                          priority === 'low' ? 'text-green-500' : 'text-gray-500';
@@ -155,7 +155,7 @@ export function BackupRoadmapTimeline({
           </div>
         );
     }
-  };
+  }, []);
 
   if (!milestones || milestones.length === 0) {
     return (
