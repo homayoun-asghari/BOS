@@ -170,95 +170,117 @@ export function BackupRoadmapTimeline({
       <ol className="relative border-s border-gray-200 dark:border-gray-600 space-y-8">
         {milestones
           .sort((a, b) => a.order_index - b.order_index)
-          .flatMap((milestone) => [
-            // Milestone Item
-            <li key={`milestone-${milestone.id}`} className="ms-4">
-              <div className="absolute -start-2 -translate-y-1/2">
-                <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
-              </div>
-              <div className="flex flex-col w-full">
-                <div className="flex justify-between items-center w-full">
-                  <div 
-                    className="flex items-center cursor-pointer group flex-1"
-                    onClick={() => toggleMilestone(milestone.id)}
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
-                      {milestone.title}
-                    </h3>
-                    {expandedMilestones[milestone.id] ? (
-                      <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
-                    )}
-                  </div>
-                  {milestone.tasks && milestone.tasks.length > 0 && (
-                    <div className={`flex items-center text-sm ${
-                      milestone.tasks.every(t => t.status === 'done') 
-                        ? 'text-green-500 dark:text-green-400' 
-                        : 'text-gray-500 dark:text-gray-400'
-                    } bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md space-x-1`}>
-                      {milestone.tasks.every(t => t.status === 'done') ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>All done</span>
-                        </>
+          .map((milestone) => {
+            // Sort tasks for this milestone by due date and then by priority
+            const sortedTasks = milestone.tasks ? [...milestone.tasks].sort((a, b) => {
+              // First, sort by due date
+              if (a.due_date && b.due_date) {
+                const dateDiff = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+                if (dateDiff !== 0) return dateDiff;
+              } else if (a.due_date) return -1;
+              else if (b.due_date) return 1;
+              
+              // If same date or no date, sort by priority (high > medium > low > undefined)
+              const priorityOrder: Record<string, number> = {
+                'high': 3,
+                'medium': 2,
+                'low': 1,
+                '': 0
+              };
+              
+              return (priorityOrder[b.priority || ''] || 0) - (priorityOrder[a.priority || ''] || 0);
+            }) : [];
+            
+            return (
+              <li key={`milestone-${milestone.id}`} className="ms-4">
+                <div className="absolute -start-2 -translate-y-1/2">
+                  <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
+                </div>
+                <div className="flex flex-col w-full">
+                  <div className="flex justify-between items-center w-full">
+                    <div 
+                      className="flex items-center cursor-pointer group flex-1"
+                      onClick={() => toggleMilestone(milestone.id)}
+                    >
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
+                        {milestone.title}
+                      </h3>
+                      {expandedMilestones[milestone.id] ? (
+                        <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
                       ) : (
-                        <span>
-                          {milestone.tasks.filter(t => t.status === 'done').length}/{milestone.tasks.length} done
-                        </span>
+                        <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
                       )}
                     </div>
+                    {milestone.tasks && milestone.tasks.length > 0 && (
+                      <div className={`flex items-center text-sm ${
+                        milestone.tasks.every(t => t.status === 'done') 
+                          ? 'text-green-500 dark:text-green-400' 
+                          : 'text-gray-500 dark:text-gray-400'
+                      } bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md space-x-1`}>
+                        {milestone.tasks.every(t => t.status === 'done') ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>All done</span>
+                          </>
+                        ) : (
+                          <span>
+                            {milestone.tasks.filter(t => t.status === 'done').length}/{milestone.tasks.length} done
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {milestone.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                      {milestone.description}
+                    </p>
                   )}
                 </div>
-                {milestone.description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                    {milestone.description}
-                  </p>
-                )}
-              </div>
-            </li>,
-            
-            // Tasks for this milestone (only show if expanded)
-            ...(expandedMilestones[milestone.id] && milestone.tasks?.sort((a, b) => a.order_index - b.order_index).map((task) => (
-              <li 
-                key={`task-${task.id}`} 
-                className={cn(
-                  "ms-8 mb-4 last:mb-0 transition-all duration-1000 ease-in-out",
-                  pulsingTaskId === task.id && isPulsing && "opacity-70"
-                )}
-              >
-                <div className="absolute w-2 h-2 bg-gray-300 rounded-full -start-1 translate-y-2"></div>
-                <div className="flex">
-                  <div className="flex-shrink-0 mr-2">
-                    <button
-                      onClick={() => handleTaskStatusChange(task.id, task.status)}
-                      aria-label={task.status === 'done' ? 'Mark as todo' : 'Mark as done'}
-                    >
-                      {getStatusIcon(task.status, task.priority)}
-                    </button>
+                
+                {/* Tasks for this milestone */}
+                {expandedMilestones[milestone.id] && sortedTasks.length > 0 && (
+                  <div className="mt-2 ml-4 space-y-2">
+                    {sortedTasks.map((task) => (
+                      <div 
+                        key={`task-${task.id}`}
+                        className={cn(
+                          "relative pl-4 py-2 transition-all duration-1000 ease-in-out",
+                          pulsingTaskId === task.id && isPulsing && "opacity-70"
+                        )}
+                      >
+                        <div className="absolute left-0 top-1/2 w-2 h-2 bg-gray-300 rounded-full -translate-y-1/2"></div>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleTaskStatusChange(task.id, task.status)}
+                            aria-label={task.status === 'done' ? 'Mark as todo' : 'Mark as done'}
+                            className="mr-2"
+                          >
+                            {getStatusIcon(task.status, task.priority)}
+                          </button>
+                          <div className="flex flex-col">
+                            <span className={`${task.status === 'done' ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                              {task.title}
+                            </span>
+                            {task.due_date && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                Due: {new Date(task.due_date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          {pulsingTaskId === task.id && (
+                            <span className="ml-2 flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-primary-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-500"></span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex flex-col">
-                    {task.due_date && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                        Due: {new Date(task.due_date).toLocaleDateString()}
-                      </span>
-                    )}
-                    <div className="relative">
-                      <span className={`${task.status === 'done' ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
-                        {task.title}
-                      </span>
-                      {pulsingTaskId === task.id && (
-                        <span className="absolute -right-2 -top-1 flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-500 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-500"></span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                )}
               </li>
-            )) || [])
-          ])}
+            );
+          })}
       </ol>
     </div>
   );
