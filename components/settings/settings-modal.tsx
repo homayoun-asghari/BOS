@@ -1,7 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sun, Moon, Bell, User, Shield, Settings as SettingsIcon } from 'lucide-react';
+import { convertToMilliseconds } from '@/hooks/useShuffleSettings';
+import { useShuffleSettings, TimeUnit } from '@/hooks/useShuffleSettings';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from 'next-themes';
@@ -27,6 +37,39 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Shuffle settings
+  const {
+    timeValue,
+    timeUnit,
+    setTimeValue,
+    setTimeUnit,
+  } = useShuffleSettings();
+  
+  // Local state for form inputs
+  const [localTimeValue, setLocalTimeValue] = useState(timeValue);
+  const [localTimeUnit, setLocalTimeUnit] = useState<TimeUnit>(timeUnit);
+  
+  // Update local state when settings change
+  useEffect(() => {
+    setLocalTimeValue(timeValue);
+    setLocalTimeUnit(timeUnit);
+  }, [timeValue, timeUnit]);
+  
+  // Handle time value change
+  const handleTimeValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    if (!isNaN(value) && value > 0) {
+      setLocalTimeValue(value);
+      setTimeValue(value);
+    }
+  };
+  
+  // Handle time unit change
+  const handleTimeUnitChange = (unit: TimeUnit) => {
+    setLocalTimeUnit(unit);
+    setTimeUnit(unit);
+  };
   const [formData, setFormData] = useState({
     name: user?.user_metadata?.full_name || '',
     email: user?.email || '',
@@ -41,12 +84,27 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
 
   const handleSave = async () => {
     setIsLoading(true);
-    // TODO: Implement save logic with Supabase
-    console.log('Saving settings:', formData);
+    
+    // Save the current values
+    const ms = convertToMilliseconds(localTimeValue, localTimeUnit);
+    
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('codeShuffleInterval', ms.toString());
+        
+        // Dispatch a custom event that TheCode component can listen to
+        window.dispatchEvent(new CustomEvent('shuffleIntervalChanged', { detail: ms }));
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
+    }
+    
+    // Close the modal
     setTimeout(() => {
       setIsLoading(false);
       onOpenChange(false);
-    }, 1000);
+    }, 300);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,6 +257,37 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                     >
                       <Moon className="h-4 w-4 mr-2" /> Dark
                     </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
+                  <div className="flex-1">
+                    <h3 className="font-medium">Code Shuffling</h3>
+                    <p className="text-sm text-muted-foreground">How often to rotate through your personal codes</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-[80px]">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={localTimeValue}
+                        onChange={handleTimeValueChange}
+                        className="w-full"
+                      />
+                    </div>
+                    <Select
+                      value={localTimeUnit}
+                      onValueChange={handleTimeUnitChange}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="seconds">Seconds</SelectItem>
+                        <SelectItem value="minutes">Minutes</SelectItem>
+                        <SelectItem value="hours">Hours</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

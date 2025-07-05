@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useShuffleSettings } from '@/hooks/useShuffleSettings';
 
 interface TheCodeHandles {
   updateShuffleInterval: (interval: number) => void;
@@ -48,7 +49,7 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentCodeIndex, setCurrentCodeIndex] = useState(0);
-  const [shuffleInterval, setShuffleInterval] = useState(30000); // 30 seconds default
+  const { shuffleInterval } = useShuffleSettings();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const shuffleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -56,20 +57,20 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     updateShuffleInterval: (newInterval: number) => {
-      setShuffleInterval(newInterval);
+      // Update the interval immediately
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+        shuffleTimerRef.current = null;
+      }
       
-      // Restart the interval with new duration
+      // Only set new interval if we have codes to rotate
       if (codes.length > 1) {
-        if (shuffleTimerRef.current) {
-          clearInterval(shuffleTimerRef.current);
-        }
-        
-        shuffleTimerRef.current = setInterval(() => {
-          setCurrentCodeIndex(prevIndex => (prevIndex + 1) % codes.length);
-        }, newInterval);
+        const rotateCode = () => setCurrentCodeIndex(prev => (prev + 1) % codes.length);
+        shuffleTimerRef.current = setInterval(rotateCode, newInterval);
+        console.log('Updated shuffle interval to:', newInterval);
       }
     }
-  }));
+  }), [codes.length]);
 
 
 
@@ -179,15 +180,22 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
     }
   }, [user]);
 
-  // Set up shuffle interval when codes change
+  // Set up the shuffle interval when codes or shuffleInterval changes
   useEffect(() => {
-    if (codes.length <= 1) return;
-    
-    // Clear any existing interval
+    if (codes.length <= 1) {
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+        shuffleTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Clear existing interval
     if (shuffleTimerRef.current) {
       clearInterval(shuffleTimerRef.current);
+      shuffleTimerRef.current = null;
     }
-    
+
     // Set up new interval
     const rotateCode = () => {
       setCurrentCodeIndex(prevIndex => (prevIndex + 1) % codes.length);
@@ -197,18 +205,54 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
     const initialDelay = 2000; // 2 seconds
     
     const timeoutId = setTimeout(() => {
-      rotateCode();
-      shuffleTimerRef.current = setInterval(rotateCode, shuffleInterval);
+      // Only set up the interval if we have more than one code
+      if (codes.length > 1) {
+        // Start the interval
+        rotateCode(); // Show next code immediately after delay
+        
+        // Set up the interval for subsequent rotations
+        shuffleTimerRef.current = setInterval(rotateCode, shuffleInterval);
+        console.log(`Set shuffle interval to ${shuffleInterval}ms`);
+      }
     }, initialDelay);
-    
-    // Clean up on unmount or when codes/shuffleInterval changes
+
+    // Cleanup function
     return () => {
       clearTimeout(timeoutId);
       if (shuffleTimerRef.current) {
         clearInterval(shuffleTimerRef.current);
+        shuffleTimerRef.current = null;
       }
     };
   }, [codes.length, shuffleInterval]);
+  
+  // Listen for shuffle interval changes and clean up on unmount
+  useEffect(() => {
+    const handleShuffleIntervalChange = (event: Event) => {
+      const customEvent = event as CustomEvent<number>;
+      const newInterval = customEvent.detail;
+      
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+        shuffleTimerRef.current = null;
+      }
+      
+      if (codes.length > 1) {
+        const rotateCode = () => setCurrentCodeIndex(prev => (prev + 1) % codes.length);
+        shuffleTimerRef.current = setInterval(rotateCode, newInterval);
+        console.log('Updated shuffle interval via event to:', newInterval);
+      }
+    };
+    
+    window.addEventListener('shuffleIntervalChanged', handleShuffleIntervalChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('shuffleIntervalChanged', handleShuffleIntervalChange as EventListener);
+      if (shuffleTimerRef.current) {
+        clearInterval(shuffleTimerRef.current);
+      }
+    };
+  }, [codes.length]);
   
   // Fetch codes when component mounts or user changes
   useEffect(() => {
