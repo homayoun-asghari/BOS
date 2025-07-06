@@ -28,14 +28,17 @@ export const ensureBucketExists = async () => {
     console.log(`Using bucket: ${BUCKET_NAME}`);
     
     // Verify we can access the bucket
-    const { error: accessError } = await supabase.storage
+    const { data: bucketList, error: accessError } = await supabase.storage
       .from(BUCKET_NAME)
       .list();
       
     if (accessError) {
       console.error('Error accessing bucket. Please check RLS policies:', accessError);
+      console.log('Make sure the bucket exists and has proper RLS policies set up.');
       throw new Error(`Cannot access bucket: ${accessError.message}`);
     }
+    
+    console.log('Bucket access verified. Bucket contents:', bucketList);
     
     return true;
   } catch (error) {
@@ -47,7 +50,7 @@ export const ensureBucketExists = async () => {
 /**
  * Uploads a file to Supabase Storage
  */
-export const uploadFile = async (file: File, path: string = '') => {
+export const uploadFile = async (file: File, pathPrefix: string = '') => {
   try {
     // Validate file
     if (!file) {
@@ -68,10 +71,20 @@ export const uploadFile = async (file: File, path: string = '') => {
     const user = await getCurrentUser();
     const userId = user?.id || 'anonymous';
     
-    // Create a unique filename with user ID for better organization
+    // Create a unique filename with timestamp and random string
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = path ? `${userId}/${path}/${fileName}` : `${userId}/${fileName}`;
+    
+    // Construct the file path with proper folder structure
+    const pathSegments = [
+      userId,
+      ...(pathPrefix ? [pathPrefix] : [])
+    ].filter(Boolean);
+    
+    const directoryPath = pathSegments.join('/');
+    const filePath = `${directoryPath}/${fileName}`;
+    
+    console.log('Uploading file to path:', filePath);
     
     // Upload the file with proper content type
     const { data, error } = await authClient.storage
@@ -87,16 +100,17 @@ export const uploadFile = async (file: File, path: string = '') => {
       throw new Error(`Upload failed: ${error.message}`);
     }
     
-    // Get the public URL
-    const { data: { publicUrl } } = authClient.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(filePath);
+    // Construct the public URL directly using the storage URL pattern
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
+    
+    console.log('File uploaded successfully. Public URL:', publicUrl);
     
     // Return metadata about the uploaded file
     return {
-      path: data.path,
+      path: filePath, // Return the full path including directories
       publicUrl,
-      fullPath: `${BUCKET_NAME}/${data.path}`,
+      fullPath: `${BUCKET_NAME}/${filePath}`,
       fileName: file.name,
       size: file.size,
       type: file.type,

@@ -32,7 +32,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       </Head>
       
       {/* Background Image - Above sidebar */}
-      <div 
+      {/* <div 
         className="fixed inset-0 z-10 opacity-10 pointer-events-none"
         style={{
           backgroundImage: "url('/asset/montain.png')",
@@ -41,7 +41,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           backgroundRepeat: 'no-repeat',
           backgroundAttachment: 'fixed'
         }}
-      />
+      /> */}
       
       {/* Main content */}
       <div className="relative z-0 flex flex-1 h-full w-full overflow-hidden">

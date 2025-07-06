@@ -113,6 +113,8 @@ CREATE POLICY "Users can manage links for their notes" ON public.note_links
 
 
 
+
+
 CREATE TABLE public.attachments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   note_id uuid NOT NULL REFERENCES public.notes(id) ON DELETE CASCADE,
