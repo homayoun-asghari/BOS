@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import useNotes from '@/hooks/useNotes';
 import { EditorContent } from '@tiptap/react';
@@ -8,6 +8,9 @@ import { useEditorInstance } from './EditorInstance';
 import { EditorToolbar } from './EditorToolbar';
 import { LinkDialog } from './LinkDialog';
 import { MarkdownPreview } from './MarkdownPreview';
+import { useFileUploads } from './hooks/useFileUploads';
+import { useEditorLifecycle } from './hooks/useEditorLifecycle';
+import { usePendingLinks } from './hooks/usePendingLinks';
 
 interface NoteItem {
   id: string;
@@ -42,87 +45,28 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   currentNoteId
 }, ref) => {
   const { createNoteLink } = useNotes();
-  const [isMounted, setIsMounted] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const pendingLinks = useRef<Array<{targetNoteId: string, linkText: string}>>([]);
   const [selectedText, setSelectedText] = useState('');
   
-  // Expose a method to process pending links
-  const processPendingLinks = useCallback(async (noteId: string) => {
-    if (!pendingLinks.current.length) {
-      return { success: 0, failed: 0 };
-    }
-    
-    console.log(`Processing ${pendingLinks.current.length} pending links for note ${noteId}`);
-    
-    const successfulLinks = [];
-    const failedLinks = [];
-    
-    // Process each pending link
-    for (const link of pendingLinks.current) {
-      try {
-        console.log('Creating pending link:', { sourceNoteId: noteId, targetNoteId: link.targetNoteId });
-        await createNoteLink(noteId, link.targetNoteId, link.linkText);
-        successfulLinks.push(link);
-      } catch (error) {
-        console.error('Failed to create pending link:', error);
-        failedLinks.push(link);
-      }
-    }
-    
-    // Remove successfully created links from pending
-    pendingLinks.current = failedLinks;
-    
-    console.log(`Processed pending links: ${successfulLinks.length} succeeded, ${failedLinks.length} failed`);
-    
-    return {
-      success: successfulLinks.length,
-      failed: failedLinks.length
-    };
-  }, [createNoteLink]);
+  // Pending links handling moved to usePendingLinks hook
+  const { processPendingLinks, addPendingLink, hasPendingLinks } = usePendingLinks({
+    createNoteLink: createNoteLink
+  });
   
-  // Expose the processPendingLinks function to parent components
-  useImperativeHandle(ref, () => ({
-    processPendingLinks,
-    hasPendingLinks: () => pendingLinks.current.length > 0
-  }), [processPendingLinks]);
+  // Initialize editor lifecycle hooks
+  const { handleContentUpdate } = useEditorLifecycle({
+    currentNoteId,
+    value,
+    onChange
+  });
   
-  // Set isMounted to true after component mounts (client-side only)
-  useEffect(() => {
-    setIsMounted(true);
-    
-    // Handle clicks on internal note links
-    const handleInternalLinkClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const link = target.closest('a.internal-note-link') as HTMLAnchorElement;
-      
-      if (link && onInternalLinkClick) {
-        const noteId = link.getAttribute('data-note-id');
-        if (noteId) {
-          e.preventDefault();
-          onInternalLinkClick(noteId);
-        }
-      }
-    };
-    
-    document.addEventListener('click', handleInternalLinkClick);
-    
-    return () => {
-      setIsMounted(false);
-      document.removeEventListener('click', handleInternalLinkClick);
-    };
-  }, [onInternalLinkClick]);
-  
+  // Initialize editor with the handleContentUpdate function
   const editor = useEditorInstance({
     initialContent: value,
-    onUpdate: (content: string) => {
-      onChange(content);
-    },
+    onUpdate: handleContentUpdate
   });
-
+  
   const handleAddLink = useCallback(() => {
     if (!editor) return;
     
@@ -143,13 +87,47 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     // update link
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   }, [editor]);
-
-  // Expose the handleAddLink function for external use
+  
+  // Expose the processPendingLinks and hasPendingLinks functions to parent components
   useImperativeHandle(ref, () => ({
     processPendingLinks,
-    hasPendingLinks: () => pendingLinks.current.length > 0,
+    hasPendingLinks,
     addLink: handleAddLink
-  }), [processPendingLinks, handleAddLink]);
+  }), [processPendingLinks, hasPendingLinks, handleAddLink]);
+  
+  // File upload handling moved to useFileUploads hook
+  const { 
+    uploadError, 
+    isUploading, 
+    handleUpload, 
+    setUploadError 
+  } = useFileUploads({ 
+    editor, 
+    onFileUpload 
+  });
+  
+  // Handle clicks on internal note links
+  useEffect(() => {
+    const handleInternalLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a.internal-note-link') as HTMLAnchorElement;
+      
+      if (link && onInternalLinkClick) {
+        const noteId = link.getAttribute('data-note-id');
+        if (noteId) {
+          e.preventDefault();
+          onInternalLinkClick(noteId);
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleInternalLinkClick);
+    return () => {
+      document.removeEventListener('click', handleInternalLinkClick);
+    };
+  }, [onInternalLinkClick]);
+
+
 
   const handleInsertTable = useCallback(() => {
     if (!editor) return;
@@ -228,7 +206,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       } else {
         // If the note doesn't have an ID yet, store the link to be created later
         console.log('Note not saved yet, storing link for later creation:', { targetNoteId: noteId, linkText });
-        pendingLinks.current.push({ targetNoteId: noteId, linkText });
+        addPendingLink(noteId, linkText);
       }
     } else {
       // Handle external links
@@ -260,80 +238,11 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         })
         .run();
     }
-    
+
     // Reset the dialog state
     setSelectedText('');
     setIsLinkDialogOpen(false);
-  }, [editor, createNoteLink, currentNoteId]);
-
-  // Handle file uploads from the toolbar
-  const handleUpload = useCallback((url: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => {
-    if (!editor) return;
-    
-    if (isError) {
-      setUploadError(`Failed to upload ${fileName}`);
-      setIsUploading(false);
-      return;
-    }
-
-    // Don't show error for empty URL if we have an uploadId (initial loading state)
-    if (!url && !uploadId) {
-      console.error('No URL provided for file upload');
-      setUploadError('No URL provided for file upload');
-      return;
-    }
-    
-    // If URL is empty but we have an uploadId, it's just the initial loading state
-    if (!url) {
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError(null);
-    
-    try {
-      // Handle image uploads
-      if (fileType.startsWith('image/')) {
-        // Insert image at the current cursor position
-        editor.chain().focus()
-          .setImage({ src: url, alt: fileName })
-          .run();
-      } else {
-        // For non-image files, insert a download link
-        editor.chain().focus()
-          .insertContent({
-            type: 'text',
-            text: fileName,
-            marks: [{
-              type: 'link',
-              attrs: {
-                href: url,
-                target: '_blank',
-                rel: 'noopener noreferrer',
-                class: 'text-blue-500 hover:underline',
-                download: fileName
-              }
-            }]
-          })
-          .run();
-      }
-      
-      // Call the parent's onFileUpload handler if provided
-      if (onFileUpload) {
-        onFileUpload(url, fileName, fileType, uploadId, false);
-      }
-    } catch (error) {
-      console.error('Error inserting file into editor:', error);
-      setUploadError(`Failed to insert ${fileName} into editor`);
-      
-      // Still notify parent about the upload if needed
-      if (onFileUpload) {
-        onFileUpload('', fileName, fileType, uploadId, true);
-      }
-    } finally {
-      setIsUploading(false);
-    }
-  }, [editor, onFileUpload]);
+  }, [editor, createNoteLink, currentNoteId, addPendingLink]);
 
   return (
     <div className="flex flex-col w-full h-full">

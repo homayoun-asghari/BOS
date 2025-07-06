@@ -100,21 +100,18 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
       throw new Error(`Upload failed: ${error.message}`);
     }
     
-    // Construct the public URL directly using the storage URL pattern
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${filePath}`;
+    // Return the storage path instead of public URL
+    const storagePath = `${BUCKET_NAME}/${data.path}`;
     
-    console.log('File uploaded successfully. Public URL:', publicUrl);
+    console.log('File uploaded successfully:', {
+      path: data.path,
+      storagePath,
+      fullPath: storagePath
+    });
     
-    // Return metadata about the uploaded file
     return {
-      path: filePath, // Return the full path including directories
-      publicUrl,
-      fullPath: `${BUCKET_NAME}/${filePath}`,
-      fileName: file.name,
-      size: file.size,
-      type: file.type,
-      uploadedAt: new Date().toISOString()
+      path: data.path,
+      storagePath
     };
   } catch (error) {
     console.error('Error in uploadFile:', error);
@@ -123,7 +120,32 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
 };
 
 /**
+ * Get a signed URL for a private file
+ * @param filePath Path to the file in the bucket (without the bucket name prefix)
+ * @param expiresIn Expiration time in seconds (default: 1 hour)
+ * @returns Signed URL string
+ */
+export const getSignedUrl = async (filePath: string, expiresIn = 3600): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(filePath, expiresIn);
+
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return null;
+    }
+
+    return data.signedUrl;
+  } catch (error) {
+    console.error('Error in getSignedUrl:', error);
+    return null;
+  }
+};
+
+/**
  * Deletes a file from Supabase Storage
+ * @param filePath Path to the file to delete (relative to the bucket)
  */
 export const deleteFile = async (filePath: string) => {
   try {

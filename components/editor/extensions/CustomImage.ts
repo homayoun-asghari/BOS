@@ -1,14 +1,42 @@
 import { mergeAttributes, Node } from '@tiptap/core';
-import { getSecureFileUrl } from '@/utils/secureFileUrl';
+import type { NodeViewRenderer, Command } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { ImageComponent } from '../../../components/ImageComponent';
+
+// Define command types
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    customImage: {
+      setImage: (options: ImageOptions) => ReturnType;
+    };
+  }
+}
+
+type ImageOptions = {
+  'data-storage-path'?: string;
+  'data-original-path'?: string;
+  src?: string;
+  alt?: string;
+  title?: string;
+};
+
+interface ImageAttributes {
+  'data-storage-path'?: string;
+  'data-original-path'?: string;
+  src?: string;
+  alt?: string;
+  title?: string;
+}
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     customImage: {
       setImage: (options: {
-        src: string;
+        'data-storage-path'?: string;
+        'data-original-path'?: string;
+        src?: string;
         alt?: string;
         title?: string;
-        'data-original-path'?: string;
       }) => ReturnType;
     };
   }
@@ -16,97 +44,103 @@ declare module '@tiptap/core' {
 
 export const CustomImage = Node.create({
   name: 'customImage',
-  
   group: 'block',
+  
+  addNodeView(): NodeViewRenderer {
+    return ReactNodeViewRenderer(ImageComponent);
+  },
   
   addAttributes() {
     return {
-      src: {
-        default: null,
-      },
-      alt: {
-        default: null,
-      },
-      title: {
-        default: null,
+      'data-storage-path': {
+        default: '',
+        parseHTML: element => element.getAttribute('data-storage-path') || '',
       },
       'data-original-path': {
-        default: null,
+        default: '',
+        parseHTML: element => element.getAttribute('data-original-path') || '',
+      },
+      src: {
+        default: '',
+        parseHTML: element => element.getAttribute('src') || '',
+      },
+      alt: {
+        default: '',
+        parseHTML: element => element.getAttribute('alt') || '',
+      },
+      title: {
+        default: '',
+        parseHTML: element => element.getAttribute('title') || '',
       },
     };
   },
-
+  
   parseHTML() {
     return [
       {
-        tag: 'img[src]',
-        getAttrs: async (node) => {
-          const domNode = node as HTMLElement;
-          const src = domNode.getAttribute('src');
-          const originalPath = domNode.getAttribute('data-original-path') || src;
+        tag: 'img[data-storage-path], img[data-original-path]',
+        getAttrs: (node: HTMLElement | string) => {
+          if (typeof node === 'string') return false;
           
-          // If we don't have a token in the URL, try to get a secure URL
-          let secureSrc = src;
-          if (src && !src.includes('token=')) {
-            try {
-              secureSrc = await getSecureFileUrl(originalPath || src);
-            } catch (error) {
-              console.error('Error getting secure URL:', error);
-            }
-          }
+          const element = node as HTMLImageElement;
+          const storagePath = element.getAttribute('data-storage-path') || 
+                            element.getAttribute('data-original-path');
           
-          return {
-            src: secureSrc,
-            alt: domNode.getAttribute('alt'),
-            title: domNode.getAttribute('title'),
-            'data-original-path': originalPath
+          if (!storagePath) return false;
+          
+          const attrs: ImageAttributes = {
+            'data-storage-path': storagePath,
+            src: element.getAttribute('src') || '',
+            alt: element.getAttribute('alt') || '',
+            title: element.getAttribute('title') || '',
           };
+          
+          return attrs;
         },
       },
     ];
   },
-
-  renderHTML({ HTMLAttributes }) {
-    const { 'data-original-path': originalPath, ...rest } = HTMLAttributes;
+  
+  renderHTML({ HTMLAttributes }: { HTMLAttributes: ImageAttributes }) {
+    const attrs = { ...HTMLAttributes };
     
-    // Always include the original path for reference
-    return ['img', mergeAttributes(rest, {
-      'data-original-path': originalPath || rest.src
-    })];
+    // If we have a storage path but no src, we'll handle that in the ImageComponent
+    if (attrs['data-storage-path'] && !attrs.src) {
+      attrs.src = ''; // Clear src to avoid loading issues
+    }
+    
+    return ['img', mergeAttributes(attrs)];
   },
-
+  
   addCommands() {
     return {
-      setImage: options => ({ commands }) => {
-        // Ensure we have a data-original-path
-        const attrs = {
-          ...options,
-          'data-original-path': options['data-original-path'] || options.src
-        };
+      setImage: (options: ImageOptions): Command => ({ commands }) => {
+        const storagePath = options['data-storage-path'] || 
+                          options['data-original-path'] || 
+                          options.src;
         
-        // If we don't have a token in the URL, try to get a secure URL
-        if (attrs.src && !attrs.src.includes('token=')) {
-          getSecureFileUrl(attrs.src)
-            .then(secureUrl => {
-              commands.insertContent({
-                type: this.name,
-                attrs: {
-                  ...attrs,
-                  src: secureUrl
-                },
-              });
-            })
-            .catch(error => {
-              console.error('Error getting secure URL:', error);
-              // Fall back to original URL if secure URL fails
-              commands.insertContent({
-                type: this.name,
-                attrs,
-              });
-            });
-          
-          // Return true to indicate the command was handled
-          return true;
+        if (!storagePath) {
+          console.error('No valid image source provided');
+          return false;
+        }
+        
+        const attrs: Record<string, string> = {};
+        
+        // Only include defined values
+        if (options['data-storage-path'] !== undefined) {
+          attrs['data-storage-path'] = options['data-storage-path'];
+        }
+        if (options['data-original-path'] !== undefined) {
+          attrs['data-original-path'] = options['data-original-path'];
+        }
+        if (options.src !== undefined) {
+          attrs.src = options.src;
+        }
+        if (options.alt !== undefined) {
+          attrs.alt = options.alt;
+        }
+        if (options.title !== undefined) {
+          attrs.title = options.title;
         }
         
         return commands.insertContent({
@@ -114,6 +148,8 @@ export const CustomImage = Node.create({
           attrs,
         });
       },
+    } as unknown as {
+      setImage: (options: ImageOptions) => Command;
     };
   },
 });

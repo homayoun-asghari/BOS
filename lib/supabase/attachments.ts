@@ -194,3 +194,72 @@ export const deleteAttachment = async (attachmentId: string) => {
     throw error;
   }
 };
+
+
+
+/**
+ * Deletes attachments that are no longer referenced in the note content
+ * @param noteId The ID of the note to clean up attachments for
+ * @param usedStoragePaths Array of storage paths that are still in use
+ */
+export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePaths: string[]) => {
+  try {
+    // Get all attachments for this note
+    const { data: attachments, error } = await supabase
+      .from('attachments')
+      .select('*')
+      .eq('note_id', noteId);
+
+    if (error) throw error;
+    if (!attachments?.length) return { deleted: 0, failed: 0, total: 0 };
+
+    // Normalize the used storage paths by removing any query parameters
+    const normalizedUsedPaths = usedStoragePaths.map(path => {
+      // Remove any query parameters
+      return path.split('?')[0];
+    });
+
+    // Find orphaned attachments (those not in usedStoragePaths)
+    const orphanedAttachments = attachments.filter(attachment => {
+      // Get the storage path for this attachment
+      const attachmentPath = attachment.storage_path;
+      if (!attachmentPath) return false;
+      
+      // Check if this attachment's path exists in the used paths
+      const isUsed = normalizedUsedPaths.some(usedPath => 
+        usedPath.endsWith(attachmentPath) || 
+        attachmentPath.endsWith(usedPath) ||
+        usedPath.includes(attachmentPath) ||
+        attachmentPath.includes(usedPath)
+      );
+      
+      return !isUsed;
+    });
+
+    // Delete orphaned attachments
+    const results = await Promise.allSettled(
+      orphanedAttachments.map(attachment => 
+        deleteAttachment(attachment.id)
+      )
+    );
+
+    const successfulDeletions = results.filter(
+      result => result.status === 'fulfilled' && result.value === true
+    ).length;
+
+    const failedDeletions = results.length - successfulDeletions;
+
+    if (failedDeletions > 0) {
+      console.warn(`Failed to delete ${failedDeletions} orphaned attachments`);
+    }
+
+    return { 
+      deleted: successfulDeletions,
+      failed: failedDeletions,
+      total: results.length
+    };
+  } catch (error) {
+    console.error('Error in cleanupOrphanedAttachments:', error);
+    throw error;
+  }
+};

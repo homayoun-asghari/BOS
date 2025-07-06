@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { File, Image as ImageIcon } from 'lucide-react';
 import { useCallback, ChangeEvent, useId } from 'react';
 import { uploadFile } from '@/lib/supabase/storage';
-import { getSecureFileUrl } from '@/utils/secureFileUrl';
 import { saveAttachment } from '@/lib/supabase/attachments';
 import { useUser } from '@/hooks/useUser';
 
@@ -51,87 +50,59 @@ export function FileUploadButton({
           .then(async (uploadResponse) => {
             console.log('Upload completed:', uploadResponse);
             
-            // 3. Get the public URL
-            let publicUrl = uploadResponse.publicUrl;
-            if (!publicUrl) {
-              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-              if (!supabaseUrl) {
-                throw new Error('NEXT_PUBLIC_SUPABASE_URL is not defined');
-              }
-              publicUrl = `${supabaseUrl}/storage/v1/object/public/notes-attachments/${uploadResponse.path}`;
-            } else if (!publicUrl.startsWith('http')) {
-              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-              publicUrl = `${supabaseUrl}${publicUrl.startsWith('/') ? '' : '/'}${publicUrl}`;
+            if (!uploadResponse.storagePath) {
+              throw new Error('No storage path returned from upload');
             }
             
-            // 4. Get secure signed URL and update the editor
-            console.log('Generating secure URL for:', publicUrl);
-            
-            try {
-              // First try to get a secure URL
-              const secureUrl = await getSecureFileUrl(publicUrl);
-              console.log('Generated secure URL:', secureUrl);
-              
-              // 5. Save attachment to database if we have a noteId and user
-              if (noteId && user?.id) {
+            // 3. Save attachment to database if we have a noteId and user
+            if (noteId && user?.id) {
+              try {
+                console.log('Upload response from storage:', uploadResponse);
+                
+                const attachmentData = {
+                  noteId,
+                  userId: user.id,
+                  fileName: file.name,
+                  fileType: file.type,
+                  fileSize: file.size,
+                  storagePath: uploadResponse.path // This is just the path part, not the full storage path
+                };
+                
+                console.log('Saving attachment with data:', attachmentData);
+                
                 try {
-                  console.log('Upload response from storage:', {
-                    path: uploadResponse.path,
-                    fullResponse: uploadResponse
-                  });
-                  
-                  if (!uploadResponse.path) {
-                    throw new Error('No path returned from storage upload');
+                  const result = await saveAttachment(attachmentData);
+                  if (result === null) {
+                    console.log('Attachment not saved to database - no valid noteId');
+                  } else {
+                    console.log('Attachment saved to database:', result);
                   }
-
-                  const attachmentData = {
+                } catch (dbError) {
+                  console.error('Error saving attachment to database:', {
+                    error: dbError,
                     noteId,
-                    userId: user.id,
+                    userId: user?.id,
                     fileName: file.name,
-                    fileType: file.type,
                     fileSize: file.size,
                     storagePath: uploadResponse.path
-                  };
-                  
-                  console.log('Saving attachment with data:', attachmentData);
-                  
-                  try {
-                    const result = await saveAttachment(attachmentData);
-                    if (result === null) {
-                      console.log('Attachment not saved to database - no valid noteId');
-                    } else {
-                      console.log('Attachment saved to database:', result);
-                    }
-                  } catch (dbError) {
-                    console.error('Error saving attachment to database:', {
-                      error: dbError,
-                      noteId,
-                      userId: user?.id,
-                      fileName: file.name,
-                      fileSize: file.size,
-                      storagePath: uploadResponse?.path
-                    });
-                    // Continue even if database save fails - we still want to show the file
-                  }
-                } catch (error) {
-                  console.error('Error in attachment handling:', error);
-                  // Continue with the upload even if there was an error
+                  });
+                  // Continue even if database save fails - we still want to show the file
                 }
+              } catch (error) {
+                console.error('Error in attachment handling:', error);
+                // Continue with the upload even if there was an error
               }
-              
-              // 6. Update the editor with the secure URL
-              onUpload(secureUrl, file.name, file.type, uploadId, false);
-              
-              console.log('File type:', file.type);
-              console.log('File name:', file.name);
-              console.log('Secure URL generated successfully');
-            } catch (error) {
-              console.error('Error generating secure URL:', error);
-              // Fall back to public URL if secure URL generation fails
-              onUpload(publicUrl, file.name, file.type, uploadId, false);
-            } finally {
-              console.groupEnd();
             }
+            
+            // 4. Update the editor with the storage path
+            // The editor will handle generating the appropriate URL when rendering
+            onUpload(uploadResponse.storagePath, file.name, file.type, uploadId, false);
+            
+            console.log('File uploaded successfully:', {
+              type: file.type,
+              name: file.name,
+              storagePath: uploadResponse.storagePath
+            });
           })
           .catch((error) => {
             console.error('Background upload failed:', error);

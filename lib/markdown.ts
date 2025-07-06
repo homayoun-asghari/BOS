@@ -32,7 +32,15 @@ turndownService.addRule('image', {
     const src = element.getAttribute('src') || '';
     const alt = element.getAttribute('alt') || '';
     const title = element.getAttribute('title') || '';
-    return `![${alt}](${src}${title ? ` "${title}"` : ''})`;
+    
+    // Prefer data-storage-path, fall back to data-original-path, then src
+    const storagePath = element.getAttribute('data-storage-path') || 
+                       element.getAttribute('data-original-path') || 
+                       src;
+    
+    // Use the storage path if it's a valid path, otherwise use the src
+    const pathToUse = storagePath.startsWith('notes-attachments/') ? storagePath : src;
+    return `![${alt}](${pathToUse}${title ? ` "${title}"` : ''})`;
   }
 });
 
@@ -49,11 +57,42 @@ export function toMarkdown(html: string): string {
   return markdown;
 }
 
-// Configure marked with basic options
+// Configure marked with custom renderer for images
+const renderer = new marked.Renderer();
+
+// Define the image renderer with proper types
+renderer.image = function({ href = '', title = null, text = '' }) {
+  // The href in markdown should be the storage path
+  const storagePath = href;
+  
+  // Generate the public URL for display
+  let src = storagePath;
+  if (storagePath && storagePath.startsWith('notes-attachments/')) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl) {
+      const path = storagePath.startsWith('notes-attachments/')
+        ? storagePath.substring('notes-attachments/'.length)
+        : storagePath;
+      src = `${supabaseUrl}/storage/v1/object/public/notes-attachments/${path}`;
+    }
+  }
+  
+  return `<img 
+    src="${src}" 
+    alt="${text || ''}" 
+    ${title ? `title="${title}"` : ''}
+    data-original-path="${storagePath}"
+    data-storage-path="${storagePath}"
+    class="max-w-full h-auto rounded-md"
+  >`;
+};
+
+// Configure marked with basic options and custom renderer
 marked.use({
   gfm: true,
   breaks: true,
-  async: false
+  async: false,
+  renderer
 });
 
 /**
