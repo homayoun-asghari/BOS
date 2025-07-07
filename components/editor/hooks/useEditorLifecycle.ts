@@ -125,7 +125,13 @@ export const useEditorLifecycle = ({
     // Clean up orphaned attachments
     const cleanup = async () => {
       try {
-        await cleanupOrphanedAttachments(currentNoteId, usedPaths);
+        const result = await cleanupOrphanedAttachments(currentNoteId, usedPaths, value);
+        
+        // If we got updated content back, trigger an update
+        if (result.updatedContent && result.updatedContent !== value) {
+          console.log('[useEditorLifecycle] Updating content to remove references to deleted attachments');
+          onChange(result.updatedContent);
+        }
       } catch (error) {
         console.error('[useEditorLifecycle] Error cleaning up orphaned attachments:', error);
       }
@@ -134,7 +140,7 @@ export const useEditorLifecycle = ({
     // Delay cleanup to avoid race conditions with uploads
     const cleanupTimer = setTimeout(cleanup, 5000);
     return () => clearTimeout(cleanupTimer);
-  }, [value, currentNoteId, extractAttachmentUrls, attachments.length]);
+  }, [value, currentNoteId, extractAttachmentUrls, attachments.length, onChange]);
 
   // Handle initial content load
   useEffect(() => {

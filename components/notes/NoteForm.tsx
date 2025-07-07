@@ -80,9 +80,9 @@ export default function NoteForm({
   const saveNoteData = useCallback(async (contentToSave: string) => {
     console.log('saveNoteData called with content length:', contentToSave?.length);
     
-    // Skip if no content or content hasn't changed
-    if (!contentToSave) {
-      console.log('Skipping save - no content');
+    // Allow empty content when cleaning up attachments
+    if (contentToSave === undefined) {
+      console.log('Skipping save - undefined content');
       return null;
     }
     

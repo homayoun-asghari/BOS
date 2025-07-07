@@ -251,14 +251,17 @@ export const deleteAttachment = async (attachmentId: string) => {
   }
 };
 
-
-
 /**
  * Deletes attachments that are no longer referenced in the note content
  * @param noteId The ID of the note to clean up attachments for
  * @param usedStoragePaths Array of storage paths that are still in use
+ * @param currentContent Optional current content of the note to clean up
  */
-export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePaths: string[]) => {
+export const cleanupOrphanedAttachments = async (
+  noteId: string, 
+  usedStoragePaths: string[], 
+  currentContent?: string
+): Promise<{deleted: number; failed: number; total: number; updatedContent?: string}> => {
   try {
     // Get all attachments for this note
     const { data: attachments, error } = await supabase
@@ -270,67 +273,65 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
     if (!attachments?.length) return { deleted: 0, failed: 0, total: 0 };
 
     // Normalize the used storage paths by removing any query parameters
-    const normalizedUsedPaths = usedStoragePaths.map(path => {
-      // Remove any query parameters
-      return path.split('?')[0];
-    });
+    const normalizedUsedPaths = usedStoragePaths.map(path => 
+      path.split('?')[0].replace(/^notes-attachments\//, '')
+    );
 
     // Find orphaned attachments (those not in usedStoragePaths)
     const orphanedAttachments = attachments.filter(attachment => {
-      const attachmentPath = attachment.storage_path;
-      if (!attachmentPath) return false;
+      if (!attachment.storage_path) return false;
       
-      // Normalize the attachment path by removing any query parameters and 'notes-attachments/' prefix
-      const normalizedAttachmentPath = attachmentPath
-        .replace(/^notes-attachments\//, '')  // Remove 'notes-attachments/' prefix if present
-        .split('?')[0];                        // Remove query parameters
-      
-      // Get just the filename part for comparison
-      const attachmentFilename = normalizedAttachmentPath.split('/').pop();
+      // Normalize the attachment path
+      const attachmentPath = attachment.storage_path.replace(/^notes-attachments\//, '');
+      const attachmentFilename = attachmentPath.split('/').pop();
       
       // Check if this attachment's path exists in the used paths
-      const isUsed = normalizedUsedPaths.some(usedPath => {
-        // Normalize the used path in the same way
-        const normalizedUsedPath = usedPath
-          .replace(/^notes-attachments\//, '')
-          .split('?')[0];
-        
-        // Get just the filename part for comparison
-        const usedFilename = normalizedUsedPath.split('/').pop();
-        
-        // Check for matches
+      return !normalizedUsedPaths.some(usedPath => {
+        const usedFilename = usedPath.split('/').pop();
         return (
-          // Direct path match (after normalization)
-          normalizedUsedPath === normalizedAttachmentPath ||
-          // Filename match
-          usedFilename === attachmentFilename ||
-          // Check if one path contains the other
-          normalizedUsedPath.includes(normalizedAttachmentPath) ||
-          normalizedAttachmentPath.includes(normalizedUsedPath) ||
-          // Check if filenames match (case-insensitive)
-          usedFilename?.toLowerCase() === attachmentFilename?.toLowerCase()
+          usedPath === attachmentPath ||
+          usedPath.endsWith(attachmentPath) ||
+          usedPath.includes(attachmentFilename) ||
+          usedFilename === attachmentFilename
         );
       });
-      
-      if (!isUsed) {
-        console.log('Found orphaned attachment:', {
-          attachmentId: attachment.id,
-          storagePath: attachmentPath,
-          normalizedPath: normalizedAttachmentPath,
-          filename: attachmentFilename,
-          usedPaths: normalizedUsedPaths
-        });
-      }
-      
-      return !isUsed;
     });
-    
+
     console.log('Found orphaned attachments:', {
       totalAttachments: attachments.length,
-      usedPaths: normalizedUsedPaths,
       orphanedCount: orphanedAttachments.length,
       orphanedIds: orphanedAttachments.map(a => a.id)
     });
+
+    // Process content updates if we have content and orphaned attachments
+    let updatedContent = currentContent;
+    let contentWasUpdated = false;
+    
+    if (updatedContent && orphanedAttachments.length > 0) {
+      // Create patterns to match orphaned attachments in the content
+      const patterns = orphanedAttachments.reduce<RegExp[]>((acc, attachment) => {
+        if (!attachment.storage_path) return acc;
+        
+        const escapedPath = attachment.storage_path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return [
+          ...acc,
+          // Match in URLs
+          new RegExp(`https?:\\/\\/[^\\s"']+\\/storage\\/v1\\/object\\/(?:public|sign)\\/${escapedPath}(?:\\?[^"'\\s]*)?`, 'gi'),
+          // Match in data attributes
+          new RegExp(`data-(?:original-path|storage-path)=["']${escapedPath}(?:\\?[^"']*)?["']`, 'gi')
+        ];
+      }, []);
+      
+      // Apply all patterns to remove references to orphaned attachments
+      const newContent = patterns.reduce((content, pattern) => 
+        content.replace(pattern, ''), updatedContent || '');
+      
+      if (newContent !== updatedContent) {
+        updatedContent = newContent;
+        contentWasUpdated = true;
+        console.log('Updated content after removing orphaned attachments');
+      }
+    }
 
     // Delete orphaned attachments
     const results = await Promise.allSettled(
@@ -372,7 +373,7 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
                     console.log(`Found ${files.length} matching files, attempting to delete them`);
                     const pathsToDelete = files.map(file => file.name);
                     
-                    const { data: deleteData, error: deleteError } = await supabase.storage
+                    const { error: deleteError } = await supabase.storage
                       .from('notes-attachments')
                       .remove(pathsToDelete);
                     
@@ -419,7 +420,8 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
     );
 
     const successfulDeletions = results.filter(
-      result => result.status === 'fulfilled' && result.value === true
+      (result): result is PromiseFulfilledResult<boolean> => 
+        result.status === 'fulfilled' && result.value === true
     ).length;
 
     const failedDeletions = results.length - successfulDeletions;
@@ -428,10 +430,11 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
       console.warn(`Failed to delete ${failedDeletions} orphaned attachments`);
     }
 
-    return { 
+    return {
       deleted: successfulDeletions,
       failed: failedDeletions,
-      total: results.length
+      total: orphanedAttachments.length,
+      ...(contentWasUpdated && { updatedContent })
     };
   } catch (error) {
     console.error('Error in cleanupOrphanedAttachments:', error);
