@@ -14,19 +14,23 @@ interface NoteItem {
 }
 
 interface NoteFormProps {
-  initialData?: Partial<NoteFormValues>;
-  onSave?: (data: { content: string; title: string }) => Promise<void>;
+  initialData?: Partial<NoteFormValues> & { id?: string };
+  onSave?: (data: { id: string; content: string; title: string }) => Promise<void>;
+  onContentChange?: (content: string, title: string) => void;
   autoSave?: boolean;
   debounceMs?: number;
   notes?: NoteItem[];
+  noteId?: string; // Explicit note ID prop
 }
 
 export default function NoteForm({
-  initialData,
+  initialData = {},
   onSave,
+  onContentChange,
   autoSave = true,
   debounceMs = 1000,
   notes = [],
+  noteId,
 }: NoteFormProps) {
   const [content, setContent] = useState(initialData?.content || '');
   const prevContentRef = useRef(content);
@@ -36,7 +40,7 @@ export default function NoteForm({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentNoteId = initialData?.id;
+  const currentNoteId = noteId || initialData?.id;
   const editorRef = useReactRef<TipTapEditorRef>(null);
   const pendingAttachmentsRef = useRef<Array<{
     userId: string;
@@ -54,7 +58,10 @@ export default function NoteForm({
     saveNote,
     setSaveError,
     setIsSaving
-  } = useNoteForm(initialData);
+  } = useNoteForm({
+    ...initialData,
+    id: initialData?.id || noteId // Use explicit noteId prop if available
+  });
 
   const processPendingLinks = useCallback(async (noteId: string) => {
     if (!editorRef.current) return { success: 0, failed: 0 };
@@ -93,6 +100,30 @@ export default function NoteForm({
 
     try {
       setIsSaving(true);
+      
+      // Process any pending attachments first
+      if (pendingAttachmentsRef.current.length > 0) {
+        console.log('Processing pending attachments:', pendingAttachmentsRef.current.length);
+        const attachments = [...pendingAttachmentsRef.current];
+        pendingAttachmentsRef.current = [];
+        
+        // Process each attachment
+        for (const attachment of attachments) {
+          try {
+            await saveAttachment({
+              noteId: currentNoteId!,
+              userId: attachment.userId,
+              fileName: attachment.fileName,
+              fileType: attachment.fileType,
+              fileSize: attachment.fileSize,
+              storagePath: attachment.storagePath
+            });
+          } catch (error) {
+            console.error('Error saving attachment:', error);
+            // Continue with note save even if attachment save fails
+          }
+        }
+      }
       setSaveError(null);
       
       // Save the note content - this will now also sync links
@@ -167,10 +198,11 @@ export default function NoteForm({
       }
       
       // Call the parent's onSave callback if provided
-      if (onSave) {
+      if (onSave && savedNote.id) {
         try {
           console.log('Calling onSave callback...');
           await onSave({
+            id: savedNote.id,
             content: savedNote.content || '',
             title: savedNote.title || ''
           });
@@ -201,7 +233,7 @@ export default function NoteForm({
       
       setTimeout(releaseLock, 500);
     }
-  }, [onSave, saveNote, setSaveError, setIsSaving, processPendingLinks, user?.id]);
+  }, [onSave, saveNote, setSaveError, setIsSaving, processPendingLinks, user?.id, currentNoteId]);
 
   // Function to add a pending attachment
   const addPendingAttachment = useCallback((attachment: {
@@ -226,6 +258,14 @@ export default function NoteForm({
   const handleEditorChange = useCallback((newContent: string) => {
     setContent(newContent);
     
+    // Extract title from content (first line)
+    const title = newContent.split('\n')[0]?.replace(/^#+\s*/, '') || '';
+    
+    // Notify parent of content changes
+    if (onContentChange) {
+      onContentChange(newContent, title);
+    }
+    
     // Only trigger save if auto-save is enabled
     if (autoSave) {
       // Clear any pending debounced save
@@ -241,7 +281,7 @@ export default function NoteForm({
         });
       }, debounceMs);
     }
-  }, [autoSave, debounceMs, saveNoteData]);
+  }, [autoSave, debounceMs, onContentChange, saveNoteData]);
   
 
 
@@ -377,6 +417,12 @@ export default function NoteForm({
             value={content}
             onChange={handleEditorChange}
             onFileUpload={handleFileUpload}
+            onInternalLinkClick={(noteId) => {
+              // Handle internal link click - navigate to the note
+              if (noteId && noteId !== currentNoteId) {
+                window.open(`/notes/${noteId}`, '_blank');
+              }
+            }}
             notes={notes}
             isLoading={isLoadingNotes}
             currentNoteId={currentNoteId}

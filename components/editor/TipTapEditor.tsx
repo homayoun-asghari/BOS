@@ -1,5 +1,9 @@
 'use client';
 
+import { createClient } from '@/lib/supabase/client';
+
+// Initialize Supabase client
+const supabase = createClient();
 import { useCallback, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import useNotes from '@/hooks/useNotes';
@@ -54,11 +58,64 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     createNoteLink: createNoteLink
   });
   
+  // Get attachments for the current note
+  const [attachments, setAttachments] = useState<Array<{id: string, storage_path: string}>>([]);
+  
+  // Load attachments when note changes
+  useEffect(() => {
+    const loadAttachments = async () => {
+      if (!currentNoteId || currentNoteId === 'new') {
+        console.log('[TipTapEditor] No currentNoteId or it is new, skipping attachment load');
+        setAttachments([]);
+        return;
+      }
+
+      console.log(`[TipTapEditor] Loading attachments for note: ${currentNoteId}`);
+      
+      try {
+        const { data, error, status } = await supabase
+          .from('attachments')
+          .select('id, storage_path, file_name, file_type, file_size_bytes')
+          .eq('note_id', currentNoteId)
+          .order('id', { ascending: false });
+
+        console.log(`[TipTapEditor] Loaded ${data?.length || 0} attachments for note ${currentNoteId}`, {
+          status,
+          error,
+          attachments: data?.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            file_type: a.file_type,
+            file_size: a.file_size_bytes
+          }))
+        });
+
+        if (error) {
+          console.error(`[TipTapEditor] Error loading attachments for note ${currentNoteId}:`, {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          });
+          throw error;
+        }
+
+        setAttachments(data || []);
+      } catch (error) {
+        console.error(`[TipTapEditor] Failed to load attachments for note ${currentNoteId}:`, error);
+        setAttachments([]);
+      }
+    };
+    
+    loadAttachments();
+  }, [currentNoteId]);
+  
   // Initialize editor lifecycle hooks
   const { handleContentUpdate } = useEditorLifecycle({
     currentNoteId,
     value,
-    onChange
+    onChange,
+    attachments
   });
   
   // Initialize editor with the handleContentUpdate function
@@ -109,23 +166,46 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   // Handle clicks on internal note links
   useEffect(() => {
     const handleInternalLinkClick = (e: MouseEvent) => {
+      // Find the closest link element that was clicked
       const target = e.target as HTMLElement;
       const link = target.closest('a.internal-note-link') as HTMLAnchorElement;
       
-      if (link && onInternalLinkClick) {
-        const noteId = link.getAttribute('data-note-id');
-        if (noteId) {
+      if (link) {
+        const href = link.getAttribute('href');
+        const isInternalLink = link.classList.contains('internal-note-link');
+        
+        if (href && isInternalLink && onInternalLinkClick) {
           e.preventDefault();
-          onInternalLinkClick(noteId);
+          e.stopPropagation();
+          
+          // Extract note ID from the URL path (e.g., '/notes/123' -> '123')
+          const noteId = href.startsWith('/notes/') 
+            ? href.split('/notes/')[1] 
+            : href.split('/').pop();
+          
+          if (!noteId) {
+            console.error('Could not extract note ID from URL:', href);
+            return;
+          }
+          
+          // Only proceed if we're not clicking on the current note
+          if (noteId !== currentNoteId) {
+            console.log('Navigating to note:', noteId);
+            onInternalLinkClick(noteId);
+          } else {
+            console.log('Skipping internal link to current note');
+          }
         }
       }
     };
     
-    document.addEventListener('click', handleInternalLinkClick);
+    // Add the event listener to the document
+    document.addEventListener('click', handleInternalLinkClick, true); // Use capture phase
+    
     return () => {
-      document.removeEventListener('click', handleInternalLinkClick);
+      document.removeEventListener('click', handleInternalLinkClick, true);
     };
-  }, [onInternalLinkClick]);
+  }, [onInternalLinkClick, currentNoteId]);
 
 
 
@@ -142,7 +222,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 
 
 
-  const handleInsertLink = useCallback(async (url: string, text: string, isInternal: boolean = false) => {
+  const handleInsertLink = useCallback(async (url: string, text: string, isInternal: boolean = false, targetNoteId?: string) => {
     if (!editor) return;
 
     // Get the current selection
@@ -156,7 +236,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     // Insert the link into the editor
     if (isInternal) {
       // For internal links, we'll use the note ID as the URL and title as the text
-      const noteId = url; // URL is the note ID for internal links
+      const noteId = targetNoteId || url; // Use targetNoteId if provided, otherwise use the URL
       
       // First, insert the link in the editor
       const chain = editor.chain().focus();
@@ -166,6 +246,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         chain.deleteSelection();
       }
       
+      // Create the full URL for the link
+      const noteUrl = `/notes/${noteId}`;
+      
       chain
         .insertContent({
           type: 'text',
@@ -173,31 +256,43 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           marks: [{
             type: 'link',
             attrs: {
-              href: `#${noteId}`,
+              href: noteUrl,
               'data-note-id': noteId,
               class: 'text-blue-500 hover:underline internal-note-link',
+              target: '_blank', // Open in new tab
+              rel: 'noopener noreferrer',
             },
           }],
         })
         .run();
       
+      // Extract the actual note ID from the URL path if needed
+      const extractNoteId = (url: string): string => {
+        if (url.startsWith('/notes/')) {
+          return url.split('/notes/')[1];
+        }
+        return url;
+      };
+      
+      const targetId = extractNoteId(noteId);
+      
       // Handle database link creation if we have a valid currentNoteId
       if (currentNoteId && currentNoteId !== 'new') {
         try {
           // Ensure we're not creating a self-link
-          if (currentNoteId === noteId) {
+          if (currentNoteId === targetId) {
             console.warn('Cannot create a self-link to the same note');
             return;
           }
           
           console.log('Creating note link in database:', { 
             sourceNoteId: currentNoteId, 
-            targetNoteId: noteId,
+            targetNoteId: targetId,
             linkText: linkText
           });
           
-          // Create the link in the database
-          await createNoteLink(currentNoteId, noteId, linkText);
+          // Create the link in the database using just the UUID
+          await createNoteLink(currentNoteId, targetId, linkText);
           console.log('Note link created successfully in database');
         } catch (error) {
           console.error('Failed to create note link in database:', error);
@@ -205,8 +300,8 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         }
       } else {
         // If the note doesn't have an ID yet, store the link to be created later
-        console.log('Note not saved yet, storing link for later creation:', { targetNoteId: noteId, linkText });
-        addPendingLink(noteId, linkText);
+        console.log('Note not saved yet, storing link for later creation:', { targetNoteId: targetId, linkText });
+        addPendingLink(targetId, linkText);
       }
     } else {
       // Handle external links

@@ -39,6 +39,13 @@ export function FileUploadButton({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Validate noteId is a valid UUID if provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (noteId && !uuidRegex.test(noteId)) {
+      console.error('Invalid noteId format. Must be a valid UUID.');
+      return;
+    }
+
     try {
       Array.from(files).forEach((file) => {
         // 1. Show a loading state or placeholder in the editor
@@ -46,12 +53,22 @@ export function FileUploadButton({
         onUpload('', file.name, file.type, uploadId, false);
         
         // 2. Start the upload
+        console.log('Starting file upload...');
         uploadFile(file, 'attachments')
           .then(async (uploadResponse) => {
-            console.log('Upload completed:', uploadResponse);
+            console.log('Upload completed:', {
+              fileName: file.name,
+              storagePath: uploadResponse.storagePath,
+              fileType: uploadResponse.fileType,
+              fileSize: uploadResponse.fileSize,
+              path: uploadResponse.path
+            });
             
             if (!uploadResponse.storagePath) {
-              throw new Error('No storage path returned from upload');
+              const error = new Error('No storage path returned from upload');
+              console.error('Upload error:', error);
+              onUpload('', file.name, file.type, uploadId, true);
+              return;
             }
             
             // 3. Save attachment to database if we have a noteId and user
@@ -59,49 +76,64 @@ export function FileUploadButton({
               try {
                 console.log('Upload response from storage:', uploadResponse);
                 
+                // Use the storagePath from the upload response
+                const storagePath = uploadResponse.storagePath || `notes-attachments/${uploadResponse.path}`;
+                
                 const attachmentData = {
                   noteId,
                   userId: user.id,
-                  fileName: file.name,
-                  fileType: file.type,
-                  fileSize: file.size,
-                  storagePath: uploadResponse.path // This is just the path part, not the full storage path
+                  fileName: uploadResponse.fileName || file.name,
+                  fileType: uploadResponse.fileType || file.type,
+                  fileSize: uploadResponse.fileSize || file.size,
+                  storagePath: storagePath
                 };
                 
-                console.log('Saving attachment with data:', attachmentData);
+                console.log('Saving attachment with data:', {
+                  ...attachmentData,
+                  // Don't log the full storage path as it might be sensitive
+                  storagePath: storagePath.length > 50 
+                    ? `${storagePath.substring(0, 25)}...${storagePath.substring(storagePath.length - 25)}` 
+                    : storagePath
+                });
                 
                 try {
+                  console.log('Attempting to save attachment to database...');
                   const result = await saveAttachment(attachmentData);
-                  if (result === null) {
-                    console.log('Attachment not saved to database - no valid noteId');
-                  } else {
-                    console.log('Attachment saved to database:', result);
-                  }
-                } catch (dbError) {
-                  console.error('Error saving attachment to database:', {
-                    error: dbError,
-                    noteId,
-                    userId: user?.id,
-                    fileName: file.name,
-                    fileSize: file.size,
-                    storagePath: uploadResponse.path
+                  
+                  console.log('✅ Attachment saved to database:', {
+                    id: result.id,
+                    note_id: result.note_id,
+                    file_name: result.file_name,
+                    // Don't log the full storage path as it might be sensitive
+                    storage_path: result.storage_path.length > 50 
+                      ? `${result.storage_path.substring(0, 25)}...${result.storage_path.substring(result.storage_path.length - 25)}` 
+                      : result.storage_path
                   });
-                  // Continue even if database save fails - we still want to show the file
+                  
+                  // Update the editor with the storage path
+                  onUpload(storagePath, file.name, file.type, uploadId, false);
+                  
+                } catch (dbError) {
+                  const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown error';
+                  console.error('❌ Error saving attachment to database:', errorMessage);
+                  
+                  // Still update the editor with the file, but mark it as having an error
+                  onUpload(storagePath, file.name, file.type, uploadId, true);
                 }
               } catch (error) {
                 console.error('Error in attachment handling:', error);
-                // Continue with the upload even if there was an error
+                onUpload('', file.name, file.type, uploadId, true);
               }
+            } else {
+              // If we don't have a noteId or user, just update the editor with the file
+              onUpload(uploadResponse.storagePath, file.name, file.type, uploadId, false);
             }
             
-            // 4. Update the editor with the storage path
-            // The editor will handle generating the appropriate URL when rendering
-            onUpload(uploadResponse.storagePath, file.name, file.type, uploadId, false);
-            
-            console.log('File uploaded successfully:', {
+            console.log('File processed successfully:', {
               type: file.type,
               name: file.name,
-              storagePath: uploadResponse.storagePath
+              hasNoteId: !!noteId,
+              hasUserId: !!user?.id
             });
           })
           .catch((error) => {
@@ -110,12 +142,15 @@ export function FileUploadButton({
           });
       });
       
-      // 5. Reset the input to allow re-uploading the same file
+      // Reset the input to allow re-uploading the same file
       e.target.value = '';
     } catch (error) {
       console.error('Error handling file upload:', error);
-      // Optionally, show an error message in the UI
-      throw error; // Rethrow the error to be handled by the parent component
+      // Show error in the UI for each file
+      Array.from(files).forEach((file) => {
+        const uploadId = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        onUpload('', file.name, file.type, uploadId, true);
+      });
     }
   }, [onUpload, noteId, user?.id]);
 

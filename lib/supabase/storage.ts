@@ -100,7 +100,7 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
       throw new Error(`Upload failed: ${error.message}`);
     }
     
-    // Return the storage path instead of public URL
+    // Return the full storage path in a consistent format
     const storagePath = `${BUCKET_NAME}/${data.path}`;
     
     console.log('File uploaded successfully:', {
@@ -109,9 +109,13 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
       fullPath: storagePath
     });
     
+    // Return a consistent response format with both path and storagePath
     return {
-      path: data.path,
-      storagePath
+      path: data.path, // Relative path within the bucket
+      storagePath,     // Full storage path including bucket name
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size
     };
   } catch (error) {
     console.error('Error in uploadFile:', error);

@@ -19,10 +19,7 @@ export function useEditorInstance({ initialContent, onUpdate }: UseEditorInstanc
   const isUpdating = useRef(false);
   
   // Convert initial markdown to HTML for the editor
-  console.log('Initializing editor with content (raw):', initialContent);
   const initialHtml = initialContent ? toHtml(initialContent) : '';
-  console.log('Converted to HTML (initial):', initialHtml);
-  console.log('Initial HTML content length:', initialHtml.length);
 
   const editor = useEditor({
     extensions: [
@@ -72,12 +69,9 @@ export function useEditorInstance({ initialContent, onUpdate }: UseEditorInstanc
       
       try {
         isUpdating.current = true;
-        // Get the current HTML content
+        // Get the current HTML content and convert to Markdown for saving
         const html = editor.getHTML();
-        console.log('Editor HTML before save:', html);
-        // Convert HTML to Markdown for saving
         const markdown = toMarkdown(html);
-        console.log('Converted to Markdown for save:', markdown);
         // Pass the Markdown content back to the parent
         onUpdate(markdown);
       } finally {

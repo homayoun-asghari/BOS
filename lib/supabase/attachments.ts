@@ -28,29 +28,47 @@ export async function saveAttachment({
   storagePath: string;
 }) {
   try {
-    console.log('[saveAttachment] Starting to save attachment:', {
+    console.log('[saveAttachment] === Starting to save attachment ===');
+    console.log('[saveAttachment] Input parameters:', {
       noteId,
-      userId,
+      userId: userId ? `${userId.substring(0, 8)}...` : 'undefined',
       fileName,
       fileType,
       fileSize,
       storagePath,
     });
-
-    // Validate required parameters
-    if (!userId || !storagePath) {
-      const error = new Error('Missing required parameters');
-      console.error('[saveAttachment] Validation error:', error.message, {
-        userId: !!userId,
-        storagePath: !!storagePath,
+    
+    // Check if we have all required parameters
+    if (!noteId || !userId || !storagePath) {
+      const errorMessage = 'Missing required parameters for saving attachment';
+      console.error(`[saveAttachment] ${errorMessage}`, {
+        hasNoteId: !!noteId,
+        hasUserId: !!userId,
+        hasStoragePath: !!storagePath,
       });
-      throw error;
+      throw new Error(errorMessage);
     }
 
-    // Skip saving attachment if we don't have a valid noteId (e.g., when creating a new note)
-    if (!noteId || noteId === 'new') {
-      console.log('[saveAttachment] Skipping attachment save - no valid noteId provided');
-      return null;
+    // Validate noteId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(noteId)) {
+      const errorMessage = `Invalid noteId format: ${noteId}. Must be a valid UUID.`;
+      console.error(`[saveAttachment] ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+
+    console.log('[saveAttachment] Starting attachment save for user:', userId);
+
+    // First, get the profile ID for this user
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)  // This assumes the profiles.id matches auth.users.id
+      .single();
+
+    if (profileError || !profile) {
+      console.error('[saveAttachment] Error fetching profile:', profileError);
+      throw new Error('User profile not found. Please complete your profile setup.');
     }
 
     const attachmentId = uuidv4();
@@ -59,7 +77,7 @@ export async function saveAttachment({
     const attachmentData = {
       id: attachmentId,
       note_id: noteId,
-      user_id: userId,
+      user_id: profile.id,  // Use the profile ID that matches the foreign key
       file_name: fileName,
       file_type: fileType,
       file_size_bytes: fileSize,
@@ -75,44 +93,62 @@ export async function saveAttachment({
         : storagePath
     });
 
-    // Try to insert the data
-    const { data, error } = await supabase
+    // Try to insert the data with transaction logging
+    console.log('[saveAttachment] Attempting to insert attachment:', {
+      attachmentData: {
+        ...attachmentData,
+        storage_path: storagePath.length > 50 
+          ? `${storagePath.substring(0, 25)}...${storagePath.substring(storagePath.length - 25)}` 
+          : storagePath
+      },
+      noteId,
+      userId
+    });
+
+    const { data: insertedData, error: insertError, status, statusText } = await supabase
       .from('attachments')
       .insert(attachmentData)
       .select()
       .single();
 
-    if (error) {
+    console.log('[saveAttachment] Insert response:', {
+      status,
+      statusText,
+      data: insertedData,
+      error: insertError ? {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint
+      } : null
+    });
+
+    if (insertError) {
       console.error('[saveAttachment] Supabase insert error:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint
       });
-      
-      // Check for common issues
-      if (error.code === '42501') {
-        throw new Error('Permission denied. Check your RLS policies.');
-      } else if (error.code === '23503') {
-        throw new Error('Foreign key violation. The note or user might not exist.');
-      } else if (error.code === '23505') {
-        throw new Error('Duplicate entry. An attachment with this ID already exists.');
-      }
-      
-      throw error;
+      throw insertError;
     }
 
-    if (!data) {
-      throw new Error('No data returned from insert operation');
+    if (!insertedData) {
+      const errorMessage = 'No data returned from insert operation';
+      console.error(`[saveAttachment] ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     console.log('[saveAttachment] Successfully saved attachment to database:', {
-      id: data.id,
-      note_id: data.note_id,
-      file_name: data.file_name,
+      id: insertedData.id,
+      note_id: insertedData.note_id,
+      file_name: insertedData.file_name,
+      storage_path: insertedData.storage_path.length > 50 
+        ? `${insertedData.storage_path.substring(0, 25)}...${insertedData.storage_path.substring(insertedData.storage_path.length - 25)}` 
+        : insertedData.storage_path
     });
     
-    return data;
+    return insertedData;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in saveAttachment:', {
@@ -128,20 +164,40 @@ export async function saveAttachment({
  * Gets all attachments for a specific note
  */
 export const getNoteAttachments = async (noteId: string) => {
+  console.log('[getNoteAttachments] Fetching attachments for note:', noteId);
+  
+  if (!noteId) {
+    console.error('[getNoteAttachments] No noteId provided');
+    return [];
+  }
+  
   try {
-    const { data, error } = await supabase
+    const { data, error, status, statusText } = await supabase
       .from('attachments')
       .select('*')
       .eq('note_id', noteId);
 
+    console.log('[getNoteAttachments] Supabase response:', {
+      status,
+      statusText,
+      dataLength: data?.length,
+      error
+    });
+
     if (error) {
-      console.error('Error fetching attachments:', error);
+      console.error('[getNoteAttachments] Error fetching attachments:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
 
+    console.log(`[getNoteAttachments] Found ${data?.length || 0} attachments for note ${noteId}`);
     return data || [];
   } catch (error) {
-    console.error('Error in getNoteAttachments:', error);
+    console.error('[getNoteAttachments] Error in getNoteAttachments:', error);
     throw error;
   }
 };
@@ -225,15 +281,29 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
       const attachmentPath = attachment.storage_path;
       if (!attachmentPath) return false;
       
+      // Get just the filename part of the path for comparison
+      const attachmentFilename = attachmentPath.split('/').pop();
+      
       // Check if this attachment's path exists in the used paths
-      const isUsed = normalizedUsedPaths.some(usedPath => 
-        usedPath.endsWith(attachmentPath) || 
-        attachmentPath.endsWith(usedPath) ||
-        usedPath.includes(attachmentPath) ||
-        attachmentPath.includes(usedPath)
-      );
+      const isUsed = normalizedUsedPaths.some(usedPath => {
+        // Check for direct match or filename match
+        return usedPath === attachmentPath || 
+               usedPath.endsWith(attachmentPath) ||
+               usedPath.includes(attachmentFilename) ||
+               // Check if the used path is part of the attachment path or vice versa
+               attachmentPath.includes(usedPath) ||
+               // Check if the filenames match (in case paths are different)
+               usedPath.endsWith(attachmentFilename);
+      });
       
       return !isUsed;
+    });
+    
+    console.log('Found orphaned attachments:', {
+      totalAttachments: attachments.length,
+      usedPaths: normalizedUsedPaths,
+      orphanedCount: orphanedAttachments.length,
+      orphanedIds: orphanedAttachments.map(a => a.id)
     });
 
     // Delete orphaned attachments

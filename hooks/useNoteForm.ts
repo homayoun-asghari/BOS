@@ -5,6 +5,7 @@ import useNotes from './useNotes';
 
 export interface NoteFormValues {
   id?: string;
+  title: string;
   content: string;
   type: string | null;
   status: string | null;
@@ -16,6 +17,7 @@ export interface NoteFormValues {
 
 export function useNoteForm(initialValues?: Partial<NoteFormValues>) {
   const [values, setValues] = useState<NoteFormValues>({
+    title: initialValues?.title || '',
     content: initialValues?.content || '',
     type: initialValues?.type || null,
     status: initialValues?.status || null,
@@ -43,93 +45,52 @@ export function useNoteForm(initialValues?: Partial<NoteFormValues>) {
     
     try {
       const now = new Date();
+      const title = content.split('\n')[0]?.substring(0, 100)?.trim() || '';
+      
       const noteData = {
-        title: content.split('\n')[0]?.substring(0, 100) || 'Untitled',
+        title: title,
         content: content,
         user_id: user.id,
         updated_at: now.toISOString()
       };
       
-      console.log('Saving note with data:', noteData);
+      console.log('Saving note with data:', { ...noteData, content_length: content?.length });
       
-      let result;
-      const currentId = values.id; // Capture current ID to avoid closure issues
+      // Always use the ID from the URL if available
+      const currentId = typeof window !== 'undefined' ? 
+        window.location.pathname.split('/').pop() : 
+        values?.id;
       
-      if (currentId) {
-        console.log('Updating existing note with ID:', currentId);
-        
-        // First, check if the note still exists
-        const { data: existingNote, error: fetchError } = await supabase
-          .from('notes')
-          .select('id')
-          .eq('id', currentId)
-          .single();
-          
-        if (fetchError || !existingNote) {
-          console.log('Note not found, creating a new one instead');
-          // If note doesn't exist, create a new one
-          const { data, error: createError } = await supabase
-            .from('notes')
-            .insert({
-              ...noteData,
-              created_at: now.toISOString()
-            })
-            .select()
-            .single();
-            
-          if (createError) throw createError;
-          result = data;
-          
-          // Sync links for the new note
-          if (result?.id) {
-            console.log('Syncing links for new note:', result.id);
-            await syncNoteLinks(result.id, content);
-          }
-        } else {
-          // Note exists, proceed with update
-          const { data, error: updateError } = await supabase
-            .from('notes')
-            .update(noteData)
-            .eq('id', currentId)
-            .select()
-            .single();
-            
-          if (updateError) throw updateError;
-          result = data;
-          
-          // Sync links for the existing note
-          if (result?.id) {
-            console.log('Syncing links for existing note:', result.id);
-            await syncNoteLinks(result.id, content);
-          }
-        }
-        
-        console.log('Note saved and links synced successfully:', result);
-      } else if (content) {
-        console.log('Creating new note');
-        // Create new note only if there's content
-        const { data, error } = await supabase
-          .from('notes')
-          .insert({
-            ...noteData,
-            created_at: now.toISOString()
-          })
-          .select()
-          .single();
-          
-        if (error) throw error;
-        result = data;
-        console.log('Note created successfully:', result);
+      if (!currentId) {
+        console.error('No note ID available for saving');
+        throw new Error('No note ID available. Please refresh the page and try again.');
       }
       
-      // Update local state with server response
+      console.log('Updating existing note with ID:', currentId);
+      
+      // Always update the existing note - it should have been created by the page component
+      const { data: result, error: updateError } = await supabase
+        .from('notes')
+        .update(noteData)
+        .eq('id', currentId)
+        .select()
+        .single();
+        
+      if (updateError) throw updateError;
+      
+      // Sync links for the note
+      if (result?.id) {
+        console.log('Syncing links for note:', result.id);
+        await syncNoteLinks(result.id, content);
+      }
+      
+      // Update local state with the saved note
       if (result) {
         setValues(prev => ({
           ...prev,
-          id: result.id,
-          content: result.content,
-          created_at: result.created_at || now,
-          updated_at: result.updated_at || now
+          ...result,
+          created_at: result.created_at ? new Date(result.created_at) : new Date(),
+          updated_at: new Date()
         }));
       }
       

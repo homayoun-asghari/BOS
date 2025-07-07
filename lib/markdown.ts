@@ -49,12 +49,7 @@ turndownService.addRule('image', {
  */
 export function toMarkdown(html: string): string {
   if (!html) return '';
-  console.group('toMarkdown');
-  console.log('Input HTML:', html);
-  const markdown = turndownService.turndown(html);
-  console.log('Output Markdown:', markdown);
-  console.groupEnd();
-  return markdown;
+  return turndownService.turndown(html || '');
 }
 
 // Configure marked with custom renderer for images
@@ -101,20 +96,10 @@ marked.use({
 export function toHtml(markdown: string): string {
   if (!markdown) return '';
   
-  console.group('toHtml');
-  console.log('Input Markdown:', markdown);
-  
   try {
     const html = marked.parse(markdown) as string;
-    console.log('Parsed HTML (before sanitize):', html);
-    
-    const sanitized = DOMPurify.sanitize(html);
-    console.log('Sanitized HTML:', sanitized);
-    console.groupEnd();
-    return sanitized;
-  } catch (error) {
-    console.error('Error converting markdown to HTML:', error);
-    console.groupEnd();
+    return DOMPurify.sanitize(html);
+  } catch {
     return markdown;
   }
 }
