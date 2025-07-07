@@ -277,24 +277,50 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
 
     // Find orphaned attachments (those not in usedStoragePaths)
     const orphanedAttachments = attachments.filter(attachment => {
-      // Get the storage path for this attachment
       const attachmentPath = attachment.storage_path;
       if (!attachmentPath) return false;
       
-      // Get just the filename part of the path for comparison
-      const attachmentFilename = attachmentPath.split('/').pop();
+      // Normalize the attachment path by removing any query parameters and 'notes-attachments/' prefix
+      const normalizedAttachmentPath = attachmentPath
+        .replace(/^notes-attachments\//, '')  // Remove 'notes-attachments/' prefix if present
+        .split('?')[0];                        // Remove query parameters
+      
+      // Get just the filename part for comparison
+      const attachmentFilename = normalizedAttachmentPath.split('/').pop();
       
       // Check if this attachment's path exists in the used paths
       const isUsed = normalizedUsedPaths.some(usedPath => {
-        // Check for direct match or filename match
-        return usedPath === attachmentPath || 
-               usedPath.endsWith(attachmentPath) ||
-               usedPath.includes(attachmentFilename) ||
-               // Check if the used path is part of the attachment path or vice versa
-               attachmentPath.includes(usedPath) ||
-               // Check if the filenames match (in case paths are different)
-               usedPath.endsWith(attachmentFilename);
+        // Normalize the used path in the same way
+        const normalizedUsedPath = usedPath
+          .replace(/^notes-attachments\//, '')
+          .split('?')[0];
+        
+        // Get just the filename part for comparison
+        const usedFilename = normalizedUsedPath.split('/').pop();
+        
+        // Check for matches
+        return (
+          // Direct path match (after normalization)
+          normalizedUsedPath === normalizedAttachmentPath ||
+          // Filename match
+          usedFilename === attachmentFilename ||
+          // Check if one path contains the other
+          normalizedUsedPath.includes(normalizedAttachmentPath) ||
+          normalizedAttachmentPath.includes(normalizedUsedPath) ||
+          // Check if filenames match (case-insensitive)
+          usedFilename?.toLowerCase() === attachmentFilename?.toLowerCase()
+        );
       });
+      
+      if (!isUsed) {
+        console.log('Found orphaned attachment:', {
+          attachmentId: attachment.id,
+          storagePath: attachmentPath,
+          normalizedPath: normalizedAttachmentPath,
+          filename: attachmentFilename,
+          usedPaths: normalizedUsedPaths
+        });
+      }
       
       return !isUsed;
     });
@@ -308,9 +334,88 @@ export const cleanupOrphanedAttachments = async (noteId: string, usedStoragePath
 
     // Delete orphaned attachments
     const results = await Promise.allSettled(
-      orphanedAttachments.map(attachment => 
-        deleteAttachment(attachment.id)
-      )
+      orphanedAttachments.map(async (attachment) => {
+        try {
+          // First delete from storage
+          if (attachment.storage_path) {
+            // Normalize the storage path by removing any 'notes-attachments/' prefix
+            let storagePath = attachment.storage_path;
+            if (storagePath.startsWith('notes-attachments/')) {
+              storagePath = storagePath.substring('notes-attachments/'.length);
+            }
+            
+            console.log('Attempting to delete from storage:', {
+              bucket: 'notes-attachments',
+              path: storagePath,
+              attachmentId: attachment.id,
+              fullPath: `notes-attachments/${storagePath}`
+            });
+            
+            try {
+              // First try to delete with the exact path
+              const { data, error: storageError } = await supabase.storage
+                .from('notes-attachments')
+                .remove([storagePath]);
+              
+              console.log('Storage deletion response:', { data, error: storageError });
+              
+              if (storageError) {
+                // If the first attempt fails, try to find the file by name
+                console.log('Initial delete failed, trying to find file by name...');
+                const fileName = storagePath.split('/').pop();
+                if (fileName) {
+                  const { data: files, error: listError } = await supabase.storage
+                    .from('notes-attachments')
+                    .list('', { search: fileName });
+                  
+                  if (!listError && files && files.length > 0) {
+                    console.log(`Found ${files.length} matching files, attempting to delete them`);
+                    const pathsToDelete = files.map(file => file.name);
+                    
+                    const { data: deleteData, error: deleteError } = await supabase.storage
+                      .from('notes-attachments')
+                      .remove(pathsToDelete);
+                    
+                    if (deleteError) {
+                      console.error('Error deleting files by name:', deleteError);
+                      throw deleteError;
+                    }
+                    
+                    console.log('Successfully deleted files by name:', pathsToDelete);
+                  } else {
+                    console.log('No matching files found by name');
+                    throw storageError;
+                  }
+                } else {
+                  throw storageError;
+                }
+              } else {
+                console.log(`Successfully deleted file from storage: ${storagePath}`);
+              }
+            } catch (error) {
+              console.error(`Error processing storage deletion for ${storagePath}:`, error);
+              throw error;
+            }
+          }
+          
+          // Then delete from database
+          const { error: dbError } = await supabase
+            .from('attachments')
+            .delete()
+            .eq('id', attachment.id);
+            
+          if (dbError) {
+            console.error(`Error deleting attachment ${attachment.id} from database:`, dbError);
+            throw dbError;
+          }
+          
+          console.log(`Successfully deleted attachment ${attachment.id} from database`);
+          return true;
+        } catch (error) {
+          console.error(`Failed to delete attachment ${attachment.id}:`, error);
+          throw error;
+        }
+      })
     );
 
     const successfulDeletions = results.filter(
