@@ -42,64 +42,84 @@ export const useEditorLifecycle = ({
     console.log('[useEditorLifecycle] Extracting attachment URLs from content');
     const paths: Set<string> = new Set();
     
-    // 1. First, extract all possible paths from the content using various patterns
-    const patterns = [
-      // Match storage paths in data-original-path attributes
-      /data-original-path=['"](notes-attachments\/[^"'?]+)/g,
-      // Match storage paths in data-storage-path attributes
-      /data-storage-path=['"](notes-attachments\/[^"'?]+)/g,
-      // Match file names in markdown image syntax
-      /!\[.*?\]\([^\s]+\/([^\s)]+)\)/g,
-      // Match file names in HTML img src attributes
-      /<img[^>]+src=['"]([^"']+\/([^"'?]+)(?:\?[^"']*)?)['"]/gi,
-      // Match file names in anchor href attributes
-      /<a[^>]+href=['"]([^"']+\/([^"'?]+)(?:\?[^"']*)?)['"]/gi
-    ];
-
-    patterns.forEach(pattern => {
-      let match;
-      while ((match = pattern.exec(content)) !== null) {
-        // The first group is typically the full match, second is the filename
-        const matchGroup = match[1] || match[0];
-        if (matchGroup) {
-          // Extract just the filename part
-          const fileName = matchGroup.split('/').pop()?.split('?')[0];
-          if (fileName) {
-            // Try to find the full path in the known attachments
-            const matchingAttachment = attachments.find(a => 
-              a.storage_path.includes(fileName) || 
-              a.storage_path.endsWith(`/${fileName}`)
-            );
-            
-            if (matchingAttachment) {
-              paths.add(matchingAttachment.storage_path);
-            } else if (currentNoteId) {
-              // If no matching attachment found, try to construct the path
-              const path = matchGroup.startsWith('notes-attachments/') 
-                ? matchGroup.split('?')[0] 
-                : `notes-attachments/${currentNoteId}/${fileName}`;
-              paths.add(path);
-            }
-          }
-        }
-      }
-    });
-
-    // 2. Also include all attachments that are explicitly in the attachments array
+    // 1. First, include all attachments that are explicitly in the attachments array
     attachments.forEach(attachment => {
       if (attachment.storage_path) {
         paths.add(attachment.storage_path);
       }
     });
 
-    console.log(`[useEditorLifecycle] Extracted ${paths.size} unique attachment paths`);
-    
-    // Match full URLs and extract the storage path
-    const urlRegex = /https?:\/\/[^\s"']+\/storage\/v1\/object\/(?:public|sign)\/(notes-attachments\/[^\s"'?]+)/g;
+    // 2. Extract paths from content using multiple patterns
+    const patterns = [
+      // Match storage paths in data-original-path attributes
+      /data-original-path=['"](notes-attachments\/[^"'?]+)/gi,
+      // Match storage paths in data-storage-path attributes
+      /data-storage-path=['"](notes-attachments\/[^"'?]+)/gi,
+      // Match file names in markdown image syntax
+      /!\[.*?\]\([^\s]+\/([^\s)"']+)(?:\?[^\s)"']*)?\)/g,
+      // Match file names in HTML img src attributes
+      /<img[^>]+src=['"]([^"']+\/([^"'?]+)(?:\?[^"']*)?)['"]/gi,
+      // Match file names in anchor href attributes
+      /<a[^>]+href=['"]([^"']+\/([^"'?]+)(?:\?[^"']*)?)['"]/gi,
+      // Match raw file names that might be in the content
+      /(?:^|\s|\()([a-f0-9]{13}-[a-z0-9]+\.(?:png|jpg|jpeg|gif|pdf|docx?|xlsx?|pptx?|txt))\b/gi
+    ];
+
+    patterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        // Get the matched group that contains the path/filename
+        const matchGroup = match[1] || match[0];
+        if (matchGroup) {
+          // Clean up the match - remove any query parameters and fragments
+          let cleanPath = matchGroup.split('?')[0].split('#')[0].trim();
+          
+          // If it's a full URL, extract the path
+          if (cleanPath.startsWith('http')) {
+            try {
+              const url = new URL(cleanPath);
+              cleanPath = url.pathname;
+            } catch (error) {
+              console.warn('Invalid URL in content:', cleanPath, error);
+              continue;
+            }
+          }
+          
+          // Extract just the filename part
+          const fileName = cleanPath.split('/').pop();
+          if (!fileName) continue;
+          
+          // Try to find the full path in the known attachments
+          const matchingAttachment = attachments.find(a => 
+            a.storage_path && (
+              a.storage_path.includes(fileName) || 
+              a.storage_path.endsWith(`/${fileName}`) ||
+              a.file_name === fileName
+            )
+          );
+          
+          if (matchingAttachment?.storage_path) {
+            paths.add(matchingAttachment.storage_path);
+          } else if (currentNoteId && !cleanPath.startsWith('http')) {
+            // If no matching attachment found, try to construct the path
+            const path = cleanPath.startsWith('notes-attachments/') 
+              ? cleanPath 
+              : `notes-attachments/${currentNoteId}/${fileName}`;
+            paths.add(path);
+          }
+        }
+      }
+    });
+
+    // 3. Match full Supabase storage URLs and extract the storage path
+    const urlRegex = /https?:\/\/[^\s"']+\/storage\/v1\/object\/(?:public|sign)\/(notes-attachments\/[^\s"'?]+)/gi;
     let urlMatch;
     while ((urlMatch = urlRegex.exec(content)) !== null) {
-      const path = urlMatch[1].split('?')[0];
-      if (path) paths.add(path);
+      const path = urlRegex.lastIndex > 0 ? urlMatch[1] : urlMatch[0];
+      if (path) {
+        const cleanPath = path.split('?')[0].split('#')[0];
+        paths.add(cleanPath);
+      }
     }
     
     // Filter and return only valid paths
