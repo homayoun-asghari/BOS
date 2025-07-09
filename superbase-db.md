@@ -18,28 +18,83 @@ CREATE POLICY "Users can update their own profile" ON public.profiles
 
 
 
+
+
+-- 1. Create the recursive function to extract all "text" from TipTap JSON content
+CREATE OR REPLACE FUNCTION extract_text_from_content(content jsonb) 
+RETURNS text AS $$
+DECLARE
+  result text := '';
+  node jsonb;
+BEGIN
+  -- Handle null or empty content
+  IF content IS NULL OR content = 'null'::jsonb THEN
+    RETURN '';
+  END IF;
+  
+  -- If content is a text node
+  IF jsonb_typeof(content) = 'string' THEN
+    RETURN content #>> '{}';
+  END IF;
+  
+  -- If content has a text property
+  IF content ? 'text' THEN
+    result := result || ' ' || (content->>'text');
+  END IF;
+  
+  -- Recursively process content array
+  IF content ? 'content' AND jsonb_typeof(content->'content') = 'array' THEN
+    FOR node IN SELECT * FROM jsonb_array_elements(content->'content')
+    LOOP
+      result := result || ' ' || extract_text_from_content(node);
+    END LOOP;
+  END IF;
+  
+  RETURN trim(result);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- 2. Create the notes table with the generated tsvector column using the function
 CREATE TABLE public.notes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   title text NOT NULL,
-  content text, -- Stores raw Markdown content
+  content jsonb, -- Stores TipTap JSON content
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  
+  -- Full-text search index (generated column)
+  content_search tsvector GENERATED ALWAYS AS (
+    to_tsvector(
+      'simple', 
+      COALESCE(title, '') || ' ' || COALESCE(extract_text_from_content(content), '')
+    )
+  ) STORED
 );
 
--- Index for faster lookups by user and updated_at
+-- 3. Indexes
 CREATE INDEX idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX idx_notes_updated_at ON public.notes(updated_at DESC);
-
--- RLS Policy: Users can only manage their own notes
-ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can create notes" ON public.notes FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can view their own notes" ON public.notes FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can update their own notes" ON public.notes FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own notes" ON public.notes FOR DELETE USING (auth.uid() = user_id);
-
-ALTER TABLE public.notes ADD COLUMN content_search tsvector GENERATED ALWAYS AS (to_tsvector('english', title || ' ' || content)) STORED;
 CREATE INDEX idx_notes_content_search ON public.notes USING GIN (content_search);
+
+-- 4. RLS: Row Level Security
+ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can create notes"
+  ON public.notes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view their own notes"
+  ON public.notes FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own notes"
+  ON public.notes FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own notes"
+  ON public.notes FOR DELETE
+  USING (auth.uid() = user_id);
 
 
 

@@ -1,7 +1,30 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Note, NoteFormData } from '@/types/note';
 import { createClient } from '@/lib/supabase/browser';
 import { useUser } from './useUser';
+import type { TiptapContent } from '@/components/editor/minimal-tiptap/hooks/use-minimal-tiptap';
+
+// Type for Tiptap node
+interface TiptapNode {
+  text?: string;
+  content?: TiptapNode[];
+  [key: string]: unknown;
+}
+
+// Type for note links
+interface InternalLink {
+  type: 'internal';
+  id: string;
+  text: string;
+}
+
+interface ExternalLink {
+  type: 'external';
+  url: string;
+  text: string;
+}
+
+type NoteLink = InternalLink | ExternalLink;
 
 function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -430,69 +453,100 @@ function useNotes() {
     }
   }, [supabase, setError]);
 
-  // Extract links from content and return them with their types
-  const extractNoteLinks = (content: string): Array<{ type: 'internal' | 'external', id?: string, url?: string, text: string }> => {
+  // Extract note links from markdown content
+  const extractNoteLinks = useCallback((content: string): NoteLink[] => {
     if (!content) return [];
-    
-    const links: Array<{ type: 'internal' | 'external', id?: string, url?: string, text: string }> = [];
-    
-    // Match internal note links like [text](/notes/note-id)
-    const internalRegex = /\[([^\]]+)\]\(\/notes\/([a-f0-9-]+)\)/g;
-    let match;
-    
-    // Extract internal links
-    while ((match = internalRegex.exec(content)) !== null) {
-      if (match[2]) { // match[2] is the note ID
+
+    const links: NoteLink[] = [];
+
+    // Match internal links like [[note-id]]
+    const internalLinkRegex = /\[\[([^\]]+)\]\]/g;
+    let internalMatch;
+    while ((internalMatch = internalLinkRegex.exec(content)) !== null) {
+      const [, id] = internalMatch; // Removed unused fullMatch
+      if (id) {
         links.push({
           type: 'internal',
-          id: match[2],
-          text: match[1] || 'Note Link'
+          id: id.trim(),
+          text: `[[${id.trim()}]]`,
         });
       }
     }
-    
-    // Match external links like [text](https://example.com)
-    const externalRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    
-    // Extract external links
-    while ((match = externalRegex.exec(content)) !== null) {
-      if (match[2]) { // match[2] is the URL
-        // Skip internal note links that were already captured
-        if (!match[2].includes('/notes/')) {
-          links.push({
-            type: 'external',
-            url: match[2],
-            text: match[1] || match[2]
-          });
-        }
+
+    // Match external links like [text](url)
+    const externalLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let externalMatch;
+    while ((externalMatch = externalLinkRegex.exec(content)) !== null) {
+      const [, text, url] = externalMatch;
+      if (text && url) {
+        links.push({
+          type: 'external',
+          url: url.trim(),
+          text: text.trim(),
+        });
       }
     }
-    
+
     return links;
-  };
+  }, []);
+
+  // Recursively extract text from Tiptap nodes
+  const extractTextFromNodes = useCallback((nodes: TiptapNode[]): string => {
+    if (!nodes || !Array.isArray(nodes)) return '';
+    
+    return nodes.map(node => {
+      if (node.text) return node.text;
+      if (node.content && Array.isArray(node.content)) {
+        return extractTextFromNodes(node.content);
+      }
+      return '';
+    }).filter(Boolean).join('\n');
+  }, []);
+
+  // Extract text from Tiptap content (handles both JSON and plain text)
+  const extractTextFromContent = useCallback((content: TiptapContent | string | null | undefined): string => {
+    if (!content) return '';
+    
+    // Handle string content (legacy)
+    if (typeof content === 'string') return content;
+    
+    // Handle Tiptap JSON content
+    if (typeof content === 'object' && 'content' in content && Array.isArray(content.content)) {
+      return extractTextFromNodes(content.content);
+    }
+    
+    return '';
+  }, [extractTextFromNodes]);
+  
+  // Extract links from Tiptap content
+  const extractLinksFromContent = useCallback((content: TiptapContent | string | null | undefined): NoteLink[] => {
+    const text = extractTextFromContent(content);
+    return extractNoteLinks(text);
+  }, [extractTextFromContent, extractNoteLinks]);
 
   // Synchronize note links with the current content
-  const syncNoteLinks = useCallback(async (noteId: string, content: string) => {
+  const syncNoteLinks = useCallback(async (noteId: string, content: TiptapContent | string | null | undefined) => {
+    if (!user) {
+      console.error('No authenticated user found');
+      throw new Error('Authentication required');
+    }
+    
+    setIsLoading(true);
+    
     try {
-      console.log('Starting syncNoteLinks for note:', noteId);
-      
-      // Get existing links from the database
+      // Fetch existing links for the note
       const existingLinks = await getNoteLinks(noteId);
-      console.log('Existing links from DB:', existingLinks);
       
-      // Extract all links from the content
-      const currentLinks = extractNoteLinks(content);
-      console.log('Extracted links from content:', currentLinks);
+      // Extract links from the content
+      const currentLinks = extractLinksFromContent(content);
       
       // Create a map of existing links for quick lookup
-      const existingLinkMap = new Map();
-      existingLinks.forEach(link => {
-        if (link.link_type === 'internal') {
-          existingLinkMap.set(`internal:${link.target_note_id}`, link);
-        } else {
-          existingLinkMap.set(`external:${link.url}`, link);
-        }
-      });
+      const existingLinkMap = new Map(
+        existingLinks.map(link => [
+          link.type === 'internal' ? `internal:${link.target_note_id}` : `external:${link.url}`,
+          link
+        ])
+      );
       
       // Find links to remove (exist in DB but not in content)
       const linksToRemove = existingLinks.filter(link => {
@@ -502,8 +556,6 @@ function useNotes() {
           return !currentLinks.some(l => l.type === 'external' && l.url === link.url);
         }
       });
-      
-      console.log('Links to remove:', linksToRemove);
       
       // Find links to add (exist in content but not in DB)
       const linksToAdd = currentLinks.filter(link => {
@@ -516,11 +568,8 @@ function useNotes() {
         return !existingLinkMap.has(key) && !isSelfLink;
       });
       
-      console.log('Links to add:', linksToAdd);
-      
       // Delete removed links
       if (linksToRemove.length > 0) {
-        console.log(`Removing ${linksToRemove.length} old links`);
         await Promise.all(
           linksToRemove.map(link => deleteNoteLink(link.id))
         );
@@ -528,41 +577,38 @@ function useNotes() {
       
       // Add new links
       if (linksToAdd.length > 0) {
-        console.log(`Adding ${linksToAdd.length} new links`);
         await Promise.all(
           linksToAdd.map(link => {
             if (link.type === 'internal') {
-              console.log(`Creating internal link from ${noteId} to ${link.id}`);
-              return createNoteLink(noteId, link.id!, link.text);
+              return createNoteLink(noteId, link.id, link.text);
             } else {
-              console.log(`Creating external link from ${noteId} to ${link.url}`);
-              return createExternalLink(noteId, link.url!, link.text);
+              return createExternalLink(noteId, link.url, link.text);
             }
           })
         );
       }
       
-      const result = {
+      return {
         removed: linksToRemove.length,
         added: linksToAdd.length
       };
-      
-      console.log('syncNoteLinks completed:', result);
-      return result;
       
     } catch (err) {
       console.error('Error in syncNoteLinks:', {
         error: err,
         noteId,
-        contentLength: content?.length
+        contentType: typeof content,
+        contentLength: typeof content === 'string' ? content.length : 'non-string content'
       });
       setError(err as Error);
       throw err;
+    } finally {
+      setIsLoading(false);
     }
-  }, [getNoteLinks, deleteNoteLink, createNoteLink, createExternalLink, setError]);
+  }, [user, getNoteLinks, deleteNoteLink, createNoteLink, createExternalLink, setError, extractLinksFromContent]);
 
-
-  return {
+  // Memoize the API to prevent unnecessary re-renders
+  const api = useMemo(() => ({
     notes,
     isLoading,
     error,
@@ -572,7 +618,7 @@ function useNotes() {
     deleteNote,
     syncNoteLinks,
     createExternalLink,
-    getNoteById: useCallback(async (id: string) => {
+    getNoteById: async (id: string) => {
       try {
         setIsLoading(true);
         const { data, error } = await supabase
@@ -590,10 +636,27 @@ function useNotes() {
       } finally {
         setIsLoading(false);
       }
-    }, [supabase, setIsLoading, setError]),
+    },
     searchNotes,
     createNoteLink,
-  };
+  }), [
+    notes,
+    isLoading,
+    error,
+    fetchNotes,
+    createNote,
+    updateNote,
+    deleteNote,
+    syncNoteLinks,
+    createExternalLink,
+    supabase,
+    setIsLoading,
+    setError,
+    searchNotes,
+    createNoteLink
+  ]);
+  
+  return api;
 };
 
 export default useNotes;

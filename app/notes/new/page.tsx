@@ -207,7 +207,6 @@ export default function NewNotePage() {
 
   return (
     <div className="h-screen flex flex-col bg-background" data-testid="new-note-page">
-      <p className="p-4 text-green-600">Note created with ID: {noteId}</p>
       <NoteForm
         key={noteId}
         noteId={noteId}
