@@ -10,23 +10,13 @@ export interface SaveAttachmentParams {
   fileType?: string;
   fileSize?: number;
   storagePath: string;
+  // publicUrl is not stored in the database, but can be used for reference
+  publicUrl?: string;
 }
 
-export async function saveAttachment({
-  noteId,
-  userId,
-  fileName,
-  fileType,
-  fileSize,
-  storagePath,
-}: {
-  noteId: string;
-  userId: string;
-  fileName: string;
-  fileType?: string;
-  fileSize?: number;
-  storagePath: string;
-}) {
+export async function saveAttachment(params: SaveAttachmentParams) {
+  const { noteId, userId, fileName, fileType, fileSize, storagePath, publicUrl } = params;
+  
   try {
     console.log('[saveAttachment] === Starting to save attachment ===');
     console.log('[saveAttachment] Input parameters:', {
@@ -35,19 +25,43 @@ export async function saveAttachment({
       fileName,
       fileType,
       fileSize,
-      storagePath,
+      storagePath: storagePath.length > 50 
+        ? `${storagePath.substring(0, 25)}...${storagePath.substring(storagePath.length - 25)}` 
+        : storagePath,
+      publicUrl: publicUrl ? '***public-url-present***' : 'undefined'
+    });
+
+    // Log the Supabase client configuration
+    console.log('[saveAttachment] Supabase client config:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '***present***' : 'missing',
+      storageUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/notes-attachments/` : 'missing'
     });
     
     // Check if we have all required parameters
     if (!noteId || !userId || !storagePath) {
-      const errorMessage = 'Missing required parameters for saving attachment';
-      console.error(`[saveAttachment] ${errorMessage}`, {
+      const error = new Error('Missing required parameters');
+      const errorDetails = {
         hasNoteId: !!noteId,
         hasUserId: !!userId,
         hasStoragePath: !!storagePath,
+        noteIdLength: noteId?.length,
+        userIdLength: userId?.length,
+        storagePathLength: storagePath?.length
+      };
+      console.error('[saveAttachment] Validation error:', {
+        message: error.message,
+        details: errorDetails
       });
-      throw new Error(errorMessage);
+      throw error;
     }
+    
+    // Log the actual values (truncated for sensitive data)
+    console.log('[saveAttachment] Validated parameters:', {
+      noteId: noteId ? `${noteId.substring(0, 4)}...${noteId.substring(noteId.length - 4)}` : 'undefined',
+      userId: userId ? `${userId.substring(0, 4)}...${userId.substring(userId.length - 4)}` : 'undefined',
+      storagePath: storagePath ? `...${storagePath.substring(Math.max(0, storagePath.length - 50))}` : 'undefined'
+    });
 
     // Validate noteId is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -60,16 +74,38 @@ export async function saveAttachment({
     console.log('[saveAttachment] Starting attachment save for user:', userId);
 
     // First, get the profile ID for this user
+    console.log('[saveAttachment] Verifying user profile...');
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', userId)  // This assumes the profiles.id matches auth.users.id
       .single();
+      
+    console.log('[saveAttachment] Profile check result:', {
+      profileFound: !!profile,
+      error: profileError,
+      profileId: profile?.id
+    });
 
     if (profileError || !profile) {
       console.error('[saveAttachment] Error fetching profile:', profileError);
       throw new Error('User profile not found. Please complete your profile setup.');
     }
+
+    // Check if the note exists and the user has permission to add attachments
+    console.log('[saveAttachment] Checking note permissions...');
+    const { data: note, error: noteError } = await supabase
+      .from('notes')
+      .select('id, user_id')
+      .eq('id', noteId)
+      .single();
+      
+    console.log('[saveAttachment] Note check result:', {
+      noteFound: !!note,
+      error: noteError,
+      noteUserId: note?.user_id,
+      currentUserId: userId
+    });
 
     const attachmentId = uuidv4();
     
@@ -77,12 +113,12 @@ export async function saveAttachment({
     const attachmentData = {
       id: attachmentId,
       note_id: noteId,
-      user_id: profile.id,  // Use the profile ID that matches the foreign key
+      user_id: userId,
       file_name: fileName,
-      file_type: fileType,
-      file_size_bytes: fileSize,
+      file_type: fileType || null,
+      file_size_bytes: fileSize || null,
       storage_path: storagePath,
-      // uploaded_at is automatically set by the database default
+      uploaded_at: new Date().toISOString()
     };
 
     console.log('[saveAttachment] Prepared attachment data:', {
@@ -93,34 +129,102 @@ export async function saveAttachment({
         : storagePath
     });
 
-    // Try to insert the data with transaction logging
-    console.log('[saveAttachment] Attempting to insert attachment:', {
-      attachmentData: {
+    // Insert the attachment
+    console.log('[saveAttachment] Inserting attachment into database:', {
+      table: 'attachments',
+      data: {
         ...attachmentData,
-        storage_path: storagePath.length > 50 
-          ? `${storagePath.substring(0, 25)}...${storagePath.substring(storagePath.length - 25)}` 
-          : storagePath
+        // Truncate long values for logging
+        storage_path: attachmentData.storage_path 
+          ? `...${attachmentData.storage_path.substring(Math.max(0, attachmentData.storage_path.length - 30))}` 
+          : 'undefined',
+        file_name: attachmentData.file_name || 'undefined',
+        file_type: attachmentData.file_type || 'undefined',
+        file_size_bytes: attachmentData.file_size_bytes || 0
       },
-      noteId,
-      userId
+      // Log the raw SQL that would be executed (for debugging)
+      _query: `
+        INSERT INTO attachments (
+          id, note_id, user_id, file_name, file_type, 
+          file_size_bytes, storage_path, uploaded_at
+        ) VALUES (
+          '${attachmentData.id}', 
+          '${attachmentData.note_id}', 
+          '${attachmentData.user_id}', 
+          ${attachmentData.file_name ? `'${attachmentData.file_name.replace(/'/g, "''")}'` : 'NULL'}, 
+          ${attachmentData.file_type ? `'${attachmentData.file_type}'` : 'NULL'}, 
+          ${attachmentData.file_size_bytes || 'NULL'}, 
+          '${attachmentData.storage_path}', 
+          '${attachmentData.uploaded_at}'
+        )
+        RETURNING *
+      `
+    });
+    
+    // Log the Supabase client config for debugging
+    console.log('[saveAttachment] Supabase client config:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY 
+        ? `${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.substring(0, 10)}...` 
+        : 'NOT SET'
     });
 
-    const { data: insertedData, error: insertError, status, statusText } = await supabase
+    const { data: insertedData, error: insertError } = await supabase
       .from('attachments')
       .insert(attachmentData)
       .select()
       .single();
+      
+    console.log('[saveAttachment] Insert operation completed:', {
+      status: insertError ? 'failed' : 'success',
+      error: insertError,
+      insertedData: insertedData || null
+    });
+
+    // Type-safe error details extraction
+    type ErrorWithExtras = Error & {
+      code?: string;
+      details?: string;
+      hint?: string;
+      details_parsed?: Record<string, unknown>;
+      hint_parsed?: Record<string, unknown>;
+      query?: string;
+    };
+
+    const getErrorDetails = (error: ErrorWithExtras | null) => {
+      if (!error) return null;
+      
+      const details: Record<string, unknown> = {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      };
+
+      // Safely include parsed details if available
+      if (error.details_parsed && typeof error.details_parsed === 'object') {
+        Object.assign(details, error.details_parsed);
+      }
+      if (error.hint_parsed && typeof error.hint_parsed === 'object') {
+        Object.assign(details, { hint_parsed: error.hint_parsed });
+      }
+      if (error.query) {
+        details.query = error.query;
+      }
+
+      return details;
+    };
+
+    const errorDetails = insertError ? getErrorDetails(insertError) : null;
 
     console.log('[saveAttachment] Insert response:', {
-      status,
-      statusText,
+      success: !insertError,
       data: insertedData,
-      error: insertError ? {
-        code: insertError.code,
-        message: insertError.message,
-        details: insertError.details,
-        hint: insertError.hint
-      } : null
+      error: errorDetails,
+      // Include the raw error for debugging
+      rawError: insertError,
+      // Safely access the query property
+      query: (insertError as unknown as { query?: string })?.query
     });
 
     if (insertError) {
@@ -394,8 +498,9 @@ export const cleanupOrphanedAttachments = async (
                 console.log(`Successfully deleted file from storage: ${storagePath}`);
               }
             } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               console.error(`Error processing storage deletion for ${storagePath}:`, error);
-              throw error;
+              throw new Error(`Storage deletion failed for ${storagePath}: ${errorMessage}`);
             }
           }
           
@@ -407,6 +512,7 @@ export const cleanupOrphanedAttachments = async (
             
           if (dbError) {
             console.error(`Error deleting attachment ${attachment.id} from database:`, dbError);
+            throw new Error(`Database deletion failed for ${attachment.id}: ${dbError.message}`);
             throw dbError;
           }
           

@@ -126,7 +126,7 @@ export default function NoteForm({
       setSaveError(null);
       
       // Save the note content - this will now also sync links
-      const savedNote = await saveNote(contentToSave);
+      const savedNote = await saveNote(contentToSave as string);
       
       if (!savedNote) {
         throw new Error('No data returned from save operation');
@@ -200,11 +200,17 @@ export default function NoteForm({
       if (onSave && savedNote.id) {
         try {
           console.log('Calling onSave callback...');
-          await onSave({
+          const contentString = typeof savedNote.content === 'string' 
+            ? savedNote.content 
+            : JSON.stringify(savedNote.content || {});
+            
+          const saveData = {
             id: savedNote.id,
-            content: savedNote.content || '',
+            content: contentString,
             title: savedNote.title || ''
-          });
+          };
+          
+          await onSave(saveData as { id: string; content: string; title: string });
         } catch (onSaveError) {
           console.error('Error in onSave callback:', onSaveError);
           // Don't fail the entire save operation if the callback fails
@@ -255,13 +261,15 @@ export default function NoteForm({
   }, []); // No dependencies needed as we only use state setters and ref
 
   const handleEditorChange = useCallback((newContent: string) => {
+    // Store the previous content for potential rollback
+    prevContentRef.current = newContent;
+    
+    // Update local state
     setContent(newContent);
     
-    // Extract title from content (first line)
-    const title = newContent.split('\n')[0]?.replace(/^#+\s*/, '') || '';
-    
-    // Notify parent of content changes
+    // Call the parent's onChange handler if provided
     if (onContentChange) {
+      const title = values.title || ''; // Ensure title is always a string
       onContentChange(newContent, title);
     }
     

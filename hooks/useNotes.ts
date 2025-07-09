@@ -152,22 +152,74 @@ function useNotes() {
   }, [supabase]);
 
   const deleteNote = useCallback(async (id: string) => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-    } catch (err) {
-      console.error('Error deleting note:', err);
-      setError(err as Error);
-      throw err;
-    } finally {
-      setIsLoading(false);
+  try {
+    setIsLoading(true);
+    console.log(`Starting deletion of note ${id}`);
+
+    // Step 1: Fetch all attachments related to this note
+    const { data: attachments, error: fetchError } = await supabase
+      .from('attachments')
+      .select('id, storage_path')
+      .eq('note_id', id);
+
+    if (fetchError) {
+      console.error('Error fetching attachments:', fetchError);
+      throw fetchError;
     }
-  }, [supabase]);
+
+    console.log(`Found ${attachments?.length || 0} attachments`);
+
+    // Step 2: Delete all files from Supabase storage
+    const filePaths = (attachments || [])
+      .map(att => att.storage_path?.replace(/^notes-attachments\//, ''))
+      .filter((p): p is string => !!p);
+
+    if (filePaths.length > 0) {
+      const { error: deleteFilesError } = await supabase
+        .storage
+        .from('notes-attachments')
+        .remove(filePaths);
+
+      if (deleteFilesError) {
+        console.error('Error deleting files from storage:', deleteFilesError);
+        // Continue even if some files fail
+      } else {
+        console.log('Successfully deleted files from storage:', filePaths);
+      }
+    }
+
+    // Step 3: Delete attachment records from DB
+    const { error: deleteAttachmentsError } = await supabase
+      .from('attachments')
+      .delete()
+      .eq('note_id', id);
+
+    if (deleteAttachmentsError) {
+      console.error('Error deleting attachment records:', deleteAttachmentsError);
+      // Continue even if DB cleanup fails
+    }
+
+    // Step 4: Delete the note itself
+    const { error: deleteNoteError } = await supabase
+      .from('notes')
+      .delete()
+      .eq('id', id);
+
+    if (deleteNoteError) {
+      console.error('Error deleting note:', deleteNoteError);
+      throw deleteNoteError;
+    }
+
+    console.log(`Successfully deleted note ${id} and all its attachments.`);
+  } catch (err) {
+    console.error('Error in deleteNote:', err);
+    setError(err as Error);
+    throw err;
+  } finally {
+    setIsLoading(false);
+  }
+}, [supabase]);
+
 
   // Search notes using full-text search
   const searchNotes = useCallback(async (query: string) => {

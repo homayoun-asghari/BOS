@@ -1,6 +1,6 @@
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
-import type { Content, UseEditorOptions } from "@tiptap/react"
+import type { UseEditorOptions } from "@tiptap/react"
 import { StarterKit } from "@tiptap/starter-kit"
 import { useEditor } from "@tiptap/react"
 import { Typography } from "@tiptap/extension-typography"
@@ -23,11 +23,12 @@ import { cn } from "@/lib/utils"
 import { fileToBase64, getOutput, randomId } from "../utils"
 import { useThrottle } from "../hooks/use-throttle"
 import { toast } from "sonner"
+import { Node as ProseMirrorNode } from 'prosemirror-model';
 
 export interface TiptapContent {
   type?: string;
-  content?: any[];
-  [key: string]: any;
+  content?: unknown[];
+  [key: string]: unknown;
 }
 
 export interface UseMinimalTiptapEditorProps extends Omit<UseEditorOptions, 'content' | 'onUpdate' | 'onBlur'> {
@@ -81,20 +82,93 @@ const createExtensions = ({
     maxFileSize: 5 * 1024 * 1024,
     allowBase64: true,
     uploadFn: async (file) => {
-      return uploader ? await uploader(file) : await fakeuploader(file)
+      const uploadId = randomId();
+      try {
+        console.log('[Tiptap Image] Starting file upload:', { fileName: file.name, uploadId });
+        const url = uploader ? await uploader(file) : await fakeuploader(file);
+        console.log('[Tiptap Image] File upload completed:', { 
+          fileName: file.name, 
+          uploadId, 
+          url: url ? 'success' : 'no url returned',
+          urlPreview: url ? `${url.substring(0, 50)}...` : 'n/a'
+        });
+        return url;
+      } catch (error) {
+        console.error('[Tiptap Image] Upload failed:', { 
+          fileName: file.name, 
+          uploadId, 
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        throw error;
+      }
     },
     onToggle(editor, files, pos) {
       editor.commands.insertContentAt(
         pos,
         files.map((image) => {
-          const blobUrl = URL.createObjectURL(image)
-          const id = randomId()
+          const blobUrl = URL.createObjectURL(image);
+          const id = randomId();
+          const uploadId = `upload-${id}`;
+          
+          // Notify about the upload start
+          onFileUpload?.(blobUrl, image.name, image.type, uploadId, false);
+          
+          // Start the upload process
+          (uploader ? uploader(image) : fakeuploader(image))
+            .then(finalUrl => {
+              if (!finalUrl) {
+                console.error('[Tiptap Image] No URL returned from upload');
+                onFileUpload?.('', image.name, image.type, uploadId, true);
+                return;
+              }
+
+              console.log('[Tiptap Image] Upload completed, updating image URL:', { 
+                uploadId, 
+                finalUrlPreview: `${finalUrl.substring(0, 50)}...`
+              });
+              
+              // Update the image source when upload is complete
+              editor.commands.command(({ tr }) => {
+                let foundPos: number | null = null;
+                
+                tr.doc.descendants((node: ProseMirrorNode, pos: number) => {
+                  if (node.attrs?.id === id) {
+                    foundPos = pos;
+                    return false; // Stop searching
+                  }
+                  return true;
+                });
+                
+                if (foundPos !== null) {
+                  const node = tr.doc.nodeAt(foundPos);
+                  if (node) {
+                    tr.setNodeMarkup(tr.mapping.map(foundPos), undefined, {
+                      ...node.attrs,
+                      src: finalUrl,
+                      'data-upload-complete': 'true'
+                    });
+                    return true;
+                  }
+                }
+                return false;
+              });
+              
+              // Notify about the successful upload completion
+              onFileUpload?.(finalUrl, image.name, image.type, uploadId, false);
+            })
+            .catch(error => {
+              console.error('[Tiptap Image] Upload failed:', { uploadId, error });
+              // Notify about the upload failure
+              onFileUpload?.('', image.name, image.type, uploadId, true);
+            });
 
           return {
             type: "image",
             attrs: {
               id,
               src: blobUrl,
+              'data-upload-id': uploadId,
+              'data-upload-complete': 'false',
               alt: image.name,
               title: image.name,
               fileName: image.name,
@@ -140,50 +214,155 @@ const createExtensions = ({
   FileHandler.configure({
     onPaste: (editor, files) => {
       files.forEach(async (file) => {
+        const uploadId = randomId();
         try {
-          const src = await (uploader ?? fakeuploader)(file);
-          const node = editor.schema.nodes.image.create({ src });
+          // Show temporary placeholder
+          const tempNode = editor.schema.nodes.image.create({
+            src: '',
+            'data-uploading': 'true',
+            'data-upload-id': uploadId,
+            alt: file.name,
+            title: file.name,
+          });
+          
           const transaction = editor.state.tr;
-          transaction.replaceSelectionWith(node);
+          transaction.replaceSelectionWith(tempNode);
           editor.view.dispatch(transaction);
           
+          // Start upload
+          const src = await (uploader ?? fakeuploader)(file);
+          
+          // Find and replace the temporary node
+          const doc = editor.state.doc;
+          let foundPos = -1;
+          
+          doc.descendants((node, pos) => {
+            if (node.attrs['data-upload-id'] === uploadId) {
+              foundPos = pos;
+              return false; // Stop searching
+            }
+            return true;
+          });
+          
+          if (foundPos >= 0) {
+            const transaction = editor.state.tr;
+            transaction.setNodeMarkup(foundPos, undefined, {
+              ...doc.nodeAt(foundPos)?.attrs,
+              src,
+              'data-uploading': undefined,
+            });
+            editor.view.dispatch(transaction);
+          }
+          
           if (onFileUpload) {
-            onFileUpload(src, file.name, file.type);
+            onFileUpload(src, file.name, file.type, uploadId, false);
           }
         } catch (error) {
           console.error('Error uploading file:', error);
+          
+          // Remove the temporary node if upload fails
+          const doc = editor.state.doc;
+          let foundPos = -1;
+          
+          doc.descendants((node, pos) => {
+            if (node.attrs['data-upload-id'] === uploadId) {
+              foundPos = pos;
+              return false;
+            }
+            return true;
+          });
+          
+          if (foundPos >= 0) {
+            const transaction = editor.state.tr;
+            transaction.delete(foundPos, foundPos + 1);
+            editor.view.dispatch(transaction);
+          }
+          
           if (onFileUpload) {
-            onFileUpload('', file.name, file.type, undefined, true);
+            onFileUpload('', file.name, file.type, uploadId, true);
           }
         }
       });
     },
     onDrop: (editor, files, pos) => {
       files.forEach(async (file) => {
+        const uploadId = randomId();
         try {
-          const src = await (uploader ?? fakeuploader)(file);
-          const node = editor.schema.nodes.image.create({ src });
+          // Show temporary placeholder at drop position
+          const tempNode = editor.schema.nodes.image.create({
+            src: '',
+            'data-uploading': 'true',
+            'data-upload-id': uploadId,
+            alt: file.name,
+            title: file.name,
+          });
+          
           const transaction = editor.state.tr;
-          transaction.insert(pos, node);
+          transaction.insert(pos, tempNode);
           editor.view.dispatch(transaction);
+          
+          // Start upload
+          const src = await (uploader ?? fakeuploader)(file);
+          
+          // Find and replace the temporary node
+          const doc = editor.state.doc;
+          let foundPos = -1;
+          
+          doc.descendants((node, nodePos) => {
+            if (node.attrs['data-upload-id'] === uploadId) {
+              foundPos = nodePos;
+              return false;
+            }
+            return true;
+          });
+          
+          if (foundPos >= 0) {
+            const transaction = editor.state.tr;
+            transaction.setNodeMarkup(foundPos, undefined, {
+              ...doc.nodeAt(foundPos)?.attrs,
+              src,
+              'data-uploading': undefined,
+            });
+            editor.view.dispatch(transaction);
+          }
+          
           if (onFileUpload) {
-            onFileUpload(src, file.name, file.type);
+            onFileUpload(src, file.name, file.type, uploadId, false);
           }
         } catch (error) {
           console.error('Error uploading file:', error);
+          
+          // Remove the temporary node if upload fails
+          const doc = editor.state.doc;
+          let foundPos = -1;
+          
+          doc.descendants((node, nodePos) => {
+            if (node.attrs['data-upload-id'] === uploadId) {
+              foundPos = nodePos;
+              return false;
+            }
+            return true;
+          });
+          
+          if (foundPos >= 0) {
+            const transaction = editor.state.tr;
+            transaction.delete(foundPos, foundPos + 1);
+            editor.view.dispatch(transaction);
+          }
+          
           if (onFileUpload) {
-            onFileUpload('', file.name, file.type, undefined, true);
+            onFileUpload('', file.name, file.type, uploadId, true);
           }
         }
       });
     },
     onValidationError: (errors) => {
       errors.forEach((error) => {
-        toast.error("Image validation error", {
+        toast.error("File upload error", {
           position: "bottom-right",
-          description: error.reason,
-        })
-      })
+          description: error.reason || 'Invalid file type or size',
+        });
+      });
     },
   }),
   Color,
@@ -218,18 +397,28 @@ export const useMinimalTiptapEditor = ({
   const handleUpdate = React.useCallback(
     (editor: Editor) => {
       try {
-        // Always get JSON output to maintain consistent structure
+        console.log('[useMinimalTiptap] === Editor Update Triggered ===');
+        console.log('[useMinimalTiptap] Output format:', output);
+        
+        // Get the current editor state
         const content = editor.getJSON();
+        console.log('[useMinimalTiptap] Editor content (raw):', JSON.stringify(content, null, 2));
+        
         if (content) {
           // Ensure we're not double-wrapping the content
           if (output === 'json') {
+            console.log('[useMinimalTiptap] Sending JSON content to parent');
             throttledSetValue(content);
           } else {
-            throttledSetValue(getOutput(editor, output) as TiptapContent);
+            const outputContent = getOutput(editor, output) as TiptapContent;
+            console.log(`[useMinimalTiptap] Converted to ${output}:`, outputContent);
+            throttledSetValue(outputContent);
           }
+        } else {
+          console.warn('[useMinimalTiptap] No content available in editor');
         }
       } catch (error) {
-        console.error('Error in editor update:', error);
+        console.error('[useMinimalTiptap] Error in editor update:', error);
       }
     },
     [output, throttledSetValue]
@@ -237,7 +426,13 @@ export const useMinimalTiptapEditor = ({
 
   const handleCreate = React.useCallback(
     (editor: Editor) => {
-      if (!value) return;
+      console.log('[useMinimalTiptap] === Editor Create Triggered ===');
+      console.log('[useMinimalTiptap] Initial value type:', typeof value);
+      
+      if (!value) {
+        console.log('[useMinimalTiptap] No initial value provided');
+        return;
+      }
       
       try {
         // If value is a string, try to parse it as JSON
@@ -245,9 +440,14 @@ export const useMinimalTiptapEditor = ({
           ? JSON.parse(value)
           : value;
           
+        console.log('[useMinimalTiptap] Parsed content:', JSON.stringify(content, null, 2));
+        
         // Only set content if the editor is empty to prevent overwriting existing content
         if (editor.isEmpty) {
+          console.log('[useMinimalTiptap] Setting initial content');
           editor.commands.setContent(content);
+        } else {
+          console.log('[useMinimalTiptap] Editor not empty, skipping initial content set');
         }
       } catch (error) {
         console.error('Error setting editor content:', error);
@@ -284,10 +484,19 @@ export const useMinimalTiptapEditor = ({
   )
 
   const editor = useEditor({
-    extensions: createExtensions({ 
-      placeholder, 
+    extensions: createExtensions({
+      placeholder,
       uploader,
-      onFileUpload
+      onFileUpload: (url, fileName, fileType, uploadId, isError) => {
+        console.log(`[useMinimalTiptap] File upload ${isError ? 'failed' : 'succeeded'}:`, { 
+          url, 
+          fileName, 
+          fileType, 
+          uploadId,
+          isError 
+        });
+        onFileUpload?.(url, fileName, fileType, uploadId, isError);
+      },
     }),
     editorProps: {
       attributes: {

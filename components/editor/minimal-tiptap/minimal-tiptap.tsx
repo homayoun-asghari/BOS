@@ -110,10 +110,25 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   // Merge forwarded ref with internal ref
   React.useImperativeHandle(ref, () => internalRef.current as HTMLDivElement);
   
+  console.log('[MinimalTiptap] Rendering with value:', value ? JSON.stringify(value, null, 2) : 'null');
+  
   const editor = useMinimalTiptapEditor({
     value,
     onUpdate: (content) => {
-      onChange?.(content);
+      console.log('[MinimalTiptap] Content changed:', JSON.stringify(content, null, 2));
+      console.log('[MinimalTiptap] Content type:', typeof content);
+      console.log('[MinimalTiptap] Content keys:', content ? Object.keys(content) : 'null');
+      
+      if (content?.content) {
+        console.log('[MinimalTiptap] Content content length:', content.content.length);
+        console.log('[MinimalTiptap] First content item:', content.content[0] ? JSON.stringify(content.content[0], null, 2) : 'null');
+      }
+      
+      try {
+        onChange?.(content);
+      } catch (error) {
+        console.error('[MinimalTiptap] Error in onChange handler:', error);
+      }
     },
     editorProps: {
       handleKeyDown: (view, event) => {

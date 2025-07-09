@@ -192,6 +192,11 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
     return {
       src: {
         default: null,
+        renderHTML: (attributes) => ({
+          src: attributes.src,
+          'data-storage-path': attributes.src,
+          'data-upload-complete': attributes['data-upload-complete'] || 'false'
+        })
       },
       alt: {
         default: null,
@@ -211,6 +216,12 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
       fileName: {
         default: null,
       },
+      'data-upload-id': {
+        default: null,
+      },
+      'data-upload-complete': {
+        default: 'false',
+      }
     }
   },
 

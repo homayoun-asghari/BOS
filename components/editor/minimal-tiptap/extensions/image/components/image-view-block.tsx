@@ -9,9 +9,9 @@ import { ActionButton, ActionWrapper, ImageActions } from "./image-actions"
 import { useImageActions } from "../hooks/use-image-actions"
 import { blobUrlToBase64, randomId } from "../../../utils"
 import { InfoCircledIcon, TrashIcon } from "@radix-ui/react-icons"
-import { ImageOverlay } from "./image-overlay"
 import { Spinner } from "../../../components/spinner"
 import type { UploadReturnType } from "../image"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 const MAX_HEIGHT = 600
 const MIN_HEIGHT = 120
@@ -59,7 +59,34 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     isZoomed: false,
     error: false,
     naturalSize: { width: initialWidth, height: initialHeight },
-  })
+  });
+  
+  // Get the storage path from data attributes or use the src as fallback
+  const storagePath = node.attrs['data-storage-path'] || initSrc;
+  const uploadComplete = node.attrs['data-upload-complete'] === 'true';
+  
+  // Generate a public URL for the image
+  const [imageUrl, setImageUrl] = React.useState<string>(initSrc);
+  const supabase = createClientComponentClient();
+  
+  React.useEffect(() => {
+    const getImageUrl = async () => {
+      if (!storagePath || !uploadComplete) return;
+      
+      try {
+        const { data: { publicUrl } } = supabase.storage
+          .from('notes-attachments')
+          .getPublicUrl(storagePath);
+          
+        setImageUrl(publicUrl);
+      } catch (error) {
+        console.error('Error getting image URL:', error);
+        setImageState(prev => ({ ...prev, error: true }));
+      }
+    };
+    
+    getImageUrl();
+  }, [storagePath, uploadComplete, supabase]);
 
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [activeResizeHandle, setActiveResizeHandle] = React.useState<
@@ -140,8 +167,9 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
   )
 
   const handleImageError = React.useCallback(() => {
-    setImageState((prev) => ({ ...prev, error: true, imageLoaded: true }))
-  }, [])
+    setImageState((prev) => ({ ...prev, error: true }));
+    console.error('Failed to load image:', imageUrl);
+  }, [imageUrl])
 
   const handleResizeStart = React.useCallback(
     (direction: "left" | "right") =>
@@ -202,11 +230,12 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
 
         updateAttributes(normalizedData)
       } catch (error) {
-        setImageState((prev) => ({
+        console.error('Error uploading image:', error);
+        setImageState(prev => ({
           ...prev,
           error: true,
           isServerUploading: false,
-        }))
+        }));
       }
     }
 
@@ -260,31 +289,28 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
                   setImageState((prev) => ({ ...prev, isZoomed: false }))
                 }
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   className={cn(
-                    "h-auto rounded object-contain transition-shadow",
-                    {
-                      "opacity-0": !imageState.imageLoaded || imageState.error,
-                    }
+                    "h-full w-full object-cover",
+                    imageState.imageLoaded ? "opacity-100" : "opacity-0"
                   )}
                   style={{
-                    maxWidth: `min(100%, ${maxWidth}px)`,
-                    minWidth: `${MIN_WIDTH}px`,
-                    maxHeight: MAX_HEIGHT,
+                    width: currentWidth,
+                    height: currentHeight,
                   }}
                   width={currentWidth}
                   height={currentHeight}
-                  src={imageState.src}
+                  src={imageUrl}
                   onError={handleImageError}
                   onLoad={handleImageLoad}
                   alt={node.attrs.alt || ""}
                   title={node.attrs.title || ""}
-                  id={node.attrs.id}
+                  data-storage-path={storagePath}
+                  data-upload-complete={String(uploadComplete)}
                 />
               </ControlledZoom>
             </div>
-
-            {imageState.isServerUploading && <ImageOverlay />}
 
             {editor.isEditable &&
               imageState.imageLoaded &&
