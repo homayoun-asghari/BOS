@@ -42,32 +42,56 @@ export function useEditorUpload(noteId?: string) {
       const uploadResult = await uploadEditorFile(file, noteId, user.id);
       console.log('[useEditorUpload] File uploaded to storage:', {
         path: uploadResult.path,
-        url: uploadResult.url,
-        publicUrl: uploadResult.url
+        url: uploadResult.url ? 'URL generated' : 'No URL generated',
+        fileName: uploadResult.fileName,
+        fileType: uploadResult.fileType,
+        fileSize: uploadResult.fileSize
       });
+      
+      // Ensure we have a valid path with extension
+      if (!uploadResult.path || !uploadResult.path.includes('.')) {
+        throw new Error('Invalid file path - missing file extension');
+      }
       
       // 2. Save attachment metadata to database
       console.log('[useEditorUpload] Saving attachment metadata to database...');
       
-      // Save the attachment metadata to the database - use the storage path, not the URL
+      // Save the attachment metadata to the database
       await saveAttachment({
         noteId: noteId,
         userId: user.id,
         fileName: uploadResult.fileName,
         fileType: uploadResult.fileType,
         fileSize: uploadResult.fileSize,
-        storagePath: uploadResult.path // This is just the path, not a full URL
+        storagePath: uploadResult.path // Store the full storage path
       });
 
       console.log('[useEditorUpload] Attachment metadata saved successfully');
 
-      // Return the complete upload result including the URL
+      // Return the complete upload result
+      // The URL here is only used for the initial display
+      // The image-view-block will handle generating the signed URL
       const result = {
         ...uploadResult,
-        url: uploadResult.url // Ensure we have a public URL for the editor to use
+        // Return the storage path as the URL - the image component will handle signing
+        url: uploadResult.path,
+        // Ensure we have the storage path available
+        storagePath: uploadResult.path,
+        // Add data attributes for the editor
+        attrs: {
+          'data-storage-path': uploadResult.path,
+          'data-upload-complete': 'true'
+        }
       };
       
-      console.log('[useEditorUpload] Upload process completed successfully:', result);
+      console.log('[useEditorUpload] Upload result with attrs:', {
+        ...result,
+        // Don't log the full URL to avoid sensitive data in logs
+        url: result.url ? 'URL set' : 'No URL',
+        storagePath: result.storagePath ? 'Path set' : 'No path'
+      });
+      
+      console.log('[useEditorUpload] Upload process completed successfully');
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to upload file';

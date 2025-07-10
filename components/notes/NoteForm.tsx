@@ -5,6 +5,7 @@ import { useNoteForm, NoteFormValues } from '@/hooks/useNoteForm';
 import { NewTipTapEditor as TipTapEditor, TipTapEditorRef } from '../editor/NewTipTapEditor';
 import { saveAttachment } from '@/lib/supabase/attachments';
 import { useUser } from '@/hooks/useUser';
+import { useTags } from '@/hooks/useTags';
 
 interface NoteItem {
   id: string;
@@ -40,14 +41,6 @@ export default function NoteForm({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentNoteId = noteId || initialData?.id;
-  const editorRef = useReactRef<TipTapEditorRef>(null);
-  const pendingAttachmentsRef = useRef<Array<{
-    userId: string;
-    fileName: string;
-    fileType?: string;
-    fileSize?: number;
-    storagePath: string;
-  }>>([]);
   
   const { 
     values, 
@@ -61,37 +54,51 @@ export default function NoteForm({
     ...initialData,
     id: initialData?.id || noteId // Use explicit noteId prop if available
   });
+  
+  // Use the useTags hook to load and manage tags for the current note
+  const { tags: loadedTags, addTags: addTagsToNote, removeTags: removeTagsFromNote } = useTags(currentNoteId);
+  
+  // Sync loaded tags with form state
+  useEffect(() => {
+    if (loadedTags.length > 0 && JSON.stringify(loadedTags) !== JSON.stringify(values.tags)) {
+      handleChange('tags', [...loadedTags]);
+    }
+  }, [loadedTags, values.tags, handleChange]);
+  
+  // Refs for editor and pending attachments
+  const editorRef = useReactRef<TipTapEditorRef>(null);
+  const pendingAttachmentsRef = useRef<Array<{
+    userId: string;
+    fileName: string;
+    fileType?: string;
+    fileSize?: number;
+    storagePath: string;
+  }>>([]);
 
   const processPendingLinks = useCallback(async (noteId: string) => {
     if (!editorRef.current) return { success: 0, failed: 0 };
-    
+
     try {
-      console.log('Processing pending links for note:', noteId);
       const result = await editorRef.current.processPendingLinks(noteId);
-      console.log('Processed pending links result:', result);
       return result;
     } catch (error) {
-      console.error('Error processing pending links:', error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Error processing pending links:', error);
+      }
       return { success: 0, failed: 0 };
     }
   }, [editorRef]);
 
   const saveNoteData = useCallback(async (contentToSave: string) => {
-    console.log('saveNoteData called with content length:', contentToSave?.length);
-    
     // Allow empty content when cleaning up attachments
     if (contentToSave === undefined) {
-      console.log('Skipping save - undefined content');
       return null;
     }
     
     // Skip if already saving
     if (isSavingRef.current) {
-      console.log('Save already in progress, skipping');
       return null;
     }
-    
-    console.log('Saving content, previous ref length:', prevContentRef.current?.length);
     
     // Set the saving lock and update refs
     isSavingRef.current = true;
@@ -135,14 +142,10 @@ export default function NoteForm({
       // Process any pending links and attachments if we have a saved note ID
       if (savedNote.id) {
         try {
-          console.log('Processing pending links for note:', savedNote.id);
           await processPendingLinks(savedNote.id);
-          console.log('Successfully processed pending links');
           
           // Process any pending attachments
           if (pendingAttachmentsRef.current.length > 0 && user?.id) {
-            console.log(`Processing ${pendingAttachmentsRef.current.length} pending attachments`);
-            
             // Set uploading state while we process attachments
             setIsUploading(true);
             
@@ -156,12 +159,11 @@ export default function NoteForm({
                   fileSize: attachment.fileSize,
                   storagePath: attachment.storagePath
                 })
-                .then(() => {
-                  console.log(`Successfully saved attachment: ${attachment.fileName}`);
-                  return true;
-                })
+                .then(() => true)
                 .catch(error => {
-                  console.error('Error saving attachment:', error);
+                  if (process.env.NODE_ENV !== 'production') {
+                    console.error('Error saving attachment:', error);
+                  }
                   setUploadError(`Failed to save attachment: ${attachment.fileName}`);
                   return false;
                 })
@@ -199,7 +201,6 @@ export default function NoteForm({
       // Call the parent's onSave callback if provided
       if (onSave && savedNote.id) {
         try {
-          console.log('Calling onSave callback...');
           const contentString = typeof savedNote.content === 'string' 
             ? savedNote.content 
             : JSON.stringify(savedNote.content || {});
@@ -212,7 +213,9 @@ export default function NoteForm({
           
           await onSave(saveData as { id: string; content: string; title: string });
         } catch (onSaveError) {
-          console.error('Error in onSave callback:', onSaveError);
+          if (process.env.NODE_ENV !== 'production') {
+            console.error('Error in onSave callback:', onSaveError);
+          }
           // Don't fail the entire save operation if the callback fails
         }
       }
@@ -233,7 +236,6 @@ export default function NoteForm({
       // This prevents rapid successive saves
       const releaseLock = () => {
         isSavingRef.current = false;
-        console.log('Save lock released');
       };
       
       setTimeout(releaseLock, 500);
@@ -342,14 +344,32 @@ export default function NoteForm({
     handleChange('status', status);
   };
 
-  const handleAddTag = (tag: string) => {
+  const handleAddTag = async (tag: string) => {
     if (!values.tags.includes(tag)) {
-      handleChange('tags', [...values.tags, tag]);
+      const newTags = [...values.tags, tag];
+      handleChange('tags', newTags);
+      
+      // Use noteId from props if available, otherwise use values.id
+      const targetNoteId = noteId || values.id;
+      
+      if (targetNoteId) {
+        try {
+          await addTagsToNote([tag]);
+        } catch (error) {
+          console.error('Failed to add tag:', error);
+          // Revert the UI if the API call fails
+          handleChange('tags', values.tags);
+        }
+      }
     }
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    handleChange('tags', values.tags.filter(tag => tag !== tagToRemove));
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const newTags = values.tags.filter(tag => tag !== tagToRemove);
+    handleChange('tags', newTags);
+    if (currentNoteId) {
+      await removeTagsFromNote([tagToRemove]);
+    }
   };
 
   // Function to handle file uploads
@@ -417,7 +437,7 @@ export default function NoteForm({
             currentNoteId={currentNoteId}
             type={values.type}
             status={values.status}
-            tags={values.tags}
+            tags={loadedTags}
             onTypeChange={handleTypeChange}
             onStatusChange={handleStatusChange}
             onAddTag={handleAddTag}

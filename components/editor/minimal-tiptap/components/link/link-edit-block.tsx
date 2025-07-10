@@ -1,115 +1,137 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { cn } from "@/lib/utils"
+import { NoteSearch } from "./note-search"
 
 export interface LinkEditorProps extends React.HTMLAttributes<HTMLDivElement> {
   defaultUrl?: string
   defaultText?: string
-  defaultIsNewTab?: boolean
-  onSave: (url: string, text?: string, isNewTab?: boolean) => void
+  isLoading?: boolean
+  onSave: (url: string, text?: string) => void
 }
 
 export const LinkEditBlock = React.forwardRef<HTMLDivElement, LinkEditorProps>(
-  ({ onSave, defaultIsNewTab, defaultUrl, defaultText, className }, ref) => {
+  ({ onSave, defaultUrl, defaultText, className, isLoading = false }, ref) => {
     const formRef = React.useRef<HTMLDivElement>(null)
     const [url, setUrl] = React.useState(defaultUrl || "")
     const [text, setText] = React.useState(defaultText || "")
-    const [isNewTab, setIsNewTab] = React.useState(defaultIsNewTab || false)
+    const [activeTab, setActiveTab] = React.useState("web")
 
-    const handleSave = React.useCallback(
-      (e: React.FormEvent) => {
-        e.preventDefault()
-        if (formRef.current) {
-          const isValid = Array.from(
-            formRef.current.querySelectorAll("input")
-          ).every((input) => input.checkValidity())
-
-          if (isValid) {
-            onSave(url, text, isNewTab)
-          } else {
-            formRef.current.querySelectorAll("input").forEach((input) => {
-              if (!input.checkValidity()) {
-                input.reportValidity()
-              }
-            })
-          }
-        }
-      },
-      [onSave, url, text, isNewTab]
-    )
+    React.useEffect(() => {
+      if (defaultUrl?.startsWith("/notes/")) {
+        setActiveTab("internal")
+      }
+    }, [defaultUrl])
 
     React.useImperativeHandle(ref, () => formRef.current as HTMLDivElement)
 
+    const ensureUrlHasProtocol = (url: string): string => {
+      if (!url) return url;
+      // If it's already a valid URL with protocol, return as is
+      if (/^https?:\/\//.test(url)) return url;
+      // If it starts with www., add https://
+      if (/^www\./i.test(url)) return `https://${url}`;
+      // For relative URLs or other cases, add https://
+      return `https://${url}`;
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      
+      // For internal links, ensure we're using the note ID in the URL
+      let finalUrl = url;
+      if (activeTab === "internal") {
+        // If we have a URL with an ID, use it directly
+        if (url?.match(/^\/notes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+          finalUrl = url;
+        } 
+        // If we have text but no valid URL, generate a slug-based URL
+        else if (text && !url) {
+          finalUrl = `/notes/${encodeURIComponent(text.toLowerCase().replace(/\s+/g, '-'))}`;
+        }
+      } else if (activeTab === "web" && url) {
+        // Ensure web URLs have a protocol
+        finalUrl = ensureUrlHasProtocol(url);
+      }
+        
+      onSave(finalUrl, text || finalUrl)
+    }
+
     return (
-      <div ref={formRef}>
-        <Tabs defaultValue="web" className={cn("space-y-4", className)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="web">Web URL</TabsTrigger>
-            <TabsTrigger value="internal">Internal Link</TabsTrigger>
-          </TabsList>
+      <div ref={formRef} className={className}>
+        <form onSubmit={handleSubmit}>
+          <Tabs 
+            value={activeTab} 
+            onValueChange={setActiveTab}
+            className="space-y-4"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="web">Web URL</TabsTrigger>
+              <TabsTrigger value="internal">Internal Link</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="web" className="space-y-4">
-            <div className="space-y-1">
-              <Label>Web Address</Label>
-              <Input
-                type="url"
-                required
-                placeholder="https://example.com"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="font-mono text-sm"
-              />
-            </div>
-          </TabsContent>
+            <TabsContent value="web" className="space-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="url">Web Address</Label>
+                <Input
+                  id="url"
+                  type="text"
+                  required={activeTab === "web"}
+                  placeholder="example.com"
+                  value={activeTab === "web" ? url : ""}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="font-mono text-sm"
+                  autoFocus
+                />
+              </div>
+            </TabsContent>
 
-          <TabsContent value="internal" className="space-y-4">
+            <TabsContent value="internal" className="space-y-4">
+              <div className="space-y-1">
+                <Label>Search Note</Label>
+                <NoteSearch
+                  value={text}
+                  onChange={(newText) => {
+                    setText(newText)
+                    // Don't update URL on text change to avoid overwriting the ID
+                    if (!url || !url.startsWith('/notes/')) {
+                      setUrl(`/notes/${encodeURIComponent(newText.toLowerCase().replace(/\s+/g, '-'))}`)
+                    }
+                  }}
+                  onSelect={(note) => {
+                    setText(note.title)
+                    // Always use the note ID for the URL to ensure proper linking
+                    setUrl(`/notes/${note.id}`)
+                  }}
+                />
+                {activeTab === "internal" && text && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Will create link to: <span className="font-mono">/notes/{text.includes(' ') ? encodeURIComponent(text.toLowerCase().replace(/\s+/g, '-')) : text}</span>
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+
             <div className="space-y-1">
-              <Label>Note Title</Label>
+              <Label htmlFor="display-text">Display Text (optional)</Label>
               <Input
+                id="display-text"
                 type="text"
-                placeholder="Search for a note..."
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  // This would be replaced with actual note search functionality
-                  // For now, we'll just use the text as part of the URL
-                  setUrl(`/notes/${encodeURIComponent(e.target.value.toLowerCase().replace(/\s+/g, '-'))}`);
-                }}
-                className="text-sm"
+                placeholder="Enter display text"
+                value={activeTab === "internal" && !text ? "" : text}
+                onChange={(e) => setText(e.target.value)}
               />
-              {text && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Will create link to: <span className="font-mono">/notes/{encodeURIComponent(text.toLowerCase().replace(/\s+/g, '-'))}</span>
-                </p>
-              )}
             </div>
-          </TabsContent>
 
-          <div className="space-y-1">
-            <Label>Display Text (optional)</Label>
-            <Input
-              type="text"
-              placeholder="Enter display text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch id="new-tab" checked={isNewTab} onCheckedChange={setIsNewTab} />
-            <Label htmlFor="new-tab">Open in New Tab</Label>
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button type="button" onClick={handleSave}>
-              Save Link
-            </Button>
-          </div>
-        </Tabs>
+            <div className="flex justify-end space-x-2 pt-2">
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Saving...' : 'Save Link'}
+              </Button>
+            </div>
+          </Tabs>
+        </form>
       </div>
     )
   }

@@ -4,12 +4,28 @@ import { createClient } from '@/lib/supabase/browser';
 import { useUser } from './useUser';
 import type { TiptapContent } from '@/components/editor/minimal-tiptap/hooks/use-minimal-tiptap';
 
-// Type for Tiptap node
-interface TiptapNode {
+// Define types for Tiptap nodes and marks
+interface TiptapMark {
+  type: string;
+  attrs?: {
+    href?: string;
+    [key: string]: unknown;
+  };
+}
+
+interface TiptapTextNode {
+  type: 'text';
   text?: string;
+  marks?: TiptapMark[];
+}
+
+interface TiptapParentNode {
+  type: string;
   content?: TiptapNode[];
   [key: string]: unknown;
 }
+
+type TiptapNode = TiptapTextNode | TiptapParentNode;
 
 // Type for note links
 interface InternalLink {
@@ -542,39 +558,225 @@ function useNotes() {
     return links;
   }, []);
 
-  // Recursively extract text from Tiptap nodes
+  // Helper function to extract text from Tiptap nodes
   const extractTextFromNodes = useCallback((nodes: TiptapNode[]): string => {
-    if (!nodes || !Array.isArray(nodes)) return '';
+    if (!Array.isArray(nodes)) return '';
     
     return nodes.map(node => {
-      if (node.text) return node.text;
-      if (node.content && Array.isArray(node.content)) {
+      if ('text' in node && node.text) {
+        return node.text;
+      }
+      if ('content' in node && Array.isArray(node.content)) {
         return extractTextFromNodes(node.content);
       }
       return '';
     }).filter(Boolean).join('\n');
   }, []);
 
-  // Extract text from Tiptap content (handles both JSON and plain text)
-  const extractTextFromContent = useCallback((content: TiptapContent | string | null | undefined): string => {
-    if (!content) return '';
-    
-    // Handle string content (legacy)
-    if (typeof content === 'string') return content;
-    
-    // Handle Tiptap JSON content
-    if (typeof content === 'object' && 'content' in content && Array.isArray(content.content)) {
-      return extractTextFromNodes(content.content);
+  // Define types for Tiptap nodes and marks
+  interface TiptapMark {
+    type: string;
+    attrs?: {
+      href?: string;
+      [key: string]: unknown;
+    };
+  }
+
+  interface TiptapTextNode {
+    type: string;
+    text?: string;
+    marks?: TiptapMark[];
+    content?: TiptapNode[];
+  }
+
+  type TiptapNode = TiptapTextNode | { [key: string]: unknown };
+
+  // Helper function to safely parse content
+  const safeParseContent = (content: string): TiptapContent | string => {
+    try {
+      return JSON.parse(content);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log('Failed to parse content as JSON:', errorMessage);
+      return content;
     }
-    
-    return '';
-  }, [extractTextFromNodes]);
-  
+  };
+
   // Extract links from Tiptap content
   const extractLinksFromContent = useCallback((content: TiptapContent | string | null | undefined): NoteLink[] => {
-    const text = extractTextFromContent(content);
-    return extractNoteLinks(text);
-  }, [extractTextFromContent, extractNoteLinks]);
+    if (!content) {
+      console.log('extractLinksFromContent: No content provided');
+      return [];
+    }
+    
+    // If content is a string, try to parse it as JSON first
+    let parsedContent: TiptapContent | string = content;
+    if (typeof content === 'string') {
+      parsedContent = safeParseContent(content);
+      
+      // If parsing didn't return an object, use text-based extraction
+      if (typeof parsedContent === 'string') {
+        console.log('extractLinksFromContent: Using text-based extraction');
+        const links = extractNoteLinks(parsedContent);
+        console.log('extractLinksFromContent: Found links in string content:', links);
+        return links;
+      }
+      
+      console.log('extractLinksFromContent: Successfully parsed string content as JSON');
+    }
+    
+    // At this point, content should be a TiptapContent object
+    const contentObj = parsedContent as Record<string, unknown>;
+    console.log('extractLinksFromContent: Parsing Tiptap content:', JSON.stringify(contentObj, null, 2));
+    
+    // If this is a document node with content, use that
+    let nodesToProcess: TiptapNode[] = [];
+    if (contentObj.type === 'doc' && Array.isArray(contentObj.content)) {
+      console.log('extractLinksFromContent: Found document node with content');
+      nodesToProcess = contentObj.content as TiptapNode[];
+    } else if (Array.isArray(contentObj)) {
+      console.log('extractLinksFromContent: Content is an array of nodes');
+      nodesToProcess = contentObj as unknown as TiptapNode[];
+    } else if (contentObj.content) {
+      console.log('extractLinksFromContent: Found content property');
+      nodesToProcess = Array.isArray(contentObj.content) 
+        ? contentObj.content as TiptapNode[] 
+        : [contentObj.content as TiptapNode];
+    }
+    
+    // Handle Tiptap JSON content
+    const links: NoteLink[] = [];
+    
+    // Type guard to check if node has marks and is a text node
+    const isTextNodeWithMarks = (node: unknown): node is TiptapTextNode => {
+      if (!node || typeof node !== 'object') return false;
+      
+      const nodeObj = node as Record<string, unknown>;
+      const isTextNode = nodeObj.type === 'text';
+      const hasMarks = 'marks' in nodeObj && Array.isArray(nodeObj.marks);
+      
+      if (hasMarks) {
+        const marks = nodeObj.marks as Array<{ type?: string }>;
+        const markTypes = marks
+          .map(mark => mark?.type)
+          .filter((type): type is string => typeof type === 'string');
+        
+        console.log('isTextNodeWithMarks:', { 
+          isTextNode, 
+          hasMarks, 
+          nodeType: nodeObj.type,
+          markTypes
+        });
+      } else {
+        console.log('isTextNodeWithMarks:', { 
+          isTextNode, 
+          hasMarks, 
+          nodeType: nodeObj.type
+        });
+      }
+      
+      return isTextNode && hasMarks;
+    };
+    
+    // Type guard to check if mark is a link mark with href
+    const isLinkMark = (mark: unknown): mark is TiptapMark & { type: 'link', attrs: { href: string } } => {
+      if (!mark || typeof mark !== 'object') return false;
+      
+      const markObj = mark as Record<string, unknown>;
+      const isLink = markObj.type === 'link';
+      if (!isLink) return false;
+      
+      const attrs = markObj.attrs as Record<string, unknown> | undefined;
+      const hasHref = !!(attrs && typeof attrs.href === 'string');
+      
+      console.log('isLinkMark:', { 
+        isLink,
+        hasAttrs: !!attrs,
+        hasHref,
+        href: hasHref ? (attrs as { href: string }).href : 'none'
+      });
+      
+      return isLink && hasHref;
+    };
+    
+    // Recursive function to traverse the Tiptap document
+    const traverseNodes = (nodes: TiptapNode[] | undefined, depth = 0) => {
+      const indent = '  '.repeat(depth);
+      if (!Array.isArray(nodes)) {
+        console.log(`${indent}traverseNodes: nodes is not an array`);
+        return;
+      }
+      
+      console.log(`${indent}traverseNodes: Processing ${nodes.length} nodes at depth ${depth}`);
+      
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        const nodeInfo: Record<string, unknown> = { type: node.type };
+        
+        if (node && typeof node === 'object' && 'text' in node) {
+          nodeInfo.text = (node as { text?: string }).text;
+        }
+        
+        if (node && typeof node === 'object' && 'marks' in node && Array.isArray(node.marks)) {
+          const marks = node.marks as Array<{ type?: string }>;
+          nodeInfo.marks = marks
+            .map(mark => mark?.type)
+            .filter((type): type is string => typeof type === 'string');
+        }
+        
+        console.log(`${indent}Node ${i}:`, JSON.stringify(nodeInfo, null, 2));
+      
+        // Handle text nodes with marks (links)
+        if (isTextNodeWithMarks(node)) {
+          console.log(`${indent}Found text node with marks:`, JSON.stringify(node.marks, null, 2));
+          const linkMarks = (node.marks || []).filter(isLinkMark);
+          
+          for (const linkMark of linkMarks) {
+            console.log(`${indent}Processing link mark:`, linkMark);
+            const href = linkMark.attrs.href;
+            const linkText = node.text || '';
+            console.log(`${indent}Found link:`, { href, linkText });
+            
+            // Check if it's an internal link (starts with /notes/)
+            const internalMatch = href.match(/^\/notes\/([a-f0-9-]+)$/);
+            if (internalMatch) {
+              links.push({
+                type: 'internal' as const,
+                id: internalMatch[1],
+                text: linkText || `Link to ${internalMatch[1]}`
+              });
+            } else if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:')) {
+              // External link
+              links.push({
+                type: 'external' as const,
+                url: href,
+                text: linkText || href
+              });
+            }
+          }
+        }
+        
+        // Recursively process child nodes
+        if ('content' in node && Array.isArray(node.content)) {
+          console.log(`${indent}Node has content, traversing children...`);
+          // Only traverse once with the depth parameter
+          traverseNodes(node.content, depth + 1);
+        }
+      }
+    };
+    
+    // Start traversal with the processed nodes
+    if (nodesToProcess.length > 0) {
+      console.log(`Starting traversal of ${nodesToProcess.length} nodes`);
+      traverseNodes(nodesToProcess, 0);
+    } else {
+      console.log('No traversable content found. Content structure:', JSON.stringify(contentObj, null, 2));
+    }
+    
+    console.log('Finished extracting links. Found:', links);
+    
+    return links;
+  }, [extractNoteLinks]);
 
   // Synchronize note links with the current content
   const syncNoteLinks = useCallback(async (noteId: string, content: TiptapContent | string | null | undefined) => {
@@ -583,67 +785,135 @@ function useNotes() {
       throw new Error('Authentication required');
     }
     
+    console.log('Starting syncNoteLinks for note:', noteId);
     setIsLoading(true);
     
     try {
-      // Fetch existing links for the note
+      // 1. Get current state from the database
       const existingLinks = await getNoteLinks(noteId);
+      console.log('Existing links in DB:', existingLinks);
       
-      // Extract links from the content
+      // 2. Extract links from the current content
       const currentLinks = extractLinksFromContent(content);
+      console.log('Links found in content:', currentLinks);
       
-      // Create a map of existing links for quick lookup
-      const existingLinkMap = new Map(
-        existingLinks.map(link => [
-          link.type === 'internal' ? `internal:${link.target_note_id}` : `external:${link.url}`,
-          link
-        ])
-      );
+      // 3. Create maps for easier comparison
+      interface LinkMapValue {
+        id: string;
+        link_type: 'internal' | 'external';
+        target_note_id?: string;
+        url?: string;
+        created_at: string;
+        // Add text field for display purposes
+        text?: string;
+        // Add type field to match NoteLink type
+        type?: 'internal' | 'external';
+      }
       
-      // Find links to remove (exist in DB but not in content)
-      const linksToRemove = existingLinks.filter(link => {
-        if (link.link_type === 'internal') {
-          return !currentLinks.some(l => l.type === 'internal' && l.id === link.target_note_id);
-        } else {
-          return !currentLinks.some(l => l.type === 'external' && l.url === link.url);
-        }
+      const existingLinkMap = new Map<string, LinkMapValue>();
+      const currentLinkMap = new Map<string, LinkMapValue>();
+      
+      // 4. Populate the maps with existing links (from DB)
+      existingLinks.forEach(link => {
+        const key = link.link_type === 'internal' 
+          ? `internal:${link.target_note_id}` 
+          : `external:${link.url}`;
+        existingLinkMap.set(key, link);
       });
       
-      // Find links to add (exist in content but not in DB)
-      const linksToAdd = currentLinks.filter(link => {
+      // 5. Populate the maps with current links (from content)
+      currentLinks.forEach(link => {
+        if (link.type === 'internal' && link.id === noteId) {
+          console.log('Skipping self-link:', link);
+          return;
+        }
+        
         const key = link.type === 'internal' 
           ? `internal:${link.id}` 
           : `external:${link.url}`;
           
-        // Skip if link already exists or is a self-link for internal links
-        const isSelfLink = link.type === 'internal' && link.id === noteId;
-        return !existingLinkMap.has(key) && !isSelfLink;
+        // Convert NoteLink to LinkMapValue
+        const mapValue: LinkMapValue = {
+          id: '', // This will be set when we create the link
+          link_type: link.type,
+          created_at: new Date().toISOString(),
+          text: link.text, // Include the link text
+          ...(link.type === 'internal' 
+            ? { target_note_id: link.id }
+            : { url: link.url })
+        };
+        
+        currentLinkMap.set(key, mapValue);
       });
       
-      // Delete removed links
-      if (linksToRemove.length > 0) {
-        await Promise.all(
-          linksToRemove.map(link => deleteNoteLink(link.id))
-        );
-      }
+      // 6. Find links that need to be added (in content but not in DB)
+      const linksToAdd = Array.from(currentLinkMap.entries())
+        .filter(([mapKey]) => !existingLinkMap.has(mapKey))
+        .map(([, link]) => link);
       
-      // Add new links
+      // 7. Find links that need to be removed (in DB but not in content)
+      // But be very conservative about removal
+      const linksToRemove = Array.from(existingLinkMap.entries())
+        .filter(([mapKey, link]) => {
+          // Never remove links that were just added (within the last 30 seconds)
+          const linkAge = Date.now() - new Date(link.created_at).getTime();
+          if (linkAge < 30000) { // 30 seconds grace period
+            console.log('Skipping recently created link from removal:', link.id);
+            return false;
+          }
+          
+          // Only remove if explicitly not in content
+          return !currentLinkMap.has(mapKey);
+        })
+        .map(([, link]) => link);
+      
+      console.log('Links to add:', linksToAdd);
+      console.log('Links to remove:', linksToRemove);
+      
+      // 8. Process additions and removals
+      let addedCount = 0;
+      let removedCount = 0;
+      
+      // Add new links first
       if (linksToAdd.length > 0) {
-        await Promise.all(
+        console.log(`Adding ${linksToAdd.length} new links`);
+        const results = await Promise.allSettled(
           linksToAdd.map(link => {
-            if (link.type === 'internal') {
-              return createNoteLink(noteId, link.id, link.text);
-            } else {
-              return createExternalLink(noteId, link.url, link.text);
+            console.log('Adding link:', link);
+            if (link.link_type === 'internal' && link.target_note_id) {
+              return createNoteLink(noteId, link.target_note_id, link.text || '');
+            } else if (link.link_type === 'external' && link.url) {
+              return createExternalLink(noteId, link.url, link.text || '');
             }
+            return Promise.resolve();
           })
         );
+        addedCount = results.filter(r => r.status === 'fulfilled').length;
       }
       
-      return {
-        removed: linksToRemove.length,
-        added: linksToAdd.length
+      // Then remove old links (if still needed)
+      if (linksToRemove.length > 0) {
+        console.log(`Removing ${linksToRemove.length} old links`);
+        const results = await Promise.allSettled(
+          linksToRemove.map(link => {
+            if (link.id) {
+              console.log('Removing link:', link.id);
+              return deleteNoteLink(link.id);
+            }
+            return Promise.resolve();
+          })
+        );
+        removedCount = results.filter(r => r.status === 'fulfilled').length;
+      }
+      
+      const result = {
+        added: addedCount,
+        removed: removedCount,
+        totalLinks: existingLinks.length + linksToAdd.length - linksToRemove.length
       };
+      
+      console.log('Sync complete:', result);
+      return result;
       
     } catch (err) {
       console.error('Error in syncNoteLinks:', {

@@ -51,8 +51,36 @@ export async function uploadEditorFile(
     throw new Error(`File size exceeds the limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
   }
 
-  // Generate a unique file path
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+  // Generate a unique file path with proper extension
+  let fileExt = '';
+  
+  // First try to get extension from filename
+  const fileNameParts = file.name.split('.');
+  if (fileNameParts.length > 1) {
+    fileExt = fileNameParts.pop()?.toLowerCase() || '';
+  }
+  
+  // If no extension in filename, try to determine from MIME type
+  if (!fileExt) {
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+      'application/pdf': 'pdf',
+      'text/plain': 'txt',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+    };
+    fileExt = mimeToExt[file.type] || '';
+  }
+  
+  // Ensure we have a valid extension
+  if (!fileExt) {
+    throw new Error('Could not determine file extension');
+  }
+  
   const fileName = `${uuidv4()}.${fileExt}`;
   const filePath = `${userId}/${noteId}/${fileName}`;
   
@@ -85,15 +113,24 @@ export async function uploadEditorFile(
       fileSize: file.size
     });
 
+    // Generate a signed URL that will be valid for 1 hour
+    const { data: signedUrlData } = await supabase.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(filePath, 3600);
+
     const result = {
-      url: filePath, 
-      path: filePath,
+      url: signedUrlData?.signedUrl || '', // Return the signed URL if available
+      path: filePath, // Keep the storage path for future reference
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size
     };
     
-    console.log('[uploadEditorFile] Returning upload result:', result);
+    console.log('[uploadEditorFile] File upload successful, returning result:', {
+      ...result,
+      url: result.url ? 'URL generated' : 'No URL generated'
+    });
+    
     return result;
   } catch (error) {
     console.error('Error in uploadEditorFile:', error);

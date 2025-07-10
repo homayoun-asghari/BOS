@@ -155,8 +155,14 @@ CREATE TABLE public.note_links (
 
 -- RLS Policy: Users can only manage links for their own notes
 ALTER TABLE public.note_links ENABLE ROW LEVEL SECURITY;
+
+-- For SELECT, UPDATE, DELETE
 CREATE POLICY "Users can manage links for their notes" ON public.note_links
   FOR ALL USING ((SELECT user_id FROM notes WHERE id = note_id) = auth.uid());
+
+-- Explicit policy for INSERT with WITH CHECK
+CREATE POLICY "Users can create links for their notes" ON public.note_links
+  FOR INSERT WITH CHECK ((SELECT user_id FROM notes WHERE id = note_id) = auth.uid());
 
 
 

@@ -4,6 +4,33 @@
 @import "./partials/typography.css";
 @import "./partials/zoom.css";
 
+/* Safari sticky header fixes */
+@supports (-webkit-touch-callout: none) {
+  /* Target Safari on iOS specifically */
+  html, body {
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+  }
+  
+  .minimal-tiptap-editor {
+    position: relative;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .sticky-toolbar-container {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+}
+
+
 /* Link styling */
 .minimal-tiptap-editor a {
   @apply text-primary underline underline-offset-2 transition-colors;
@@ -128,12 +155,20 @@
 }
 
 .minimal-tiptap-editor .ProseMirror {
-  @apply flex max-w-full cursor-text flex-col;
-  @apply z-0 outline-0;
+  @apply flex max-w-full cursor-text flex-col h-full;
+  @apply z-0 outline-0 bg-transparent;
+  background: transparent !important;
 }
 
 .minimal-tiptap-editor .ProseMirror > div.editor {
   @apply block flex-1 whitespace-pre-wrap;
+  min-height: 100%;
+  background: transparent !important;
+}
+
+/* Ensure the editor content area takes full height */
+.minimal-tiptap-editor .ProseMirror > div.editor > *:last-child {
+  margin-bottom: 2rem; /* Add some space at the bottom */
 }
 
 .minimal-tiptap-editor .ProseMirror .block-node:not(:last-child),

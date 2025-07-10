@@ -52,10 +52,13 @@ const formatActions: InsertElement[] = [
   },
 ]
 
-interface SectionFiveProps extends VariantProps<typeof toggleVariants> {
+interface SectionFiveProps {
   editor: Editor
   activeActions?: InsertElementAction[]
   mainActionCount?: number
+  size?: VariantProps<typeof toggleVariants>["size"]
+  variant?: VariantProps<typeof toggleVariants>["variant"]
+  noteId?: string
 }
 
 export const SectionFive: React.FC<SectionFiveProps> = ({
@@ -64,10 +67,11 @@ export const SectionFive: React.FC<SectionFiveProps> = ({
   mainActionCount = 0,
   size,
   variant,
+  noteId,
 }) => {
   return (
     <>
-      <LinkEditPopover editor={editor} size={size} variant={variant} />
+      <LinkEditPopover editor={editor} size={size} variant={variant} noteId={noteId} />
       <ImageEditDialog editor={editor} size={size} variant={variant} />
       <ToolbarSection
         editor={editor}

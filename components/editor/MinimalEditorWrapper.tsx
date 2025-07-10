@@ -44,58 +44,29 @@ export function MinimalEditorWrapper({
   createdAt,
   updatedAt,
 }: MinimalEditorWrapperProps) {
-  console.log('[MinimalEditorWrapper] Initializing with value:', value);
-
   // Initialize file upload handler
   const { uploadFile } = useEditorUpload(currentNoteId);
 
   // Create the uploader function that will be passed to the editor
   const uploader = useCallback(async (file: File) => {
     const uploadId = Math.random().toString(36).substring(2, 9);
-    console.log('[MinimalEditorWrapper] Starting file upload:', {
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      uploadId,
-      hasNoteId: !!currentNoteId,
-      noteId: currentNoteId
-    });
-
     if (!currentNoteId) {
       const error = new Error('Cannot upload file: No note ID provided');
-      console.error('[MinimalEditorWrapper] Upload error:', error);
       onFileUpload?.('', file.name, file.type || 'application/octet-stream', uploadId, true);
       throw error;
     }
     
     try {
-      console.log('[MinimalEditorWrapper] Calling uploadFile...');
       const result = await uploadFile(file);
-      
-      console.log('[MinimalEditorWrapper] File upload successful:', {
-        url: result.url,
-        path: result.path,
-        fileName: result.fileName,
-        fileType: result.fileType,
-        fileSize: result.fileSize,
-        uploadId
-      });
       
       // Notify parent component of successful upload
       onFileUpload?.(result.url, result.fileName, result.fileType, uploadId, false);
       
       // Return the public URL to be used in the editor
-      console.log('[MinimalEditorWrapper] Returning URL to editor:', result.url);
       return result.url;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[MinimalEditorWrapper] File upload failed:', {
-        error: errorMessage,
-        fileName: file.name,
-        uploadId,
-        noteId: currentNoteId,
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      // Error is handled by the error boundary and onFileUpload callback
       
       onFileUpload?.(
         '', 
@@ -131,7 +102,6 @@ export function MinimalEditorWrapper({
 
   // Handle editor content changes
   const handleChange = useCallback((content: Content) => {
-    console.log('[MinimalEditorWrapper] Content changed:', content);
     if (content === null || content === undefined) {
       onChange('');
     } else if (typeof content === 'string') {
@@ -167,16 +137,22 @@ export function MinimalEditorWrapper({
   };
 
   return (
-    <div className={cn("flex flex-col", className)} style={{ height: '100%' }}>
+    <div className={cn("flex flex-col w-full", className)} style={{ height: '100%', maxWidth: '100%' }}>
+      <style jsx global>{`
+        .ProseMirror {
+          padding: 0 !important;
+        }
+      `}</style>
       <TooltipProvider>
         <div ref={editorRef} className="flex flex-col h-full relative">
-          <div className="relative h-full w-full">
+          <div className="relative h-full w-full max-w-full overflow-x-hidden">
             <MinimalTiptap
               value={value}
               onChange={handleChange}
               onInternalLinkClick={onInternalLinkClick}
               onFileUpload={handleFileUploadNotification}
               uploader={uploader}
+              noteId={currentNoteId}
               type={type}
               status={status}
               tags={tags}
@@ -185,11 +161,11 @@ export function MinimalEditorWrapper({
               onAddTag={onAddTag}
               onRemoveTag={onRemoveTag}
               className={cn(
-                'h-full w-full',
-                'prose dark:prose-invert prose-sm sm:prose-base max-w-none',
+                'h-full w-full max-w-full',
+                'prose dark:prose-invert prose-sm sm:prose-base !max-w-none !px-0 !mx-0 [&>*]:!px-0 !pl-0 !pr-0',
                 'prose-headings:font-medium prose-p:my-2 prose-ul:my-2 prose-ol:my-2',
                 'prose-blockquote:not-italic',
-                'prose-pre:bg-muted/50 prose-pre:rounded-lg prose-pre:p-4',
+                'prose-pre:bg-muted/50 prose-pre:rounded-lg prose-pre:px-0 prose-pre:py-4',
                 'prose-code:before:hidden prose-code:after:hidden',
                 'prose-code:bg-muted/50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground/80',
                 'prose-code:font-normal',
@@ -200,15 +176,19 @@ export function MinimalEditorWrapper({
                 'prose-h1:border-b prose-h1:pb-2 prose-h1:border-border',
                 'prose-h2:border-b prose-h2:pb-1 prose-h2:border-border/50',
                 'prose-h3:border-b prose-h3:pb-1 prose-h3:border-border/30',
-                'prose-blockquote:border-l-4 prose-blockquote:border-primary/50 prose-blockquote:pl-4 prose-blockquote:py-0.5',
+                'prose-blockquote:border-l-4 prose-blockquote:border-primary/50 prose-blockquote:py-0.5',
                 'prose-blockquote:bg-muted/30 prose-blockquote:not-italic',
-                'prose-ul:list-disc prose-ol:list-decimal prose-li:my-0.5',
+                'prose-ul:list-disc prose-ol:list-decimal prose-li:my-0.5 prose-li:pl-0',
+                'prose-ul:pl-0 prose-ol:pl-0',
                 'prose-table:border-collapse prose-table:w-full prose-table:my-4',
-                'prose-th:bg-muted/50 prose-th:px-3 prose-th:py-2 prose-th:border prose-th:border-border',
-                'prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-border',
+                'prose-th:bg-muted/50 prose-th:py-2 prose-th:border prose-th:border-border',
+                'prose-td:py-2 prose-td:border prose-td:border-border',
                 'prose-hr:my-4 prose-hr:border-border/50',
                 'prose-img:rounded-lg prose-img:border prose-img:border-border',
                 'focus:outline-none',
+                '[&_.ProseMirror]:!p-0 [&_.ProseMirror]:w-full [&_.ProseMirror]:max-w-full',
+                '[&_.ProseMirror>*]:!p-0 [&_.ProseMirror>*]:w-full [&_.ProseMirror>*]:max-w-full',
+                '[&_.ProseMirror_p]:!px-0 [&_.ProseMirror_ul]:!px-0 [&_.ProseMirror_ol]:!px-0',
                 className
               )}
             />

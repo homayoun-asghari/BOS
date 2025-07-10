@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
+import { getSignedUrl } from '@/lib/supabase/storage-utils';
 
 interface UseFileUploadsProps {
   editor: Editor | null;
@@ -37,7 +38,7 @@ export const useFileUploads = ({ editor, onFileUpload }: UseFileUploadsProps) =>
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleUpload = useCallback((storagePath: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => {
+  const handleUpload = useCallback(async (storagePath: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => {
     if (!editor) return;
     
     if (isError) {
@@ -62,23 +63,25 @@ export const useFileUploads = ({ editor, onFileUpload }: UseFileUploadsProps) =>
     setUploadError(null);
     
     try {
-      // Generate public URL for display
-      const publicUrl = getPublicUrl(storagePath);
-      
+      // For images, we'll use the storage path and let the ImageViewBlock handle the URL generation
       if (fileType.startsWith('image/')) {
         // For images, we'll use the CustomImage extension which handles the storage path
         editor.chain().focus()
           .setImage({ 
-            src: publicUrl, 
+            src: storagePath, // Store the storage path, not the public URL
             alt: fileName,
             'data-original-path': storagePath, // For backward compatibility
-            'data-storage-path': storagePath   // Primary storage path reference
+            'data-storage-path': storagePath,  // Primary storage path reference
+            'data-upload-complete': 'true'     // Mark upload as complete
           })
           .run();
       } else {
-        // For other files, create a download link
+        // For other files, create a download link with a signed URL
         const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
         const isPdf = fileExtension === 'pdf';
+        
+        // Get a signed URL for the file
+        const signedUrl = await getSignedUrl(storagePath, { expiresIn: 3600 }) || '';
         
         editor.chain().focus()
           .insertContent({
@@ -87,9 +90,10 @@ export const useFileUploads = ({ editor, onFileUpload }: UseFileUploadsProps) =>
             marks: [{
               type: 'link',
               attrs: {
-                href: publicUrl,
+                href: signedUrl || '#', // Use the signed URL if available, fallback to '#'
                 'data-original-path': storagePath, // Store the storage path as a data attribute
                 'data-storage-path': storagePath,  // Explicit storage path attribute
+                'data-signed-url': signedUrl,      // Store the signed URL as a data attribute
                 target: isPdf ? '_blank' : '_blank',
                 rel: 'noopener noreferrer',
                 class: 'inline-flex items-center text-blue-600 hover:underline',

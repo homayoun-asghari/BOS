@@ -30,7 +30,7 @@ export interface MinimalTiptapProps
   editorContentClassName?: string
   onInternalLinkClick?: (noteId: string) => void
   onFileUpload?: (url: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => void
-  // Tag input props
+  noteId?: string
   type?: string | null
   status?: string | null
   tags?: string[]
@@ -40,13 +40,21 @@ export interface MinimalTiptapProps
   onRemoveTag?: (tag: string) => void
 }
 
-const Toolbar = React.memo(({ editor }: { editor: Editor }) => {
+interface ToolbarProps {
+  editor: Editor;
+  noteId?: string;
+}
+
+const Toolbar = React.memo(({ editor, noteId }: ToolbarProps) => {
   return (
-    <div className="shrink-0 overflow-x-auto px-4 py-3">
-      <div className="flex w-max items-center gap-1">
+    <div className="w-full overflow-x-auto py-1 scrollbar-hide px-0.5">
+      <div className="flex items-center gap-0.5 sm:gap-1 mx-auto w-max">
         <SectionOne editor={editor} activeLevels={[1, 2, 3, 4, 5, 6]} />
 
-        <Separator orientation="vertical" className="mx-2 h-7 bg-foreground/20 dark:bg-foreground/40" />
+        <Separator 
+          orientation="vertical" 
+          className="mx-1 md:mx-2 h-6 md:h-7 bg-foreground/20 dark:bg-foreground/40 separator" 
+        />
 
         <SectionTwo
           editor={editor}
@@ -61,11 +69,17 @@ const Toolbar = React.memo(({ editor }: { editor: Editor }) => {
           mainActionCount={3}
         />
 
-        <Separator orientation="vertical" className="mx-2 h-7 bg-foreground/20 dark:bg-foreground/40" />
+        <Separator 
+          orientation="vertical" 
+          className="mx-1 md:mx-2 h-6 md:h-7 bg-foreground/20 dark:bg-foreground/40 separator" 
+        />
 
         <SectionThree editor={editor} />
 
-        <Separator orientation="vertical" className="mx-2 h-7 bg-foreground/20 dark:bg-foreground/40" />
+        <Separator 
+          orientation="vertical" 
+          className="mx-1 md:mx-2 h-6 md:h-7 bg-foreground/20 dark:bg-foreground/40 separator" 
+        />
 
         <SectionFour
           editor={editor}
@@ -73,17 +87,43 @@ const Toolbar = React.memo(({ editor }: { editor: Editor }) => {
           mainActionCount={0}
         />
 
-        <Separator orientation="vertical" className="mx-2 h-7 bg-foreground/20 dark:bg-foreground/40" />
+        <Separator 
+          orientation="vertical" 
+          className="mx-1 md:mx-2 h-6 md:h-7 bg-foreground/20 dark:bg-foreground/40 separator" 
+        />
 
         <SectionFive
           editor={editor}
           activeActions={["codeBlock", "blockquote", "horizontalRule"]}
           mainActionCount={0}
+          noteId={noteId}
         />
       </div>
     </div>
   );
 });
+
+// Add responsive styles for the toolbar buttons
+const styles = `
+  @media (max-width: 640px) {
+    .minimal-tiptap-editor .toolbar-button {
+      min-width: 36px;
+      height: 36px;
+      padding: 0 8px;
+    }
+    .minimal-tiptap-editor .separator {
+      height: 24px;
+      margin: 0 4px;
+    }
+  }
+`;
+
+// Add the styles to the document head
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = styles;
+  document.head.appendChild(styleElement);
+}
 
 Toolbar.displayName = 'Toolbar';
 
@@ -92,7 +132,9 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   onChange, 
   className, 
   editorContentClassName, 
+  onInternalLinkClick, 
   onFileUpload,
+  noteId,
   type,
   status,
   tags = [],
@@ -110,24 +152,13 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   // Merge forwarded ref with internal ref
   React.useImperativeHandle(ref, () => internalRef.current as HTMLDivElement);
   
-  console.log('[MinimalTiptap] Rendering with value:', value ? JSON.stringify(value, null, 2) : 'null');
-  
   const editor = useMinimalTiptapEditor({
     value,
     onUpdate: (content) => {
-      console.log('[MinimalTiptap] Content changed:', JSON.stringify(content, null, 2));
-      console.log('[MinimalTiptap] Content type:', typeof content);
-      console.log('[MinimalTiptap] Content keys:', content ? Object.keys(content) : 'null');
-      
-      if (content?.content) {
-        console.log('[MinimalTiptap] Content content length:', content.content.length);
-        console.log('[MinimalTiptap] First content item:', content.content[0] ? JSON.stringify(content.content[0], null, 2) : 'null');
-      }
-      
       try {
         onChange?.(content);
       } catch (error) {
-        console.error('[MinimalTiptap] Error in onChange handler:', error);
+        console.error('Error in onChange handler:', error);
       }
     },
     editorProps: {
@@ -147,6 +178,23 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
     },
     ...props,
   })
+
+  // Handle clicks on the editor content
+  const handleEditorClick = React.useCallback((e: React.MouseEvent) => {
+    // Only handle clicks that aren't on the toolbar or its toggle
+    const target = e.target as HTMLElement;
+    if (toolbarRef.current?.contains(target) || target.closest('[data-toolbar-toggle]')) {
+      return;
+    }
+    // Hide toolbar when clicking on the actual editor content
+    if (editor?.view.dom.contains(target)) {
+      setIsHovering(false);
+    }
+    // Focus the editor when clicking in the container
+    if (editor && !editor.isFocused) {
+      editor.commands.focus();
+    }
+  }, [editor]);
 
   // Handle editor and tag input focus
   const tagInputRef = React.useRef<HTMLInputElement>(null);
@@ -179,98 +227,108 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
     return null;
   }
 
+
   return (
     <div 
       ref={internalRef}
       className={cn(
-        "group relative flex h-full min-h-72 w-full flex-col shadow-sm focus-within:ring-1 focus-within:ring-primary/50",
+        "relative h-full min-h-72 w-full shadow-sm focus-within:ring-1 focus-within:ring-primary/50 flex flex-col",
         className
       )}
-      onClick={(e) => {
-        // Hide toolbar when clicking on the editor on mobile, or when not hovering toolbar on desktop
-        if (window.innerWidth < 640 || 
-            (toolbarRef.current && !toolbarRef.current.contains(e.target as Node))) {
-          setIsHovering(false);
-        }
-        // Focus the editor when clicking anywhere in the container
-        if (editor && !editor.isFocused) {
-          editor.commands.focus();
-        }
-      }}
-      onTouchStart={(e) => {
-        // On mobile, only hide toolbar if clicking outside the toolbar
-        if (window.innerWidth < 640 && 
-            toolbarRef.current && 
-            !toolbarRef.current.contains(e.target as Node)) {
-          setIsHovering(false);
-        }
-      }}
+      onClick={handleEditorClick}
     >
-      {/* Toolbar Container */}
-      <div className="sticky top-0 z-30 w-full flex flex-col items-center">
-        {/* Slider Edge - Only shows toolbar on hover */}
-        <div className="w-full h-8 flex justify-center items-start touch-none">
+      {/* Sticky Toolbar Toggle */}
+      <div className="sticky-toolbar-container top-0 left-0 right-0 z-50 w-full bg-background/80 backdrop-blur-sm">
+        <div className="w-full flex justify-center py-2 relative">
           <div 
-            className="h-2 w-16 rounded-full bg-foreground/20 hover:bg-foreground/30 hover:w-20 transition-all duration-200 cursor-pointer"
-            onMouseEnter={() => setIsHovering(true)}
+            className="h-2 w-16 rounded-full bg-foreground/20 hover:bg-foreground/30 hover:w-20 transition-all duration-200 cursor-pointer touch-manipulation"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              if (window.innerWidth < 640) { // sm breakpoint
-                setIsHovering(true);
-              } else {
+              setIsHovering(prev => !prev);
+            }}
+            role="button"
+            aria-label="Toggle toolbar"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
                 setIsHovering(prev => !prev);
               }
             }}
           />
-        </div>
-        
-        {/* Toolbar */}
-        <div 
-          ref={toolbarRef}
-          className={cn(
-            "z-20 overflow-x-auto overflow-y-hidden transition-all duration-200 ease-in-out bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border border-border rounded-lg my-2 w-full sm:w-max max-w-full",
-            isHovering ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-          )}
-          onMouseEnter={() => setIsHovering(true)}
-        >
-          <div className="w-max min-w-full sm:min-w-0 px-2 sm:px-0">
-            <Toolbar editor={editor} />
+          
+          {/* Toolbar */}
+          <div 
+            ref={toolbarRef}
+            className={cn(
+              "fixed left-1/2 -translate-x-1/2 z-40 bg-background/95 border border-border rounded-lg shadow-lg transition-all duration-200 w-[85vw] max-w-[500px] overflow-hidden",
+              "sm:w-[90vw] sm:max-w-[550px]",
+              isHovering ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
+            )}
+            style={{
+              top: 'calc(100% + 0.5rem)',
+              WebkitTransform: 'translate3d(-50%, 0, 0)',
+              transform: 'translate3d(-50%, 0, 0)',
+              WebkitOverflowScrolling: 'touch',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              maxHeight: '70vh',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="overflow-x-auto py-1 px-1.5 touch-pan-x">
+              <Toolbar editor={editor} noteId={noteId} />
+            </div>
           </div>
         </div>
       </div>
-      
-      {/* Inline Tag Input - Moved to top */}
-      <div className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-        <InlineTagInput
-          ref={tagInputRef}
-          type={type}
-          status={status}
-          tags={tags}
-          onTypeChange={onTypeChange}
-          onStatusChange={onStatusChange}
-          onAddTag={onAddTag}
-          onRemoveTag={onRemoveTag}
-          onEnterPress={() => {
-            if (editor) {
-              // Focus the editor at the start of the first line
-              editor.commands.focus('start');
-              // Move cursor to the beginning of the document
-              editor.commands.setTextSelection(0);
-            }
-          }}
-        />
-      </div>
-      
       {/* Editor Content */}
-      <div className="relative flex-1">
-        <EditorContent
-          editor={editor}
-          className={cn(
-            "minimal-tiptap-editor h-full w-full",
+      <div className="relative flex-1 overflow-y-auto pt-2">
+        <div className="min-h-full">
+          {/* Inline Tag Input - Now inside editor content */}
+          <div className="py-2 bg-background" onClick={(e) => e.stopPropagation()}>
+            <InlineTagInput
+              ref={tagInputRef}
+              noteId={noteId}
+              type={type}
+              status={status}
+              tags={tags}
+              onTypeChange={onTypeChange}
+              onStatusChange={onStatusChange}
+              onAddTag={onAddTag}
+              onRemoveTag={onRemoveTag}
+              onEnterPress={() => {
+                if (editor) {
+                  // Focus the editor at the start of the first line
+                  editor.commands.focus('start');
+                  // Move cursor to the beginning of the document
+                  editor.commands.setTextSelection(0);
+                }
+              }}
+            />
+          </div>
+          
+          <div className={cn(
+            "minimal-tiptap-editor min-h-full w-full p-0 m-0",
             editorContentClassName
-          )}
-        />
-        <LinkBubbleMenu editor={editor} />
+          )}>
+            <EditorContent
+              editor={editor}
+              className="h-full w-full"
+              style={{
+                background: 'transparent',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                padding: 0,
+                margin: 0
+              }}
+            />
+          </div>
+          <LinkBubbleMenu editor={editor} />
+        </div>
       </div>
     </div>
   )

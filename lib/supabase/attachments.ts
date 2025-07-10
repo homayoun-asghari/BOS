@@ -401,11 +401,7 @@ export const cleanupOrphanedAttachments = async (
       });
     });
 
-    console.log('Found orphaned attachments:', {
-      totalAttachments: attachments.length,
-      orphanedCount: orphanedAttachments.length,
-      orphanedIds: orphanedAttachments.map(a => a.id)
-    });
+    // Silently process orphaned attachments
 
     // Process content updates if we have content and orphaned attachments
     let updatedContent = currentContent;
@@ -433,7 +429,9 @@ export const cleanupOrphanedAttachments = async (
       if (newContent !== updatedContent) {
         updatedContent = newContent;
         contentWasUpdated = true;
-        console.log('Updated content after removing orphaned attachments');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Updated content after removing orphaned attachments');
+        }
       }
     }
 
@@ -449,12 +447,14 @@ export const cleanupOrphanedAttachments = async (
               storagePath = storagePath.substring('notes-attachments/'.length);
             }
             
-            console.log('Attempting to delete from storage:', {
-              bucket: 'notes-attachments',
-              path: storagePath,
-              attachmentId: attachment.id,
-              fullPath: `notes-attachments/${storagePath}`
-            });
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Attempting to delete from storage:', {
+                bucket: 'notes-attachments',
+                path: storagePath,
+                attachmentId: attachment.id,
+                fullPath: `notes-attachments/${storagePath}`
+              });
+            }
             
             try {
               // First try to delete with the exact path
@@ -462,11 +462,11 @@ export const cleanupOrphanedAttachments = async (
                 .from('notes-attachments')
                 .remove([storagePath]);
               
-              console.log('Storage deletion response:', { data, error: storageError });
-              
               if (storageError) {
                 // If the first attempt fails, try to find the file by name
-                console.log('Initial delete failed, trying to find file by name...');
+                if (process.env.NODE_ENV !== 'production') {
+                  console.log('Initial delete failed, trying to find file by name...');
+                }
                 const fileName = storagePath.split('/').pop();
                 if (fileName) {
                   const { data: files, error: listError } = await supabase.storage
@@ -474,7 +474,6 @@ export const cleanupOrphanedAttachments = async (
                     .list('', { search: fileName });
                   
                   if (!listError && files && files.length > 0) {
-                    console.log(`Found ${files.length} matching files, attempting to delete them`);
                     const pathsToDelete = files.map(file => file.name);
                     
                     const { error: deleteError } = await supabase.storage
@@ -482,24 +481,23 @@ export const cleanupOrphanedAttachments = async (
                       .remove(pathsToDelete);
                     
                     if (deleteError) {
-                      console.error('Error deleting files by name:', deleteError);
+                      if (process.env.NODE_ENV !== 'production') {
+                        console.error('Error deleting files by name:', deleteError);
+                      }
                       throw deleteError;
                     }
-                    
-                    console.log('Successfully deleted files by name:', pathsToDelete);
                   } else {
-                    console.log('No matching files found by name');
                     throw storageError;
                   }
                 } else {
                   throw storageError;
                 }
-              } else {
-                console.log(`Successfully deleted file from storage: ${storagePath}`);
               }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-              console.error(`Error processing storage deletion for ${storagePath}:`, error);
+              if (process.env.NODE_ENV !== 'production') {
+                console.error(`Error processing storage deletion for ${storagePath}:`, error);
+              }
               throw new Error(`Storage deletion failed for ${storagePath}: ${errorMessage}`);
             }
           }
@@ -511,15 +509,19 @@ export const cleanupOrphanedAttachments = async (
             .eq('id', attachment.id);
             
           if (dbError) {
-            console.error(`Error deleting attachment ${attachment.id} from database:`, dbError);
+            if (process.env.NODE_ENV !== 'production') {
+              console.error(`Error deleting attachment ${attachment.id} from database:`, dbError);
+            }
             throw new Error(`Database deletion failed for ${attachment.id}: ${dbError.message}`);
             throw dbError;
           }
           
-          console.log(`Successfully deleted attachment ${attachment.id} from database`);
+          // Silently handle successful deletion
           return true;
         } catch (error) {
-          console.error(`Failed to delete attachment ${attachment.id}:`, error);
+          if (process.env.NODE_ENV !== 'production') {
+            console.error(`Failed to delete attachment ${attachment.id}:`, error);
+          }
           throw error;
         }
       })
@@ -533,7 +535,9 @@ export const cleanupOrphanedAttachments = async (
     const failedDeletions = results.length - successfulDeletions;
 
     if (failedDeletions > 0) {
-      console.warn(`Failed to delete ${failedDeletions} orphaned attachments`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`Failed to delete ${failedDeletions} orphaned attachments`);
+      }
     }
 
     return {
@@ -543,7 +547,9 @@ export const cleanupOrphanedAttachments = async (
       ...(contentWasUpdated && { updatedContent })
     };
   } catch (error) {
-    console.error('Error in cleanupOrphanedAttachments:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Error in cleanupOrphanedAttachments:', error);
+    }
     throw error;
   }
 };

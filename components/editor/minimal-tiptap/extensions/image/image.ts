@@ -192,11 +192,12 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
     return {
       src: {
         default: null,
-        renderHTML: (attributes) => ({
-          src: attributes.src,
-          'data-storage-path': attributes.src,
-          'data-upload-complete': attributes['data-upload-complete'] || 'false'
-        })
+        parseHTML: (element) => element.getAttribute("src"),
+        renderHTML: (attributes) => {
+          return {
+            src: attributes.src,
+          }
+        },
       },
       alt: {
         default: null,
@@ -204,73 +205,94 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
       title: {
         default: null,
       },
-      id: {
-        default: null,
-      },
       width: {
-        default: null,
+        default: "100%",
       },
       height: {
-        default: null,
+        default: "auto",
       },
-      fileName: {
+      'data-storage-path': {
         default: null,
-      },
-      'data-upload-id': {
-        default: null,
+        parseHTML: (element) => element.getAttribute('data-storage-path') || element.getAttribute('src'),
+        renderHTML: (attributes) => {
+          return {
+            'data-storage-path': attributes['data-storage-path'] || attributes.src
+          }
+        },
       },
       'data-upload-complete': {
         default: 'false',
-      }
+        parseHTML: (element) => element.getAttribute('data-upload-complete') || 'false',
+      },
     }
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageViewBlock, {
+      className: 'image-node-view',
+      as: 'div',
+    })
   },
 
   addCommands() {
     return {
+      setImage:
+        (options) =>
+        ({ commands }) => {
+          // Ensure we have the required attributes
+          const attrs = {
+            ...options,
+            'data-storage-path': options['data-storage-path'] || options.src,
+            'data-upload-complete': options['data-upload-complete'] || 'true'
+          };
+          
+          return commands.insertContent({
+            type: this.name,
+            attrs,
+          })
+        },
       setImages:
         (attrs) =>
         ({ commands }) => {
-          const [validImages, errors] = filterFiles(attrs, {
+          const [validImages, errors] = filterFiles(Array.isArray(attrs) ? attrs : [attrs], {
             allowedMimeTypes: this.options.allowedMimeTypes,
             maxFileSize: this.options.maxFileSize,
             allowBase64: this.options.allowBase64,
-          })
+          });
 
           if (errors.length > 0 && this.options.onValidationError) {
-            this.options.onValidationError(errors)
+            this.options.onValidationError(errors);
           }
 
           if (validImages.length > 0) {
             return commands.insertContent(
               validImages.map((image) => {
-                if (image.src instanceof File) {
-                  const blobUrl = URL.createObjectURL(image.src)
-                  const id = randomId()
-
-                  return {
-                    type: this.type.name,
-                    attrs: {
-                      id,
-                      src: blobUrl,
-                      alt: image.alt,
-                      title: image.title,
-                      fileName: image.src.name,
-                    },
-                  }
-                } else {
-                  return {
-                    type: this.type.name,
-                    attrs: {
-                      id: randomId(),
-                      src: image.src,
-                      alt: image.alt,
-                      title: image.title,
-                      fileName: null,
-                    },
-                  }
-                }
+                const isFile = image.src instanceof File;
+                const src = isFile ? URL.createObjectURL(image.src) : image.src;
+                
+                // Check if we have a storage path (for existing images)
+                const storagePath = image['data-storage-path'] || 
+                                  (typeof image.src === 'string' ? image.src : null);
+                
+                // Determine if upload is complete
+                const uploadComplete = image['data-upload-complete'] !== false && 
+                                     image['data-upload-complete'] !== 'false';
+                
+                return {
+                  type: this.type.name,
+                  attrs: {
+                    id: image.id || randomId(),
+                    src: storagePath || src, // Prefer storage path if available
+                    alt: image.alt || '',
+                    title: image.title || '',
+                    width: image.width || null,
+                    height: image.height || null,
+                    'data-storage-path': storagePath,
+                    'data-upload-complete': uploadComplete ? 'true' : 'false',
+                  },
+                };
               })
-            )
+            );
           }
 
           return false
@@ -356,7 +378,11 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
 
   addNodeView() {
     return ReactNodeViewRenderer(ImageViewBlock, {
-      className: "block-node",
+      className: "relative w-full h-full",
+      attrs: {
+        'data-storage-path': { default: null },
+        'data-upload-complete': { default: 'false' }
+      }
     })
   },
 })

@@ -84,14 +84,7 @@ const createExtensions = ({
     uploadFn: async (file) => {
       const uploadId = randomId();
       try {
-        console.log('[Tiptap Image] Starting file upload:', { fileName: file.name, uploadId });
         const url = uploader ? await uploader(file) : await fakeuploader(file);
-        console.log('[Tiptap Image] File upload completed:', { 
-          fileName: file.name, 
-          uploadId, 
-          url: url ? 'success' : 'no url returned',
-          urlPreview: url ? `${url.substring(0, 50)}...` : 'n/a'
-        });
         return url;
       } catch (error) {
         console.error('[Tiptap Image] Upload failed:', { 
@@ -117,15 +110,9 @@ const createExtensions = ({
           (uploader ? uploader(image) : fakeuploader(image))
             .then(finalUrl => {
               if (!finalUrl) {
-                console.error('[Tiptap Image] No URL returned from upload');
                 onFileUpload?.('', image.name, image.type, uploadId, true);
                 return;
               }
-
-              console.log('[Tiptap Image] Upload completed, updating image URL:', { 
-                uploadId, 
-                finalUrlPreview: `${finalUrl.substring(0, 50)}...`
-              });
               
               // Update the image source when upload is complete
               editor.commands.command(({ tr }) => {
@@ -156,8 +143,7 @@ const createExtensions = ({
               // Notify about the successful upload completion
               onFileUpload?.(finalUrl, image.name, image.type, uploadId, false);
             })
-            .catch(error => {
-              console.error('[Tiptap Image] Upload failed:', { uploadId, error });
+            .catch(() => {
               // Notify about the upload failure
               onFileUpload?.('', image.name, image.type, uploadId, true);
             });
@@ -177,8 +163,8 @@ const createExtensions = ({
         })
       )
     },
-    onImageRemoved({ id, src }) {
-      console.log("Image removed", { id, src })
+    onImageRemoved() {
+      // Image removed handler
     },
     onValidationError(errors) {
       errors.forEach((error) => {
@@ -397,28 +383,20 @@ export const useMinimalTiptapEditor = ({
   const handleUpdate = React.useCallback(
     (editor: Editor) => {
       try {
-        console.log('[useMinimalTiptap] === Editor Update Triggered ===');
-        console.log('[useMinimalTiptap] Output format:', output);
-        
         // Get the current editor state
         const content = editor.getJSON();
-        console.log('[useMinimalTiptap] Editor content (raw):', JSON.stringify(content, null, 2));
         
         if (content) {
           // Ensure we're not double-wrapping the content
           if (output === 'json') {
-            console.log('[useMinimalTiptap] Sending JSON content to parent');
             throttledSetValue(content);
           } else {
             const outputContent = getOutput(editor, output) as TiptapContent;
-            console.log(`[useMinimalTiptap] Converted to ${output}:`, outputContent);
             throttledSetValue(outputContent);
           }
-        } else {
-          console.warn('[useMinimalTiptap] No content available in editor');
         }
       } catch (error) {
-        console.error('[useMinimalTiptap] Error in editor update:', error);
+        // Handle any errors silently
       }
     },
     [output, throttledSetValue]
@@ -426,11 +404,7 @@ export const useMinimalTiptapEditor = ({
 
   const handleCreate = React.useCallback(
     (editor: Editor) => {
-      console.log('[useMinimalTiptap] === Editor Create Triggered ===');
-      console.log('[useMinimalTiptap] Initial value type:', typeof value);
-      
       if (!value) {
-        console.log('[useMinimalTiptap] No initial value provided');
         return;
       }
       
@@ -439,18 +413,16 @@ export const useMinimalTiptapEditor = ({
         const content = typeof value === 'string' 
           ? JSON.parse(value)
           : value;
-          
-        console.log('[useMinimalTiptap] Parsed content:', JSON.stringify(content, null, 2));
         
         // Only set content if the editor is empty to prevent overwriting existing content
         if (editor.isEmpty) {
-          console.log('[useMinimalTiptap] Setting initial content');
           editor.commands.setContent(content);
-        } else {
-          console.log('[useMinimalTiptap] Editor not empty, skipping initial content set');
         }
       } catch (error) {
-        console.error('Error setting editor content:', error);
+        // Log error only in development
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Error setting editor content:', error);
+        }
         // If parsing fails, set as plain text
         if (editor.isEmpty) {
           editor.commands.setContent([{
@@ -477,7 +449,10 @@ export const useMinimalTiptapEditor = ({
           }
         }
       } catch (error) {
-        console.error('Error in editor blur:', error);
+        // Handle errors silently in production
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Error in editor blur:', error);
+        }
       }
     },
     [output, onBlur]
@@ -488,13 +463,6 @@ export const useMinimalTiptapEditor = ({
       placeholder,
       uploader,
       onFileUpload: (url, fileName, fileType, uploadId, isError) => {
-        console.log(`[useMinimalTiptap] File upload ${isError ? 'failed' : 'succeeded'}:`, { 
-          url, 
-          fileName, 
-          fileType, 
-          uploadId,
-          isError 
-        });
         onFileUpload?.(url, fileName, fileType, uploadId, isError);
       },
     }),

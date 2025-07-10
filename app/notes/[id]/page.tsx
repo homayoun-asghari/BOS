@@ -49,16 +49,25 @@ export default function NotePage() {
 
   useEffect(() => {
     fetchNotes();
+    
+    // Prevent page scrolling
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    
+    // Cleanup function to re-enable scrolling when component unmounts
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    };
   }, [fetchNotes]);
 
   const handleSave = async (noteData: { content: string; title: string }) => {
-    console.log('Note saved:', noteData);
-    // You can add additional logic here if needed when a note is saved
+    // Note saved handler - add any additional logic here if needed
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen overflow-hidden">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
@@ -66,8 +75,10 @@ export default function NotePage() {
 
   if (error || !note) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen p-4">
-        <div className="text-red-500 text-lg mb-4">{error || 'Note not found'}</div>
+      <div className="flex flex-col items-center justify-center h-screen p-4 overflow-hidden">
+        <div className="container mx-auto py-8 px-4 h-full">
+          <NoteForm note={note} onSuccess={fetchNotes} />
+        </div>
         <button
           onClick={() => router.push('/notes/new')}
           className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
@@ -92,14 +103,17 @@ export default function NotePage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <NoteForm 
-        key={note.id} // Force re-render when note changes
-        initialData={initialData}
-        onSave={handleSave}
-        notes={notes.filter(n => n.id !== note.id)} // Pass all notes except the current one
-        autoSave={true}
-      />
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <div className="container mx-auto h-full flex flex-col">
+        <NoteForm 
+          key={note.id} // Force re-render when note changes
+          initialData={initialData}
+          onSave={handleSave}
+          notes={notes.filter(n => n.id !== note.id)} // Pass all notes except the current one
+          autoSave={true}
+        />
+
+      </div>
     </div>
   );
 }

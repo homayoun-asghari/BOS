@@ -1,9 +1,16 @@
 import * as React from "react"
-import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
-import type { ElementDimensions } from "../hooks/use-drag-resize"
-import { useDragResize } from "../hooks/use-drag-resize"
-import { ResizeHandle } from "./resize-handle"
-import { cn } from "@/lib/utils"
+import { NodeViewWrapper } from "@tiptap/react"
+import type { NodeViewProps } from '@tiptap/core';
+import { cn } from '@/lib/utils';
+import { Loader2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Resizable } from 're-resizable';
+import { useEditor } from '@tiptap/react';
+import { useHotkeys } from 'react-hotkeys-hook';
+import { getSignedUrl } from '@/lib/supabase/storage-utils';
+import { ElementDimensions } from '../hooks/use-drag-resize';
+import { useDragResize } from '../hooks/use-drag-resize';
+import { ResizeHandle } from './resize-handle';
 import { Controlled as ControlledZoom } from "react-medium-image-zoom"
 import { ActionButton, ActionWrapper, ImageActions } from "./image-actions"
 import { useImageActions } from "../hooks/use-image-actions"
@@ -60,33 +67,130 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     error: false,
     naturalSize: { width: initialWidth, height: initialHeight },
   });
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [retryCount, setRetryCount] = React.useState(0);
+  const MAX_RETRIES = 3;
   
-  // Get the storage path from data attributes or use the src as fallback
-  const storagePath = node.attrs['data-storage-path'] || initSrc;
+  // Get the storage path from node attributes or fall back to src if not available
+  const storagePath = node.attrs['data-storage-path'] || node.attrs.src;
   const uploadComplete = node.attrs['data-upload-complete'] === 'true';
   
-  // Generate a public URL for the image
-  const [imageUrl, setImageUrl] = React.useState<string>(initSrc);
-  const supabase = createClientComponentClient();
+  // State for the image URL - start with empty to prevent initial load with local path
+  const [imageUrl, setImageUrl] = React.useState<string>('');
   
+  // Clean up the storage path to remove any query parameters or fragments
+  const cleanStoragePath = (path: string): string => {
+    if (!path) return '';
+    // If it's a blob URL, return it as is
+    if (path.startsWith('blob:')) return path;
+    // If it's already a full URL (http/https), return it as is
+    if (path.startsWith('http')) return path;
+    // If it looks like a local path, return empty string
+    if (path.includes('/notes/') || path.includes('localhost:3000/notes/')) return '';
+    // Remove any query parameters or fragments
+    return path.split('?')[0].split('#')[0];
+  };
+  
+  const cleanPath = storagePath ? cleanStoragePath(storagePath) : '';
+
   React.useEffect(() => {
-    const getImageUrl = async () => {
-      if (!storagePath || !uploadComplete) return;
+    let isMounted = true;
+    setIsLoading(true);
+    
+    const loadImage = async () => {
+      // If we have a blob URL, use it directly (temporary until upload completes)
+      if (cleanPath.startsWith('blob:')) {
+        if (isMounted) {
+          setImageUrl(cleanPath);
+          setIsLoading(false);
+        }
+        return;
+      }
+      
+      // Skip if we don't have a valid storage path
+      if (!cleanPath) {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+      
+      // If we have a storage path but upload isn't complete, don't try to generate a signed URL yet
+      if (!uploadComplete) {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+
+      // If it's already a full URL, use it directly
+      if (cleanPath.startsWith('http')) {
+        if (isMounted) {
+          setImageUrl(cleanPath);
+          setImageState(prev => ({ ...prev, error: false }));
+          setIsLoading(false);
+        }
+        return;
+      }
+      
+
+      
+      const getSignedImageUrl = async (retry = 0): Promise<string | null> => {
+        try {
+          // Validate the path has a file extension
+          if (!cleanPath.includes('.')) {
+            throw new Error('Invalid file path: missing file extension');
+          }
+          
+          // Get signed URL for private bucket access
+          const signedUrl = await getSignedUrl(cleanPath, { expiresIn: 3600 });
+          
+          if (!signedUrl) {
+            throw new Error('Failed to generate signed URL');
+          }
+          return signedUrl;
+          
+        } catch (error) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.error(`[ImageViewBlock] Error getting signed URL (attempt ${retry + 1}):`, error);
+          }
+          if (retry < MAX_RETRIES - 1) {
+            // Wait before retrying (exponential backoff)
+            const delay = 1000 * Math.pow(2, retry);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return getSignedImageUrl(retry + 1);
+          }
+          throw error;
+        }
+      };
       
       try {
-        const { data: { publicUrl } } = supabase.storage
-          .from('notes-attachments')
-          .getPublicUrl(storagePath);
-          
-        setImageUrl(publicUrl);
+        const url = await getSignedImageUrl(retryCount);
+        if (isMounted && url) {
+          setImageUrl(url);
+          setImageState(prev => ({ ...prev, error: false }));
+        } else if (isMounted) {
+          throw new Error('Failed to get signed URL for path:', cleanPath);
+        }
       } catch (error) {
-        console.error('Error getting image URL:', error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Failed to load image after all retries:', error);
+        }
         setImageState(prev => ({ ...prev, error: true }));
+        if (retryCount < MAX_RETRIES - 1) {
+          setRetryCount(prev => prev + 1);
+        } else {
+          console.error('Max retries reached, giving up');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
     
-    getImageUrl();
-  }, [storagePath, uploadComplete, supabase]);
+    loadImage();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [cleanPath, uploadComplete, retryCount]);
 
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [activeResizeHandle, setActiveResizeHandle] = React.useState<
@@ -242,6 +346,8 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     handleImage()
   }, [editor, fileName, initSrc, updateAttributes])
 
+  const shouldRenderImage = imageUrl && !imageState.error;
+
   return (
     <NodeViewWrapper
       ref={containerRef}
@@ -254,7 +360,9 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
           maxWidth: `min(${maxWidth}px, 100%)`,
           width: currentWidth,
           maxHeight: MAX_HEIGHT,
-          aspectRatio: `${imageState.naturalSize.width} / ${imageState.naturalSize.height}`,
+          aspectRatio: imageState.naturalSize.width && imageState.naturalSize.height 
+            ? `${imageState.naturalSize.width} / ${imageState.naturalSize.height}`
+            : 'auto',
         }}
       >
         <div
@@ -268,48 +376,57 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         >
           <div className="h-full contain-paint">
             <div className="relative h-full">
-              {imageState.isServerUploading && !imageState.error && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Spinner className="size-7" />
+              {(isLoading || imageState.isServerUploading) && !imageState.error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-muted/20 rounded-md">
+                  <div className="flex flex-col items-center gap-2">
+                    <Spinner className="size-7" />
+                    <p className="text-xs text-muted-foreground">
+                      {retryCount > 0 ? `Retrying... (${retryCount}/${MAX_RETRIES})` : 'Loading image...'}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {imageState.error && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
+              {imageState.error && !isLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/20 rounded-md">
                   <InfoCircledIcon className="size-8 text-destructive" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Failed to load image
+                  <p className="mt-2 text-sm text-muted-foreground text-center px-2">
+                    {retryCount >= MAX_RETRIES 
+                      ? 'Failed to load image' 
+                      : `Loading failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`}
                   </p>
                 </div>
               )}
 
-              <ControlledZoom
-                isZoomed={imageState.isZoomed}
-                onZoomChange={() =>
-                  setImageState((prev) => ({ ...prev, isZoomed: false }))
-                }
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  className={cn(
-                    "h-full w-full object-cover",
-                    imageState.imageLoaded ? "opacity-100" : "opacity-0"
-                  )}
-                  style={{
-                    width: currentWidth,
-                    height: currentHeight,
-                  }}
-                  width={currentWidth}
-                  height={currentHeight}
-                  src={imageUrl}
-                  onError={handleImageError}
-                  onLoad={handleImageLoad}
-                  alt={node.attrs.alt || ""}
-                  title={node.attrs.title || ""}
-                  data-storage-path={storagePath}
-                  data-upload-complete={String(uploadComplete)}
-                />
-              </ControlledZoom>
+              {shouldRenderImage ? (
+                <ControlledZoom
+                  isZoomed={imageState.isZoomed}
+                  onZoomChange={() =>
+                    setImageState((prev) => ({ ...prev, isZoomed: false }))
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className={cn(
+                      "h-full w-full object-cover",
+                      imageState.imageLoaded ? "opacity-100" : "opacity-0"
+                    )}
+                    style={{
+                      width: currentWidth,
+                      height: currentHeight,
+                    }}
+                    width={currentWidth}
+                    height={currentHeight}
+                    src={imageUrl}
+                    onError={handleImageError}
+                    onLoad={handleImageLoad}
+                    alt={node.attrs.alt || ""}
+                    title={node.attrs.title || ""}
+                    data-storage-path={storagePath}
+                    data-upload-complete={String(uploadComplete)}
+                  />
+                </ControlledZoom>
+              ) : null}
             </div>
 
             {editor.isEditable &&

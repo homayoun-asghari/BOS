@@ -212,7 +212,6 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
         
         // Set up the interval for subsequent rotations
         shuffleTimerRef.current = setInterval(rotateCode, shuffleInterval);
-        console.log(`Set shuffle interval to ${shuffleInterval}ms`);
       }
     }, initialDelay);
 
@@ -359,9 +358,10 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
               </motion.span>
             </AnimatePresence>
           </div>
+          <span className="sr-only">{isOpen ? 'Collapse' : 'Expand'} personal codes</span>
           <ChevronDown 
-            className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''} flex-shrink-0`} 
-            aria-hidden="true"
+            className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''} flex-shrink-0`}
+            aria-hidden="false"
           />
         </button>
         
@@ -371,7 +371,7 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
             role="dialog"
             aria-modal="true"
           >
-            <div className="max-h-60 overflow-y-auto">
+            <div className="max-h-60 overflow-y-auto ">
               {isLoading ? (
                 <div className="text-center py-4 text-sm text-muted-foreground">Loading...</div>
               ) : codes.length === 0 ? (
