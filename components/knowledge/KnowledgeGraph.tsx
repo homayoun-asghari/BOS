@@ -52,10 +52,16 @@ export default function KnowledgeGraph({
     
     // Theme-aware colors
     const isDark = theme === 'dark';
-    const nodeColor = isDark ? 'hsl(0, 0%, 95%)' : 'hsl(var(--primary))';
-    const linkColor = isDark ? 'hsla(0, 0%, 100%, 0.7)' : 'hsl(var(--muted-foreground) / 0.5)';
-    const linkHighlightedColor = isDark ? 'hsl(0, 0%, 100%)' : 'hsl(var(--primary))';
-    const linkLessenedColor = isDark ? 'hsla(0, 0%, 100%, 0.3)' : 'hsl(var(--muted-foreground) / 0.3)';
+    
+    // Node colors - dynamic based on theme
+    const nodeColor = isDark ? 'hsl(0, 0%, 90%)' : 'hsl(0, 0%, 20%)';
+    const nodeHighlighted = isDark ? 'hsl(0, 0%, 100%)' : 'hsl(0, 0%, 10%)';
+    const nodeLessened = isDark ? 'hsla(0, 0%, 70%, 0.6)' : 'hsla(0, 0%, 30%, 0.6)';
+    
+    // Link colors - dynamic based on theme
+    const linkColor = isDark ? 'hsla(0, 0%, 85%, 0.6)' : 'hsla(0, 0%, 40%, 0.6)';
+    const linkHighlighted = isDark ? 'hsl(0, 0%, 100%)' : 'hsl(0, 0%, 10%)';
+    const linkLessened = isDark ? 'hsla(0, 0%, 60%, 0.3)' : 'hsla(0, 0%, 60%, 0.2)';
 
     // Create graph view with theme-aware styling
     const graphView = new NoteGraphView({
@@ -70,21 +76,21 @@ export default function KnowledgeGraph({
         node: {
           note: {
             regular: nodeColor,
-            highlighted: 'hsl(var(--accent))',
-            lessened: isDark ? 'hsla(0, 0%, 100%, 0.5)' : 'hsl(var(--muted))'
+            highlighted: nodeHighlighted,
+            lessened: nodeLessened
           }
         },
         // Link styles
         link: {
           regular: linkColor,
-          highlighted: linkHighlightedColor,
-          lessened: linkLessenedColor
+          highlighted: linkHighlighted,
+          lessened: linkLessened
         },
         // Hover styles for node links
         hoverNodeLink: {
           highlightedDirection: {
-            inbound: 'hsl(var(--accent))',
-            outbound: linkHighlightedColor
+            inbound: 'hsl(45, 100%, 50%)', // Yellow for both modes
+            outbound: 'hsl(45, 100%, 60%)'  // Slightly lighter yellow for outbound
           }
         }
       }
@@ -113,17 +119,18 @@ export default function KnowledgeGraph({
     };
   }, [notes, height, theme]);
 
-  const heightStyle = typeof height === 'number' ? `${height}px` : height;
-
   return (
     <div 
       ref={containerRef} 
-      className={`w-full rounded-lg border note-graph-container ${className}`} 
+      className={className}
       style={{ 
-        height: heightStyle,
-        minHeight: heightStyle,
+        height: typeof height === 'number' ? `${height}px` : height,
+        width: '100%',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        outline: 'none',
+        border: 'none',
+        boxShadow: 'none',
       }}
     >
       <div className="absolute inset-0 flex items-center justify-center">
