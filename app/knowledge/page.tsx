@@ -160,7 +160,7 @@ export default function KnowledgePage() {
               ))}
               <Input
                 ref={inputRef}
-                placeholder="Search notes..."
+                placeholder="Filter by tags and search notes..."
                 value={inputValue}
                 onChange={(e) => {
                   setInputValue(e.target.value);
