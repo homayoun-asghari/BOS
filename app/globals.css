@@ -200,6 +200,88 @@
 }
 
 /* ========== 🧩 Base Styles ========== */
+/* Knowledge Graph Styles */
+.note-graph-container {
+  background-color: hsl(var(--baby-powder));
+  transition: background-color 0.3s ease;
+}
+
+/* Dark mode styles */
+.dark .note-graph-container {
+  background-color: hsl(var(--arsenic));
+}
+
+.note-graph-node {
+  fill: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  stroke: hsl(var(--background));
+  stroke-width: 2px;
+}
+
+.note-graph-node text {
+  fill: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.note-graph-link {
+  stroke: hsl(var(--muted-foreground) / 0.5);
+  stroke-width: 1.5px;
+}
+
+/* Link animation styles */
+.note-graph-link g.animation path,
+.note-graph-link g.animation line,
+.note-graph-link .link-animation,
+.note-graph-link .link-animation path,
+.note-graph-link .link-animation line,
+/* More specific selectors for the animation elements */
+.note-graph-link g.animation > *,
+.note-graph-link g.animation > * > *,
+.note-graph-link g.animation > * > * > * {
+  stroke: hsla(0, 0%, 90%, 0.8) !important;
+  stroke-width: 1.5px !important;
+  stroke-dasharray: 5, 5 !important;
+  animation: linkAnimation 1.5s linear infinite !important;
+  vector-effect: non-scaling-stroke !important;
+}
+
+@keyframes linkAnimation {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Debug styles */
+.note-graph-link * {
+  outline: 1px solid rgba(255, 0, 0, 0.2) !important;
+}
+
+/* Target specific animation elements */
+.note-graph-link g.animation,
+.note-graph-link .link-animation {
+  outline: 2px solid rgba(0, 255, 0, 0.5) !important;
+}
+
+/* Target the actual path/line elements */
+.note-graph-link g.animation path,
+.note-graph-link g.animation line,
+.note-graph-link .link-animation path,
+.note-graph-link .link-animation line {
+  outline: 2px solid rgba(0, 0, 255, 0.5) !important;
+}
+
+.note-graph-link:hover {
+  stroke: hsl(var(--primary) / 0.8);
+  stroke-width: 2px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

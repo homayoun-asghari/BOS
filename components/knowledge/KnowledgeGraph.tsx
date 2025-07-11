@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { NoteGraphView, NoteGraphModel } from 'note-graph';
+import { useTheme } from 'next-themes';
 
 export interface Note {
   id: string;
@@ -21,6 +22,7 @@ export default function KnowledgeGraph({
   className = '', 
   height = 500 
 }: KnowledgeGraphProps) {
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphViewRef = useRef<NoteGraphView | null>(null);
 
@@ -38,18 +40,54 @@ export default function KnowledgeGraph({
       id: note.id,
       title: note.title,
       linkTo: note.linkTo,
-      referencedBy: note.referencedBy
+      referencedBy: note.referencedBy,
+      // Add custom properties for styling
+      isIndex: note.title.toLowerCase().includes('index'),
+      isInbox: note.title.toLowerCase() === 'inbox',
+      isTodo: note.title.toLowerCase() === 'todo'
     }));
 
     // Create graph model with the notes
     const graphModel = new NoteGraphModel(graphNotes);
     
-    // Create graph view with minimal configuration
+    // Theme-aware colors
+    const isDark = theme === 'dark';
+    const nodeColor = isDark ? 'hsl(0, 0%, 95%)' : 'hsl(var(--primary))';
+    const linkColor = isDark ? 'hsla(0, 0%, 100%, 0.7)' : 'hsl(var(--muted-foreground) / 0.5)';
+    const linkHighlightedColor = isDark ? 'hsl(0, 0%, 100%)' : 'hsl(var(--primary))';
+    const linkLessenedColor = isDark ? 'hsla(0, 0%, 100%, 0.3)' : 'hsl(var(--muted-foreground) / 0.3)';
+
+    // Create graph view with theme-aware styling
     const graphView = new NoteGraphView({
       container: containerRef.current,
       graphModel,
       enableNodeDrag: true,
-      // Using default styling for now
+      style: {
+        // Set canvas background
+        background: 'hsl(var(--background))',
+        fontSize: 12,
+        // Node styles
+        node: {
+          note: {
+            regular: nodeColor,
+            highlighted: 'hsl(var(--accent))',
+            lessened: isDark ? 'hsla(0, 0%, 100%, 0.5)' : 'hsl(var(--muted))'
+          }
+        },
+        // Link styles
+        link: {
+          regular: linkColor,
+          highlighted: linkHighlightedColor,
+          lessened: linkLessenedColor
+        },
+        // Hover styles for node links
+        hoverNodeLink: {
+          highlightedDirection: {
+            inbound: 'hsl(var(--accent))',
+            outbound: linkHighlightedColor
+          }
+        }
+      }
     });
 
     graphViewRef.current = graphView;
@@ -73,14 +111,14 @@ export default function KnowledgeGraph({
         graphViewRef.current = null;
       }
     };
-  }, [notes, height]);
+  }, [notes, height, theme]);
 
   const heightStyle = typeof height === 'number' ? `${height}px` : height;
 
   return (
     <div 
       ref={containerRef} 
-      className={`w-full rounded-lg border bg-card ${className}`} 
+      className={`w-full rounded-lg border note-graph-container ${className}`} 
       style={{ 
         height: heightStyle,
         minHeight: heightStyle,
