@@ -17,16 +17,22 @@ type Note = {
   title: string;
   linkTo: string[];
   referencedBy: string[];
+  tags?: Array<{ id: string; name: string }>;
+  content_search?: string;
 };
 
 interface KnowledgeGraphProps {
   height?: number | string;
   className?: string;
+  search?: string;
+  tags?: string[];
 }
 
 export default function KnowledgeGraph({ 
   height = '100%',
-  className = ''
+  className = '',
+  search,
+  tags
 }: KnowledgeGraphProps) {
   const router = useRouter();
   const { theme } = useTheme();
@@ -47,21 +53,82 @@ export default function KnowledgeGraph({
       console.log('No graph data available yet:', { isLoading, error, graphData });
       return [];
     }
+
+    // First, find all notes that match the search/tags
+    const matchedNoteIds = new Set<string>();
     
-    const notes = graphData.map(note => ({
+    // Get all notes that match the search/tags
+    const matchedNotes = graphData.filter(note => {
+      let matches = true;
+      
+      // Filter by tags
+      if (tags?.length) {
+        const noteTagNames = (note.tags || []).map(t => t.name.toLowerCase());
+        const searchTags = tags.map(t => t.trim().toLowerCase());
+        console.log('Filtering by tags:', { 
+          noteId: note.id, 
+          noteTags: noteTagNames, 
+          searchTags,
+          matchesAll: searchTags.every(tag => noteTagNames.includes(tag))
+        });
+        matches = searchTags.every(tag => noteTagNames.includes(tag));
+      }
+      
+      // Filter by search text
+      if (matches && search) {
+        const searchText = search.toLowerCase();
+        const titleMatch = note.title.toLowerCase().includes(searchText);
+        const contentMatch = note.content_search?.toLowerCase().includes(searchText) || false;
+        matches = titleMatch || contentMatch;
+      }
+      
+      if (matches) {
+        matchedNoteIds.add(note.id);
+      }
+      
+      return matches;
+    });
+
+    // Now find all linked notes that aren't in the matched set
+    const linkedNoteIds = new Set<string>();
+    
+    // For each matched note, find all linked notes
+    matchedNotes.forEach(note => {
+      note.linkTo?.forEach(linkedId => {
+        if (!matchedNoteIds.has(linkedId)) {
+          linkedNoteIds.add(linkedId);
+        }
+      });
+      
+      note.referencedBy?.forEach(linkedId => {
+        if (!matchedNoteIds.has(linkedId)) {
+          linkedNoteIds.add(linkedId);
+        }
+      });
+    });
+
+    // Get the actual linked notes data
+    const linkedNotes = graphData.filter(note => linkedNoteIds.has(note.id));
+    
+    // Combine matched and linked notes
+    const allNotesToShow = [...matchedNotes, ...linkedNotes];
+    
+    const notes = allNotesToShow.map(note => ({
       id: note.id,
       title: note.title,
-      linkTo: note.linkTo,
-      referencedBy: note.referencedBy,
+      linkTo: note.linkTo || [],
+      referencedBy: note.referencedBy || [],
       // Add custom properties for styling
       isIndex: note.title.toLowerCase().includes('index'),
       isInbox: note.title.toLowerCase() === 'inbox',
-      isTodo: note.title.toLowerCase() === 'todo'
+      isTodo: note.title.toLowerCase() === 'todo',
+      // Add search match status for highlighting
+      isSearchMatch: matchedNoteIds.has(note.id)
     }));
     
-    console.log('Graph notes prepared:', notes);
+    console.log('Graph notes with links:', notes);
     return notes;
-  }, [graphData, isLoading, error]);
+  }, [graphData, isLoading, error, search, tags]);
   
   // Memoize the graph style to prevent unnecessary recalculations
   const graphStyle = React.useMemo(() => {
@@ -104,6 +171,86 @@ export default function KnowledgeGraph({
       }
     };
   }, [theme]);
+
+  // Create and initialize the graph model
+  useEffect(() => {
+    if (!graphViewRef.current || !containerRef.current) return;
+
+    const graphModel = new NoteGraphModel();
+    
+    // Create a Set of existing node IDs for quick lookup
+    const existingNodeIds = new Set(graphNotes.map(note => note.id));
+    
+    // Set up initial nodes and links
+    graphNotes.forEach(note => {
+      graphModel.addNode(note.id, {
+        label: note.title,
+        color: 'hsl(0, 0%, 90%)',
+        size: 15,
+        labelColor: 'hsl(0, 0%, 10%)'
+      });
+      
+      // Only add links where both source and target nodes exist in the filtered set
+      note.linkTo.forEach(targetId => {
+        if (existingNodeIds.has(targetId)) {
+          graphModel.addLink(note.id, targetId);
+        }
+      });
+    });
+
+    // Highlight nodes that match the search
+    graphNotes.forEach(note => {
+      if (note.isSearchMatch) {
+        // Highlight matching nodes
+        graphModel.updateNode(note.id, {
+          color: 'hsl(210, 70%, 60%)',
+          size: 20,
+          labelColor: 'hsl(0, 0%, 100%)'
+        });
+      }
+    });
+
+    // Configure layout and physics
+    graphModel.configure({
+      layout: {
+        gravity: 0.1,
+        repulsion: 100,
+        damping: 0.9,
+        stiffness: 0.1,
+        nodeOverlap: 1.5,
+        linkOverlap: 0.5,
+        bounds: {
+          left: 0,
+          top: 0,
+          right: containerRef.current.clientWidth,
+          bottom: containerRef.current.clientHeight
+        }
+      },
+      physics: {
+        enabled: true,
+        springLength: 100,
+        springStiffness: 0.001,
+        damping: 0.01,
+        gravity: -0.01
+      }
+    });
+
+    // Set up the graph view
+    graphViewRef.current = new NoteGraphView({
+      container: containerRef.current,
+      model: graphModel,
+      style: graphStyle
+    });
+
+    // Handle node click
+    graphViewRef.current.onInteraction('nodeClick', ({ node }) => {
+      handleNodeClick(node.id);
+    });
+
+    return () => {
+      graphViewRef.current?.dispose();
+    };
+  }, [graphNotes, search, graphStyle]);
 
   // Load data on initial mount
   useEffect(() => {

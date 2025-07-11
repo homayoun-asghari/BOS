@@ -198,6 +198,8 @@ export default function KnowledgePage() {
           <TabsContent value="graph" className="mt-0 p-0 flex-1">
             <div className="bg-background h-full">
               <KnowledgeGraph 
+                search={searchQuery}
+                tags={tags}
                 height="100%"
                 className="h-full w-full"
               />
