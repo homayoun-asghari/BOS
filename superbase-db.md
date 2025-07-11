@@ -54,15 +54,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+
+
+
+
+
+
 -- 2. Create the notes table with the generated tsvector column using the function
 CREATE TABLE public.notes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  title text NOT NULL,
-  content jsonb, -- Stores TipTap JSON content
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  title text,
+  content jsonb,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  is_pinned boolean DEFAULT false,
+
   -- Full-text search index (generated column)
   content_search tsvector GENERATED ALWAYS AS (
     to_tsvector(
@@ -72,12 +79,12 @@ CREATE TABLE public.notes (
   ) STORED
 );
 
--- 3. Indexes
 CREATE INDEX idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX idx_notes_updated_at ON public.notes(updated_at DESC);
 CREATE INDEX idx_notes_content_search ON public.notes USING GIN (content_search);
+CREATE INDEX idx_notes_pinned ON public.notes(pinned);
 
--- 4. RLS: Row Level Security
+-- 3. Row-Level Security (RLS)
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can create notes"
@@ -95,6 +102,7 @@ CREATE POLICY "Users can update their own notes"
 CREATE POLICY "Users can delete their own notes"
   ON public.notes FOR DELETE
   USING (auth.uid() = user_id);
+
 
 
 

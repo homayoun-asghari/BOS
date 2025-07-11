@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, Plus, Network, List } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Plus, Network, List, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { mockKnowledgeData } from './mockData';
+import NoteList from '@/components/notes/NoteList';
 
 // Dynamically import the KnowledgeGraph component with no SSR
 const KnowledgeGraph = dynamic(
@@ -18,11 +20,115 @@ const KnowledgeGraph = dynamic(
 export default function KnowledgePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<'list' | 'graph'>('graph');
-  
-  // Simple search filter
-  const filteredNotes = mockKnowledgeData.filter(note => 
-    note.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [tags, setTags] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const router = useRouter();
+  const searchParamsObj = useSearchParams();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize tags from URL
+  useEffect(() => {
+    const tagParams = Array.from(searchParamsObj.entries())
+      .filter(([key]) => key.startsWith('tag'))
+      .map(([, value]) => value);
+    
+    if (tagParams.length > 0) {
+      setTags(tagParams);
+    }
+  }, [searchParamsObj]);
+
+  // Initialize view from URL
+  useEffect(() => {
+    const viewParam = searchParamsObj.get('view') as 'list' | 'graph' | null;
+    if (viewParam) {
+      setView(viewParam);
+    }
+  }, [searchParamsObj]);
+
+  // Update URL when view changes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', view);
+    router.push(`?${params.toString()}`);
+  }, [view, router]);
+
+  const normalizeTag = (tag: string): string => {
+    // Remove leading # if exists and trim whitespace
+    return tag.replace(/^#+/, '').trim();
+  };
+
+  const handleAddTag = (tag: string) => {
+    const normalizedTag = normalizeTag(tag);
+    const newTags = [...tags, normalizedTag];
+    setTags(newTags);
+    
+    // Update URL with all tags
+    const params = new URLSearchParams(window.location.search);
+    params.set('search', searchQuery);
+    
+    // Clear existing tag parameters
+    params.forEach((_, key) => {
+      if (key.startsWith('tag')) {
+        params.delete(key);
+      }
+    });
+    
+    // Add new tags
+    newTags.forEach((tag, index) => {
+      params.set(`tag${index + 1}`, tag);
+    });
+    
+    router.push(`?${params.toString()}`);
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    const newTags = tags.filter(tag => tag !== tagToRemove);
+    setTags(newTags);
+    router.push(`?search=${encodeURIComponent(searchQuery)}${newTags.length > 0 ? `&tag=${encodeURIComponent(newTags[0])}` : ''}`);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && inputValue.trim()) {
+      e.preventDefault();
+      // If input starts with #, add as tag
+      if (inputValue.startsWith('#')) {
+        handleAddTag(inputValue);
+      } else {
+        // Otherwise, update search query
+        setSearchQuery(inputValue);
+        const params = new URLSearchParams(window.location.search);
+        params.set('search', inputValue);
+        router.push(`?${params.toString()}`);
+      }
+      setInputValue('');
+    } else if (e.key === ' ' && inputValue.trim() && inputValue.startsWith('#')) {
+      e.preventDefault();
+      handleAddTag(inputValue);
+      setInputValue('');
+    } else if (e.key === 'Backspace' && !inputValue) {
+      e.preventDefault();
+      const newTags = [...tags];
+      newTags.pop();
+      setTags(newTags);
+      router.push(`?search=${encodeURIComponent(searchQuery)}${newTags.length > 0 ? `&tag=${encodeURIComponent(newTags[0])}` : ''}`);
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    // Extract tags from query
+    const tagMatches = query.match(/#(\w[\w\s]*)/g);
+    if (tagMatches) {
+      const newTags = tagMatches.map(tag => normalizeTag(tag));
+      setTags(newTags);
+    }
+  };
+
+  // Search filter for NoteList
+  const searchFilter = {
+    search: searchQuery,
+    tags: tags.map(tag => tag.toLowerCase())
+  };
 
   return (
     <div className="w-full p-4 relative flex flex-col" style={{ height: 'calc(100vh - 2rem)' }}>
@@ -31,12 +137,45 @@ export default function KnowledgePage() {
         <div className="flex items-center justify-between w-full gap-2">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search..."
-              className="pl-9 h-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="relative flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+              {tags.map(tag => (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className="flex items-center gap-1"
+                >
+                  <span>#{tag}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveTag(tag);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))}
+              <Input
+                ref={inputRef}
+                placeholder="Search notes..."
+                value={inputValue}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  // Update search query immediately if not typing a tag
+                  if (!e.target.value.startsWith('#')) {
+                    setSearchQuery(e.target.value);
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('search', e.target.value);
+                    router.push(`?${params.toString()}`);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                className="flex-1 border-0 bg-transparent px-0 py-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
           </div>
           
           <Tabs 
@@ -59,7 +198,6 @@ export default function KnowledgePage() {
           <TabsContent value="graph" className="mt-0 p-0 flex-1">
             <div className="bg-background h-full">
               <KnowledgeGraph 
-                notes={filteredNotes} 
                 height="100%"
                 className="h-full w-full"
               />
@@ -67,50 +205,9 @@ export default function KnowledgePage() {
           </TabsContent>
           
           <TabsContent value="list" className="mt-0">
-            {filteredNotes.length > 0 ? (
-              <div className="space-y-4">
-                {filteredNotes.map((note) => (
-                  <div key={note.id} className="rounded-lg border p-4 hover:bg-accent/50 transition-colors">
-                    <h3 className="font-medium">{note.title}</h3>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {note.linkTo && note.linkTo.length > 0 && (
-                        <div className="flex items-center">
-                          <span className="text-xs text-muted-foreground mr-2">Links to:</span>
-                          {note.linkTo.map((linkId: string) => {
-                            const linkedNote = mockKnowledgeData.find(n => n.id === linkId);
-                            return linkedNote ? (
-                              <span key={linkId} className="text-xs bg-muted rounded-full px-2 py-0.5">
-                                {linkedNote.title}
-                              </span>
-                            ) : null;
-                          })}
-                        </div>
-                      )}
-                      {note.referencedBy && note.referencedBy.length > 0 && (
-                        <div className="flex items-center">
-                          <span className="text-xs text-muted-foreground mr-2">Referenced by:</span>
-                          {note.referencedBy.map((refId: string) => {
-                            const refNote = mockKnowledgeData.find(n => n.id === refId);
-                            return refNote ? (
-                              <span key={refId} className="text-xs bg-muted/50 rounded-full px-2 py-0.5">
-                                {refNote.title}
-                              </span>
-                            ) : null;
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex-1 rounded-lg border border-dashed p-8 text-center">
-                <h3 className="text-lg font-medium">No knowledge items found</h3>
-                <p className="text-sm text-muted-foreground">
-                  Try adjusting your search or add a new knowledge item.
-                </p>
-              </div>
-            )}
+            <div className="space-y-4">
+              <NoteList searchParams={searchFilter} />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
