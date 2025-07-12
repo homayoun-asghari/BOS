@@ -1,3 +1,34 @@
+-- Update the function to handle both profile creation and journal creation
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  -- Only process for new user inserts
+  IF TG_OP = 'INSERT' THEN
+    -- First, insert the user into the profiles table
+    INSERT INTO public.profiles (id, email, username)
+    VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'username');
+    
+    -- Then create the 366 journals for the user
+    PERFORM public.create_journals_for_user(NEW.id);
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop the existing trigger if it exists
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Recreate the trigger
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_user();
+
+
+
+
+
 CREATE TABLE public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email text UNIQUE NOT NULL,
@@ -325,3 +356,100 @@ CREATE POLICY "Users can delete their own personal codes" ON public.personal_cod
 -- This will now search only within the 'content' column.
 ALTER TABLE public.personal_codes ADD COLUMN content_search tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
 CREATE INDEX idx_personal_codes_search ON public.personal_codes USING GIN (content_search);
+
+
+
+
+
+
+
+
+
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE TABLE public.journals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  day_index smallint NOT NULL CHECK (day_index >= 1 AND day_index <= 366),
+  title text NOT NULL,
+  content jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_user_day UNIQUE(user_id, day_index)
+);
+
+
+
+
+ALTER TABLE public.journals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own journals"
+  ON public.journals FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own journals"
+  ON public.journals FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+
+
+  CREATE OR REPLACE FUNCTION public.create_journals_for_user(p_user_id uuid)
+RETURNS void AS $$
+DECLARE
+  i int;
+  d date := '2000-01-01'::date; -- Leap year base
+  day_date date;
+  day_title text;
+BEGIN
+  -- Delete any existing entries for this user
+  DELETE FROM public.journals WHERE user_id = p_user_id;
+  
+  -- Create 366 entries (including Feb 29)
+  FOR i IN 1..366 LOOP
+    day_date := d + (i - 1) * INTERVAL '1 day';
+    day_title := TO_CHAR(day_date, 'FMDD FMMonth');
+    
+    INSERT INTO public.journals (user_id, day_index, title, created_at, updated_at)
+    VALUES (
+      p_user_id,
+      i,
+      day_title,
+      now(),
+      now()
+    );
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
+
+
+CREATE OR REPLACE FUNCTION public.get_journal_by_date(p_user_id uuid, p_date date)
+RETURNS SETOF public.journals AS $$
+DECLARE
+  day_of_year int;
+  is_leap_year boolean;
+  year_part int;
+BEGIN
+  -- Get the year part of the provided date
+  year_part := EXTRACT(YEAR FROM p_date)::int;
+  
+  -- Check if the year is a leap year
+  is_leap_year := (year_part % 4 = 0 AND (year_part % 100 != 0 OR year_part % 400 = 0));
+  
+  -- Get day of year (1-366)
+  day_of_year := EXTRACT(DOY FROM p_date)::int;
+  
+  -- Adjust for non-leap years
+  IF NOT is_leap_year AND day_of_year > 59 THEN
+    day_of_year := day_of_year + 1;
+  END IF;
+  
+  RETURN QUERY
+  SELECT * FROM public.journals
+  WHERE user_id = p_user_id 
+  AND day_index = day_of_year;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;

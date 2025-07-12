@@ -360,7 +360,19 @@ const createExtensions = ({
   HorizontalRule,
   ResetMarksOnEnter,
   CodeBlockLowlight,
-  Placeholder.configure({ placeholder: () => placeholder }),
+  Placeholder.configure({
+    placeholder: ({ editor }) => {
+      // Only show placeholder when editor is completely empty
+      if (editor.state.doc.content.childCount === 1 && 
+          editor.state.doc.firstChild?.content.size === 0) {
+        return placeholder;
+      }
+      return '';
+    },
+    showOnlyWhenEditable: true,
+    emptyEditorClass: 'is-editor-empty',
+    emptyNodeClass: 'is-empty',
+  }),
 ]
 
 export const useMinimalTiptapEditor = ({

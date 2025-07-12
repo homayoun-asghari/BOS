@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Book } from 'lucide-react';
 
 type SidebarItem = {
   name: string;
@@ -27,6 +27,11 @@ export function Sidebar({ className }: SidebarProps) {
       name: 'Knowledge',
       href: '/knowledge',
       icon: <BookOpen className="h-5 w-5" />,
+    },
+    {
+      name: 'Journal',
+      href: '/journal',
+      icon: <Book className="h-5 w-5" />,
     },
   ];
 

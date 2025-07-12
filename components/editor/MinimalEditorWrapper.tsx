@@ -15,6 +15,9 @@ interface MinimalEditorWrapperProps {
   className?: string;
   onInternalLinkClick?: (noteId: string) => void;
   onFileUpload?: (url: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => void;
+  // Editor props
+  showTagInput?: boolean;
+  placeholder?: string;
   // Tag input props
   type?: string | null;
   status?: string | null;
@@ -34,6 +37,8 @@ export function MinimalEditorWrapper({
   className,
   onInternalLinkClick,
   onFileUpload,
+  showTagInput = true,
+  placeholder,
   type,
   status,
   tags = [],
@@ -160,6 +165,8 @@ export function MinimalEditorWrapper({
               onStatusChange={onStatusChange}
               onAddTag={onAddTag}
               onRemoveTag={onRemoveTag}
+              showTagInput={showTagInput}
+              placeholder={placeholder}
               className={cn(
                 'h-full w-full max-w-full',
                 'prose dark:prose-invert prose-sm sm:prose-base !max-w-none !px-0 !mx-0 [&>*]:!px-0 !pl-0 !pr-0',

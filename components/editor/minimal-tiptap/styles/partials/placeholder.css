@@ -1,4 +1,18 @@
-.minimal-tiptap-editor .ProseMirror > p.is-editor-empty::before {
+.minimal-tiptap-editor .ProseMirror > .is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  @apply pointer-events-none float-left h-0 text-[var(--mt-secondary)];
+  @apply pointer-events-none absolute top-0 left-0 h-0 text-[var(--mt-secondary)];
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.6;
+}
+
+/* Hide placeholder for empty paragraphs that are not the first child */
+.minimal-tiptap-editor .ProseMirror > p:not(:first-child).is-empty::before {
+  display: none;
+}
+
+/* Ensure the editor has relative positioning for absolute placeholder */
+.minimal-tiptap-editor .ProseMirror {
+  position: relative;
 }

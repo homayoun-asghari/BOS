@@ -38,6 +38,7 @@ export interface MinimalTiptapProps
   onStatusChange?: (status: string) => void
   onAddTag?: (tag: string) => void
   onRemoveTag?: (tag: string) => void
+  showTagInput?: boolean
 }
 
 interface ToolbarProps {
@@ -142,6 +143,7 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   onStatusChange = () => {},
   onAddTag = () => {},
   onRemoveTag = () => {},
+  showTagInput = true,
   ...props 
 }, ref) => {
   const [isHovering, setIsHovering] = React.useState(false);
@@ -287,28 +289,30 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
       {/* Editor Content */}
       <div className="relative flex-1 overflow-y-auto pt-2">
         <div className="min-h-full">
-          {/* Inline Tag Input - Now inside editor content */}
-          <div className="py-2 bg-background" onClick={(e) => e.stopPropagation()}>
-            <InlineTagInput
-              ref={tagInputRef}
-              noteId={noteId}
-              type={type}
-              status={status}
-              tags={tags}
-              onTypeChange={onTypeChange}
-              onStatusChange={onStatusChange}
-              onAddTag={onAddTag}
-              onRemoveTag={onRemoveTag}
-              onEnterPress={() => {
-                if (editor) {
-                  // Focus the editor at the start of the first line
-                  editor.commands.focus('start');
-                  // Move cursor to the beginning of the document
-                  editor.commands.setTextSelection(0);
-                }
-              }}
-            />
-          </div>
+          {/* Inline Tag Input - Conditionally rendered based on showTagInput prop */}
+          {showTagInput !== false && (
+            <div className="py-2 bg-background" onClick={(e) => e.stopPropagation()}>
+              <InlineTagInput
+                ref={tagInputRef}
+                noteId={noteId}
+                type={type}
+                status={status}
+                tags={tags}
+                onTypeChange={onTypeChange}
+                onStatusChange={onStatusChange}
+                onAddTag={onAddTag}
+                onRemoveTag={onRemoveTag}
+                onEnterPress={() => {
+                  if (editor) {
+                    // Focus the editor at the start of the first line
+                    editor.commands.focus('start');
+                    // Move cursor to the beginning of the document
+                    editor.commands.setTextSelection(0);
+                  }
+                }}
+              />
+            </div>
+          )}
           
           <div className={cn(
             "minimal-tiptap-editor min-h-full w-full p-0 m-0",
