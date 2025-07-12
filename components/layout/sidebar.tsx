@@ -1,8 +1,9 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, Book } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Book, MoreHorizontal } from 'lucide-react';
 
 type SidebarItem = {
   name: string;
@@ -16,7 +17,8 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
-  
+
+
   const items: SidebarItem[] = [
     {
       name: 'Roadmap',
@@ -35,62 +37,74 @@ export function Sidebar({ className }: SidebarProps) {
     },
   ];
 
-  // Navigation is handled by Next.js Link component
-
   return (
     <>
-      {/* Desktop Sidebar */}
-      <div className={`hidden md:flex h-full ${className || ''}`} style={{ position: 'relative', zIndex: 1000 }}>
-        <div className="flex w-64 flex-col border-r border-border h-full bg-background relative z-50">
-          <div className="flex flex-1 flex-col h-full">
-            <div className="flex-1 flex flex-col overflow-y-auto pt-5">
-              <div className="flex-1 space-y-1 px-3">
-                {items.map((item) => {
-                  const isActive = pathname === item.href;
-                  return (
-                    <div key={item.name} className="relative">
-                      <Link
-                        href={item.href}
-                        className={`group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
-                        }`}
-                      >
-                        <span className="mr-3">{item.icon}</span>
-                        {item.name}
-                      </Link>
+      {/* Desktop Sidebar - Hidden on medium screens, shown on large screens */}
+      <div className={`hidden lg:block group fixed left-4 top-1/2 -translate-y-1/2 z-50 transition-all duration-300 hover:w-48 ${className || ''}`}>
+        <div className="bg-background/80 backdrop-blur-lg rounded-2xl p-2 shadow-lg border border-border/50 transition-all duration-300 group-hover:px-4">
+          <nav className="flex flex-col space-y-1">
+            {items.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={`desktop-${item.name}`}
+                  href={item.href}
+                  className={`flex items-center p-2 rounded-xl transition-all duration-300 overflow-hidden ${
+                    isActive 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
+                  } justify-center group-hover:justify-start group-hover:pr-4`}
+                >
+                  <div className="flex items-center justify-center w-8 h-8">
+                    <div className="h-5 w-5 transition-transform duration-300 group-hover:scale-110">
+                      {item.icon}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                  </div>
+                  <span className={`whitespace-nowrap text-sm font-medium transition-all duration-300 ml-0 group-hover:ml-3 w-0 overflow-hidden group-hover:w-auto opacity-0 group-hover:opacity-100 ${
+                    isActive ? 'opacity-100' : ''
+                  }`}>
+                    {item.name}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation - Floating Capsule */}
-      <div className="fixed z-50 w-full max-w-xs -translate-x-1/2 bg-background/95 backdrop-blur-sm border border-border rounded-full bottom-4 left-1/2 dark:bg-card/80 shadow-lg md:hidden">
-        <div className="grid h-16 grid-cols-2 mx-auto">
-          {items.map((item, index) => {
-            const isActive = pathname === item.href;
-            const isFirst = index === 0;
-            
-            return (
+      {/* Bottom Navigation - Shown on medium and small screens */}
+      <div className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[18rem] md:w-[22rem]">
+        <div className="bg-background/80 backdrop-blur-lg rounded-2xl p-2 shadow-lg border border-border/50 w-full">
+          <nav className="flex items-center justify-between">
+            {items.map((item) => (
               <Link
-                key={item.name}
+                key={`mobile-${item.name}`}
                 href={item.href}
-                className={`inline-flex flex-col items-center justify-center hover:bg-accent/30 transition-colors duration-200 ${
-                  isFirst ? 'rounded-l-full' : 'rounded-r-full'
-                } ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+                className={`p-2 rounded-xl transition-colors duration-200 ${
+                  pathname === item.href 
+                    ? 'bg-primary/10 text-primary' 
+                    : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
+                }`}
               >
-                <span className="h-5 w-5 flex items-center justify-center">
+                <div className="h-6 w-6 flex items-center justify-center">
                   {item.icon}
-                </span>
-                <span className="text-[10px] mt-0.5">{item.name}</span>
+                </div>
               </Link>
-            );
-          })}
+            ))}
+            <Link
+              href="/right-panel"
+              className={`p-2 rounded-xl transition-colors duration-200 ${
+                pathname === '/right-panel'
+                  ? 'bg-primary/10 text-primary' 
+                  : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
+              }`}
+              aria-label="More options"
+            >
+              <div className="h-6 w-6 flex items-center justify-center">
+                <MoreHorizontal className="h-5 w-5" />
+              </div>
+            </Link>
+          </nav>
         </div>
       </div>
     </>

@@ -11,6 +11,7 @@ interface NavbarProps {
   onCodeAccordionChange: (open: boolean) => void;
   onOpenSettings: () => void;
   onOpenHelp: () => void;
+  fullWidth?: boolean;
 }
 
 export function Navbar({
@@ -20,6 +21,7 @@ export function Navbar({
   onCodeAccordionChange,
   onOpenSettings,
   onOpenHelp,
+  fullWidth = false,
 }: NavbarProps) {
   const handleUserMenuOpenChange = (open: boolean) => {
     if (open) {
@@ -28,9 +30,9 @@ export function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
-      <div className="relative">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
+    <header className={`sticky top-0 z-30 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 ${fullWidth ? 'pl-16' : ''}`}>
+      <div className={fullWidth ? 'w-full' : 'relative lg:max-w-[calc(100%-375px)]'}>
+        <div className={`w-full px-4 md:px-6 transition-all duration-300 ${fullWidth ? '' : 'lg:pl-20 group-has-[.sidebar:hover]:lg:pl-[10rem]'}`}>
           <div className="flex h-16 items-center justify-between">
             <div className="flex-1 flex items-center min-w-0 relative">
               <div className="w-full">

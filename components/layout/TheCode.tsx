@@ -334,7 +334,7 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
   };
 
   return (
-    <div className="w-full" ref={dropdownRef}>
+    <div className="w-full px-4" ref={dropdownRef}>
       <div className="relative w-full">
         <button
           onClick={() => handleOpenChange(!isOpen)}
@@ -359,19 +359,20 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
             </AnimatePresence>
           </div>
           <span className="sr-only">{isOpen ? 'Collapse' : 'Expand'} personal codes</span>
-          <ChevronDown 
-            className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''} flex-shrink-0`}
-            aria-hidden="false"
-          />
-        </button>
-        
-        {isOpen && (
-          <div 
-            className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg overflow-hidden p-0.5 px-1.5"
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="max-h-60 overflow-y-auto ">
+            <ChevronDown 
+              className={`h-4 w-4 text-muted-foreground/80 transition-transform ${isOpen ? 'rotate-180' : ''} flex-shrink-0`}
+              aria-hidden="false"
+            />
+          </button>
+          
+          {isOpen && (
+            <div 
+              className="absolute z-10 w-full mt-1 bg-background border border-border rounded-lg shadow-lg overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+              style={{ left: '0', right: '0' }}
+            >
+            <div className="max-h-60 overflow-y-auto p-1">
               {isLoading ? (
                 <div className="text-center py-4 text-sm text-muted-foreground">Loading...</div>
               ) : codes.length === 0 ? (

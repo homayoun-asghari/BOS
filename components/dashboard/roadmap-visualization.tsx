@@ -5,6 +5,7 @@ import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
 import { BackupRoadmapTimeline } from './BackupRoadmapTimeline';
+import { RoadmapPostsSheet } from './roadmap-posts-sheet';
 import { toast } from 'sonner';
 
 export interface TaskType {
@@ -81,20 +82,9 @@ export function RoadmapVisualization() {
 
 
 
-  if (loading && !localRoadmap) {
-    return <div className="p-4 text-foreground/80">Loading roadmap...</div>;
-  }
-
-  if (error) {
-    return <div className="p-4 text-destructive">{error}</div>;
-  }
-
-  if (!localRoadmap) {
-    return (
-      <div className="flex h-64 items-center justify-center text-foreground/60">
-        No roadmap found. Create one to get started!
-      </div>
-    );
+  // Show nothing while loading or if there's an error
+  if (loading || error || !localRoadmap) {
+    return null;
   }
 
   // Calculate progress based on milestones
@@ -176,8 +166,11 @@ export function RoadmapVisualization() {
   
 
 
+  // Check if there are no milestones
+  const hasNoMilestones = !localRoadmap?.milestones || localRoadmap.milestones.length === 0;
+
   return (
-    <div className="w-full">
+    <div className="w-full max-w-full lg:pr-[375px] mx-auto relative">
       <RoadmapHeader
         roadmap={localRoadmap}
         progress={progress}
@@ -190,6 +183,21 @@ export function RoadmapVisualization() {
         onDeleteConfirm={handleDeleteRoadmap}
         onDeleteCancel={() => setIsDeleteDialogOpen(false)}
       />
+
+      {hasNoMilestones && (
+        <div className="mt-8 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 p-12 text-center">
+          <h3 className="text-lg font-medium text-muted-foreground">No roadmap created yet</h3>
+          <p className="text-sm text-muted-foreground mt-2">
+            Get started by creating your first milestone
+          </p>
+          <button
+            onClick={() => setIsEditModalOpen(true)}
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Create Roadmap
+          </button>
+        </div>
+      )}
 
       {/* Edit Roadmap Modal */}
       {localRoadmap && isEditModalOpen && (
@@ -208,17 +216,17 @@ export function RoadmapVisualization() {
       )}
       
       {/* Roadmap Content */}
-      <div className="mt-6">
-        <BackupRoadmapTimeline 
-          milestones={localRoadmap.milestones}
-          onTaskStatusChange={handleTaskStatusChange}
-        />
-        {/* Uncomment the line below to switch back to the original timeline */}
-        {/* <EnhancedRoadmapTimeline 
-          milestones={localRoadmap.milestones}
-          onTaskStatusChange={handleTaskStatusChange}
-        /> */}
-      </div>
+      {!hasNoMilestones && (
+        <div className="mt-6 pb-24">
+          <BackupRoadmapTimeline 
+            milestones={localRoadmap.milestones}
+            onTaskStatusChange={handleTaskStatusChange}
+          />
+        </div>
+      )}
+      
+      {/* Roadmap Posts Sheet */}
+      <RoadmapPostsSheet />
     </div>
   );
 }

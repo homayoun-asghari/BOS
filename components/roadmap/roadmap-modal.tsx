@@ -5,6 +5,7 @@ import { useUser } from '@/hooks/useUser';
 import { supabase } from '@/lib/supabase';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { GoalSection } from './GoalSection';
 import { MilestoneItem } from './MilestoneItem';
@@ -217,10 +218,9 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         return `${year}-${month}-${day}`;
       };
 
-      // Check if we're updating an existing roadmap or creating a new one
-      let roadmapId = roadmap?.id;
-      
-      if (roadmapId) {
+      let finalRoadmapId = roadmap?.id;
+
+      if (roadmap?.id) {
         // Update existing roadmap
         const { error: roadmapError } = await supabase
           .from('roadmaps')
@@ -230,7 +230,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             end_date: formatDateForDB(goalEndDate),
             updated_at: new Date().toISOString()
           })
-          .eq('id', roadmapId);
+          .eq('id', roadmap.id);
 
         if (roadmapError) throw roadmapError;
 
@@ -238,7 +238,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         const { error: deleteError } = await supabase
           .from('milestones')
           .delete()
-          .eq('roadmap_id', roadmapId);
+          .eq('roadmap_id', roadmap.id);
 
         if (deleteError) throw deleteError;
       } else {
@@ -257,7 +257,11 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
           .single();
 
         if (roadmapError) throw roadmapError;
-        roadmapId = newRoadmap.id;
+        finalRoadmapId = newRoadmap.id;
+      }
+
+      if (!finalRoadmapId) {
+        throw new Error('Failed to create or update roadmap');
       }
 
       // Process all milestones
@@ -265,7 +269,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         const { data: savedMilestone, error: milestoneError } = await supabase
           .from('milestones')
           .insert({
-            roadmap_id: roadmapId,
+            roadmap_id: finalRoadmapId,
             title: milestone.title || 'Untitled Milestone',
             start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
             end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
@@ -298,6 +302,21 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       onSave?.();
       onOpenChange(false);
     } catch (error) {
+      console.error('Error saving roadmap:', error);
+      
+      // Log additional error details if available
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+      } else if (error) {
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      }
+      
+      // Show a more descriptive error message to the user
+      toast.error('Failed to save roadmap. Please check the console for details.');
       console.error('Error saving roadmap:', error);
     }
   }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange, roadmap?.id, onSave]);

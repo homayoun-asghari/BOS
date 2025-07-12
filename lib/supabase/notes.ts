@@ -76,7 +76,7 @@ export async function toggleNotePin(noteId: string, pinned: boolean) {
   const { error } = await supabase
     .from('notes')
     .update({ 
-      pinned,
+      is_pinned: pinned,
       updated_at: new Date().toISOString() 
     })
     .eq('id', noteId)

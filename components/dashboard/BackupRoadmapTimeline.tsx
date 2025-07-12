@@ -167,7 +167,7 @@ export function BackupRoadmapTimeline({
 
   return (
     <div className="p-4">
-      <ol className="relative border-s border-gray-200 dark:border-gray-600 space-y-8">
+      <ol className="relative border-l-2 border-gray-200 dark:border-gray-600 space-y-8 ml-2">
         {milestones
           .sort((a, b) => a.order_index - b.order_index)
           .map((milestone) => {
@@ -192,8 +192,8 @@ export function BackupRoadmapTimeline({
             }) : [];
             
             return (
-              <li key={`milestone-${milestone.id}`} className="ms-4">
-                <div className="absolute -start-2 -translate-y-1/2">
+              <li key={`milestone-${milestone.id}`} className="ml-4">
+                <div className="absolute -left-2 -translate-y-1/2">
                   <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
                 </div>
                 <div className="flex flex-col w-full">
@@ -244,11 +244,11 @@ export function BackupRoadmapTimeline({
                       <div 
                         key={`task-${task.id}`}
                         className={cn(
-                          "relative pl-4 py-2 transition-all duration-1000 ease-in-out",
+                          "relative pl-6 transition-all duration-1000 ease-in-out py-2",
                           pulsingTaskId === task.id && isPulsing && "opacity-70"
                         )}
                       >
-                        <div className="absolute left-0 top-1/2 w-2 h-2 bg-gray-300 rounded-full -translate-y-1/2"></div>
+                        <div className="absolute -left-[2.36rem] top-1/2 w-3 h-3 bg-gray-300 rounded-full -translate-y-1/2 border-2 border-white dark:border-gray-800"></div>
                         <div className="flex items-center">
                           <button
                             onClick={() => handleTaskStatusChange(task.id, task.status)}

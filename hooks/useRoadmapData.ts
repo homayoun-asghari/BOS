@@ -122,14 +122,21 @@ export const useRoadmapData = () => {
         .from('roadmaps')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
-      if (roadmapError) throw roadmapError;
-      if (!roadmapData) {
-        safeSetRoadmap(null);
+      // If no roadmap exists for this user, initialize empty state
+      if (!roadmapData || roadmapError?.code === 'PGRST116') {
+        safeSetRoadmap({
+          ...EMPTY_ROADMAP,
+          user_id: user.id,
+          id: '',
+          milestones: []
+        });
         setLoading(false);
         return;
       }
+      
+      if (roadmapError) throw roadmapError;
 
       // Fetch milestones with tasks
       const { data: milestonesData, error: milestonesError } = await supabase
@@ -170,10 +177,11 @@ export const useRoadmapData = () => {
       if (errorDetails.code === 'PGRST116') {
         // No roadmap found for this user - this is an expected case
         console.log('No roadmap found for user - initializing empty state');
+        // Initialize empty roadmap without an ID - let the database generate it
         safeSetRoadmap({
           ...EMPTY_ROADMAP,
           user_id: user?.id || '',
-          id: 'new',
+          id: '', // Empty string - will be set by the database
           milestones: []
         });
         return;

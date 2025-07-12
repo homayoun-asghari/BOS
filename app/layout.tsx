@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import LayoutWrapper from './LayoutWrapper';
 import { Toaster } from 'sonner';
+import { MobileRightPanelProvider } from '@/context/mobile-right-panel-context';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,9 +30,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <ThemeProvider>
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
+          <MobileRightPanelProvider>
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+          </MobileRightPanelProvider>
           <Toaster position="top-right" richColors />
         </ThemeProvider>
       </body>

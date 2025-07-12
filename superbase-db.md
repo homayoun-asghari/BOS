@@ -453,3 +453,240 @@ BEGIN
   AND day_index = day_of_year;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Posts table
+CREATE TABLE public.posts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  media_urls jsonb DEFAULT '[]'::jsonb, -- Array of media URLs
+  like_count integer DEFAULT 0,
+  is_edited boolean DEFAULT false,
+  roadmap_id uuid REFERENCES public.roadmaps(id) ON DELETE SET NULL,
+  milestone_id uuid REFERENCES public.milestones(id) ON DELETE SET NULL,
+  task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  deleted_at timestamptz
+);
+
+-- Likes table
+CREATE TABLE public.post_likes (
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, post_id)
+);
+
+-- Mentions
+CREATE TABLE public.post_mentions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id uuid NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  mentioned_user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  mentioned_note_id uuid REFERENCES public.notes(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  deleted_at timestamptz
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Chat rooms
+CREATE TABLE public.chat_rooms (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  is_group boolean DEFAULT false,
+  name text,
+  media_urls jsonb DEFAULT '[]'::jsonb, -- For group avatars/media
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  deleted_at timestamptz
+);
+
+-- Chat participants
+CREATE TABLE public.chat_participants (
+  room_id uuid REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  last_read_at timestamptz,
+  joined_at timestamptz DEFAULT now(),
+  left_at timestamptz,
+  PRIMARY KEY (room_id, user_id)
+);
+
+-- Chat messages
+CREATE TABLE public.chat_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id uuid NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  media_urls jsonb DEFAULT '[]'::jsonb,
+  is_read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  deleted_at timestamptz
+);
+
+
+
+
+
+
+-- Posts
+CREATE INDEX idx_posts_user_id ON public.posts(user_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_posts_created_at ON public.posts(created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_post_mentions ON public.post_mentions(post_id) WHERE deleted_at IS NULL;
+
+-- Messages
+CREATE INDEX idx_messages_room ON public.chat_messages(room_id, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_unread_messages ON public.chat_messages(room_id, is_read) WHERE is_read = false AND deleted_at IS NULL;
+CREATE INDEX idx_chat_participants_user ON public.chat_participants(user_id) WHERE left_at IS NULL;
+
+
+
+
+
+
+
+
+
+-- Enable RLS
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.post_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.post_mentions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Posts policies
+CREATE POLICY "Users can view non-deleted posts" 
+ON public.posts FOR SELECT 
+USING (deleted_at IS NULL);
+
+CREATE POLICY "Users can manage own posts" 
+ON public.posts 
+FOR ALL USING (auth.uid() = user_id AND deleted_at IS NULL);
+
+-- Chat room policies
+CREATE POLICY "Users can view joined rooms" 
+ON public.chat_rooms FOR SELECT 
+USING (EXISTS (
+  SELECT 1 FROM public.chat_participants 
+  WHERE chat_participants.room_id = chat_rooms.id 
+  AND chat_participants.user_id = auth.uid()
+  AND chat_participants.left_at IS NULL
+));
+
+-- Message policies
+CREATE POLICY "Users can view room messages" 
+ON public.chat_messages FOR SELECT 
+USING (
+  deleted_at IS NULL AND
+  EXISTS (
+    SELECT 1 FROM public.chat_participants 
+    WHERE chat_participants.room_id = chat_messages.room_id 
+    AND chat_participants.user_id = auth.uid()
+    AND chat_participants.left_at IS NULL
+  )
+);
+
+
+
+
+
+
+
+
+
+
+
+-- Update updated_at on posts
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW; 
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_posts_updated_at
+BEFORE UPDATE ON public.posts
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Update like count
+CREATE OR REPLACE FUNCTION update_post_like_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.posts 
+    SET like_count = like_count + 1
+    WHERE id = NEW.post_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.posts 
+    SET like_count = GREATEST(0, like_count - 1)
+    WHERE id = OLD.post_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_like_count
+AFTER INSERT OR DELETE ON public.post_likes
+FOR EACH ROW EXECUTE FUNCTION update_post_like_count();
+
+
+
+
+
+
+
+
+
+-- Enable realtime for posts
+ALTER PUBLICATION supabase_realtime ADD TABLE public.posts;
+
+-- Enable realtime for chat messages
+ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+
+-- Add realtime for specific events
+CREATE OR REPLACE FUNCTION notify_new_message()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_notify(
+    'new_message', 
+    json_build_object(
+      'room_id', NEW.room_id,
+      'message_id', NEW.id
+    )::text
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_new_message
+AFTER INSERT ON public.chat_messages
+FOR EACH ROW EXECUTE FUNCTION notify_new_message();
