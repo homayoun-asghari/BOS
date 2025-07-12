@@ -72,89 +72,128 @@ export default function JournalPage() {
 
   // Fetch journal entry for the selected date using the database function
   const fetchJournalEntry = useCallback(async (date: Date) => {
+    console.log('fetchJournalEntry called with date:', date);
     try {
       setIsLoading(true);
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (!userId) return;
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      console.log('User auth data:', { userData, userError });
+      
+      const userId = userData?.user?.id;
+      if (!userId) {
+        console.error('No user ID found');
+        return;
+      }
 
       // Ensure we have a valid date
       if (!(date instanceof Date) || isNaN(date.getTime())) {
+        console.log('Invalid date provided, falling back to current date');
         date = new Date();
       }
+      
+      console.log('Using date for query:', date);
 
       // Format date as YYYY-MM-DD in user's local timezone
-      const formattedDate = date.toISOString().split('T')[0];
-      console.log('Fetching journal for date:', formattedDate);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // getMonth() is zero-based
+      const day = date.getDate();
+      const formattedDate = `${year}-${pad(month)}-${pad(day)}`;
+      
+      // Check if the selected date is today
+      const today = new Date();
+      const isToday = date.getDate() === today.getDate() && 
+                     date.getMonth() === today.getMonth() && 
+                     date.getFullYear() === today.getFullYear();
+      
+      console.log('Fetching journal for date:', {
+        originalDate: date,
+        year,
+        month,
+        day,
+        formattedDate,
+        isToday,
+        dateString: date.toDateString(),
+        todayString: today.toDateString(),
+        timezoneOffset: date.getTimezoneOffset()
+      });
 
       // Get the journal entry using the database function
+      console.log('Calling get_journal_by_date with params:', {
+        p_user_id: userId,
+        p_date: formattedDate
+      });
+      
       const { data, error } = await supabase
         .rpc('get_journal_by_date', {
           p_user_id: userId,
           p_date: formattedDate
         })
         .single();
+        
+      console.log('Database response:', { data, error });
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is 'no rows returned'
         console.error('Error fetching journal:', error);
         throw error;
       }
 
+      const dateHeader = formatDateHeader(date);
+      
       if (data) {
         console.log('Found existing journal entry:', data);
-        
-        // Ensure we have valid content
         const entryData = data as JournalEntry;
-        const content: JournalContent = entryData.content || { type: 'doc', content: [] };
-        const contentArray = Array.isArray(content.content) ? content.content : [];
         
-        // Check if the content already has the date header
-        const dateHeader = formatDateHeader(date);
-        const hasDateHeader = contentArray.length > 0 && 
-                            contentArray[0]?.type === 'heading' && 
-                            contentArray[0]?.content?.[0]?.text === dateHeader;
-        
-        if (hasDateHeader) {
-          // If the header is already there, use the content as is
-          setJournal(entryData);
-        } else {
-          // If the header is missing, create a new content with the header
+        // Always create fresh content for the selected date
+        if (isToday) {
+          console.log('Creating fresh content for today');
           const newContent = createInitialContent(date);
+          const updatedJournal: JournalEntry = {
+            ...entryData,
+            content: newContent
+          };
+          setJournal(updatedJournal);
+        } else {
+          // For past dates, use the existing content but ensure it has the correct date header
+          const content: JournalContent = entryData.content || { type: 'doc', content: [] };
+          const contentArray = Array.isArray(content.content) ? content.content : [];
           
-          // If there's existing content, append it after the header
-          if (contentArray.length > 0) {
-            // Create a new content object with the date header and existing content
-            const updatedContent: JournalContent = {
-              ...content,
-              content: [
-                ...(newContent.content || []),
-                ...contentArray
-              ]
-            };
-            
-            // Update the journal entry with the new content
-            const updatedJournal: JournalEntry = {
-              ...entryData,
-              content: updatedContent
-            };
-            
-            console.log('Updated journal entry with date header:', updatedJournal);
-            setJournal(updatedJournal);
+          // Check if the content already has the correct date header
+          const hasDateHeader = contentArray.length > 0 && 
+                              contentArray[0]?.type === 'heading' && 
+                              contentArray[0]?.content?.[0]?.text === dateHeader;
+          
+          if (hasDateHeader) {
+            setJournal(entryData);
           } else {
-            // If no existing content, just use the new content with the header
+            // If the header is missing or incorrect, create a new content with the correct header
+            const newContent = createInitialContent(date);
+            
+            // If there's existing content, append it after the header
+            if (contentArray.length > 0) {
+              // Skip the first element if it was a different header
+              const contentToAppend = contentArray[0]?.type === 'heading'
+                ? contentArray.slice(1)
+                : contentArray;
+                
+              newContent.content = [
+                ...(newContent.content || []),
+                ...contentToAppend
+              ];
+            }
+            
             const updatedJournal: JournalEntry = {
               ...entryData,
               content: newContent
             };
             
-            console.log('Updated journal entry with new date header:', updatedJournal);
+            console.log('Updated journal entry with correct date header:', updatedJournal);
             setJournal(updatedJournal);
           }
         }
       } else {
         console.log('No existing journal entry, creating new one');
-        // If no entry exists, create a new one with the date header
+        // Create a new entry with the date header
         const newContent = createInitialContent(date);
-        console.log('New content created:', newContent);
         
         const newJournal = {
           id: '',
@@ -162,7 +201,8 @@ export default function JournalPage() {
           content: newContent,
           day_index: getDayOfYear(date)
         };
-        console.log('New journal entry to be created:', newJournal);
+        
+        console.log('New journal entry created:', newJournal);
         setJournal(newJournal);
       }
     } catch (error) {
@@ -345,10 +385,18 @@ export default function JournalPage() {
 
   // Set up non-scrollable page and fetch entry when selected date changes
   useEffect(() => {
+    console.log('useEffect triggered with selectedDate:', selectedDate);
+    
     // Prevent page scrolling
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     
+    // Reset editor ready state when date changes
+    console.log('Resetting editor ready state');
+    setIsEditorReady(false);
+    
+    // Fetch the journal entry for the selected date
+    console.log('Calling fetchJournalEntry with date:', selectedDate);
     fetchJournalEntry(selectedDate);
     
     // Cleanup function to re-enable scrolling when component unmounts
@@ -360,7 +408,9 @@ export default function JournalPage() {
 
   // Handle date change
   const handleDateChange = (date: Date) => {
-    // The content is already saved via auto-save when it changes
+    console.log('Date changed to:', date);
+    console.log('Current selectedDate before update:', selectedDate);
+    console.log('New date to set:', date);
     setSelectedDate(date);
   };
 
@@ -396,13 +446,16 @@ export default function JournalPage() {
           <div className="w-full px-6 py-4 h-full">
             <div className="w-full h-full">
               <div className="h-full w-full relative">
-                <MinimalEditorWrapper
-                  value={journal?.content ? JSON.stringify(journal.content) : '{"type":"doc","content":[{"type":"paragraph"}]}'}
-                  onChange={handleEditorChange}
-                  className="h-full w-full"
-                  showTagInput={false}
-                  placeholder="I am future YOU, talk to me ..."
-                />
+                {journal && (
+                  <MinimalEditorWrapper
+                    key={`${journal.id}-${selectedDate.toISOString().split('T')[0]}`}
+                    value={JSON.stringify(journal.content)}
+                    onChange={handleEditorChange}
+                    className="h-full w-full"
+                    showTagInput={false}
+                    placeholder="I am future YOU, talk to me ..."
+                  />
+                )}
                 {!isEditorReady && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/50">
                     <div className="animate-pulse">Loading editor...</div>
