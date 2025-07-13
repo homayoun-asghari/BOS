@@ -10,16 +10,29 @@ export function RightPanelProvider({
   defaultView = 'stats' // Default to showing stats
 }: RightPanelProviderProps) {
   const [currentView, setCurrentView] = useState<RightPanelView>(defaultView);
+  const [isOpen, setIsOpen] = useState(false);
 
   const openPanel = (view: RightPanelView) => {
     setCurrentView(view);
+    setIsOpen(true);
+  };
+
+  const closePanel = () => {
+    setIsOpen(false);
+  };
+
+  const togglePanel = () => {
+    setIsOpen(prev => !prev);
   };
 
   return (
     <RightPanelContext.Provider
       value={{
         currentView,
+        isOpen,
         openPanel,
+        closePanel,
+        togglePanel
       }}
     >
       {children}

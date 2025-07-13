@@ -58,7 +58,7 @@ export function AnimatedHero() {
       </motion.div>
       
       <motion.div 
-        className="mt-16 group"
+        className="mt-16 group relative"
         initial={{ opacity: 0, y: 20 }}
         animate={{ 
           opacity: mounted ? 1 : 0, 
@@ -71,9 +71,12 @@ export function AnimatedHero() {
           } 
         }}
       >
+        <div className="absolute inset-0 rounded-full bg-red-500 blur-md animate-pulse opacity-90 scale-110 -z-10" style={{
+          animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+        }}></div>
         <Button 
           size="lg" 
-          className="text-2xl px-10 py-7 rounded-full bg-foreground text-background hover:bg-primary hover:scale-105 hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 transform-gpu group-hover:rotate-1"
+          className="relative text-2xl px-10 py-7 rounded-full bg-foreground text-background hover:bg-primary hover:scale-105 hover:shadow-lg hover:shadow-primary/20 transition-all duration-300 transform-gpu group-hover:rotate-1 border-4 border-red-500/60"
           onClick={() => setIsAuthModalOpen(true)}
         >
           <span className="relative">
@@ -90,6 +93,16 @@ export function AnimatedHero() {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
+        }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 0.9;
+            transform: scale(1.1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(1.15);
+          }
         }
         .animate-gradient {
           animation: gradient 8s ease infinite;

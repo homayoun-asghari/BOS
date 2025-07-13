@@ -143,15 +143,10 @@ export default function JournalPage() {
         console.log('Found existing journal entry:', data);
         const entryData = data as JournalEntry;
         
-        // Always create fresh content for the selected date
+        // Use existing content for today's date
         if (isToday) {
-          console.log('Creating fresh content for today');
-          const newContent = createInitialContent(date);
-          const updatedJournal: JournalEntry = {
-            ...entryData,
-            content: newContent
-          };
-          setJournal(updatedJournal);
+          console.log('Using existing content for today');
+          setJournal(entryData);
         } else {
           // For past dates, use the existing content but ensure it has the correct date header
           const content: JournalContent = entryData.content || { type: 'doc', content: [] };
@@ -353,21 +348,59 @@ export default function JournalPage() {
       const parsedContent = JSON.parse(content) as JournalContent;
       
       // Update the local state with the new content
-      setJournal(prev => ({
-        ...prev!,
-        content: parsedContent
-      }));
+      const updatedJournal = {
+        ...journal,
+        content: parsedContent,
+        updated_at: new Date().toISOString()
+      };
       
-      // Auto-save after a delay
-      const timer = setTimeout(() => {
-        saveJournalEntry();
+      setJournal(updatedJournal);
+      
+      // Auto-save after a short delay
+      const timer = setTimeout(async () => {
+        try {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          if (!userId) return;
+
+          if (updatedJournal.id) {
+            // Update existing entry
+            const { error } = await supabase
+              .from('journals')
+              .update({ 
+                content: updatedJournal.content,
+                updated_at: updatedJournal.updated_at
+              })
+              .eq('id', updatedJournal.id);
+
+            if (error) throw error;
+          } else {
+            // Create new entry
+            const { data: newJournal, error } = await supabase
+              .from('journals')
+              .insert({
+                user_id: userId,
+                title: selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+                content: updatedJournal.content,
+                day_index: getDayOfYear(selectedDate),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+            if (error) throw error;
+            setJournal(newJournal as JournalEntry);
+          }
+        } catch (error) {
+          console.error('Error saving journal entry:', error);
+        }
       }, 1000);
       
       return () => clearTimeout(timer);
     } catch (error) {
       console.error('Error parsing editor content:', error);
     }
-  }, [journal, saveJournalEntry]);
+  }, [journal, selectedDate, supabase]);
   
   // Set up editor ready state
   useEffect(() => {

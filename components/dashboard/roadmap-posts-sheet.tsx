@@ -194,7 +194,7 @@ export function RoadmapPostsSheet() {
       <motion.div
         ref={sheetRef}
         className={cn(
-          'fixed bottom-0 left-[6rem] right-[375px] z-[9999]', // Default layout
+          'fixed bottom-0 left-[6rem] right-[500px] z-[9999]', // Default layout
           'max-[1023px]:left-0 max-[1023px]:right-0', // Full width at 1023px and below
           'bg-background/95 backdrop-blur-lg border-t border-border/50 shadow-2xl',
           'rounded-t-2xl overflow-hidden transition-all duration-300',

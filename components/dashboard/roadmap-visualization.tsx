@@ -170,7 +170,7 @@ export function RoadmapVisualization() {
   const hasNoMilestones = !localRoadmap?.milestones || localRoadmap.milestones.length === 0;
 
   return (
-    <div className="w-full max-w-full lg:pr-[375px] mx-auto relative">
+    <div className="w-full max-w-full lg:pr-[500px] mx-auto relative">
       <RoadmapHeader
         roadmap={localRoadmap}
         progress={progress}
