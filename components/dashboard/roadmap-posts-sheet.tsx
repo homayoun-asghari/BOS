@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { PostCard } from '@/components/ui/post-card';
+import { PostCard } from '@/components/posts/display/TextDisplay';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Post {

@@ -1,0 +1,68 @@
+.search-input {
+  /* Prevent zooming */
+  -webkit-text-size-adjust: 100%;
+  text-zoom: 100%;
+  zoom: 1;
+
+  /* Prevent keyboard zoom */
+  -webkit-keyboard-display: compact;
+  -webkit-text-size-adjust: none;
+
+  /* Prevent form zoom */
+  resize: none;
+  overflow: hidden;
+
+  /* Prevent focus zoom */
+  outline: none;
+  outline-width: 0;
+  outline-style: none;
+  outline-color: transparent;
+
+  /* Prevent transform zoom */
+  -webkit-transform: none;
+  transform: none;
+  transform-origin: 0 0;
+
+  /* Additional zoom prevention */
+  -webkit-zoom: 1;
+  -moz-zoom: 1;
+  -ms-zoom: 1;
+  -o-zoom: 1;
+
+  /* Prevent scaling */
+  -webkit-transform: scale(1);
+  -moz-transform: scale(1);
+  -ms-transform: scale(1);
+  -o-transform: scale(1);
+  transform: scale(1);
+
+  /* Prevent keyboard scaling */
+  -webkit-keyboard-display: compact;
+  -webkit-text-size-adjust: none;
+
+  /* Prevent input scaling */
+  -webkit-appearance: textfield;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Prevent tap highlight color */
+  -webkit-tap-highlight-color: transparent;
+
+  /* Prevent user select */
+  -webkit-user-select: text;
+  user-select: text;
+
+  /* Prevent modify */
+  -webkit-user-modify: read-write-plaintext-only;
+
+  /* Prevent touch callout */
+  -webkit-touch-callout: none;
+
+  /* Prevent overflow scrolling */
+  -webkit-overflow-scrolling: touch;
+
+  /* Force hardware acceleration */
+  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  -webkit-perspective: 1000;
+}

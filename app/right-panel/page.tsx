@@ -4,8 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ChatView } from "@/components/chat/chat-view";
-import { Search, X, Plus, MessageSquare, FileText } from "lucide-react";
+import { Search, X, Plus } from "lucide-react";
+
 import { CreatePostModal } from "@/components/posts/CreatePostModal";
+import { dummyPosts } from "@/components/posts/dummy-posts";
+import { TextDisplay } from "@/components/posts/display/TextDisplay";
+import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
+import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 
 type RightPanelViewType = 'chat' | 'posts' | 'stats';
 
@@ -40,22 +45,21 @@ function useResponsiveNavigation() {
 
 function RightPanelContent() {
   const router = useRouter();
-  const [currentView, setCurrentView] = useState<RightPanelViewType>('stats');
+  const [currentView, setCurrentView] = useState<RightPanelViewType>('posts');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFabOpen, setIsFabOpen] = useState(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isInActiveChat, setIsInActiveChat] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const fabRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { isMobile } = useResponsiveNavigation();
   useAuth();
 
-  // Close FAB when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (fabRef.current && !fabRef.current.contains(event.target as Node)) {
-        setIsFabOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
       }
     };
 
@@ -64,6 +68,8 @@ function RightPanelContent() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+
 
   // Focus the search input when search is opened
   useEffect(() => {
@@ -94,22 +100,79 @@ function RightPanelContent() {
         </div>
       );
     }
+
+    if (currentView === 'posts') {
+      return (
+        <div className="h-full overflow-y-auto p-4 space-y-4">
+          {dummyPosts.map((post) => {
+            const timestamp = post.timestamp instanceof Date ? post.timestamp : new Date(post.timestamp);
+            switch (post.type) {
+              case 'text':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <TextDisplay
+                      id={post.id}
+                      content={post.content}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              case 'image':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <ImageDisplay
+                      id={post.id}
+                      imageUrl={post.imageUrl}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              case 'video':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <VideoDisplay
+                      id={post.id}
+                      videoUrl={post.videoUrl}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })}
+          {/* End of posts indicator */}
+          <div className="h-64 flex items-center justify-center bg-background/50 border-t border-border/20">
+            <p className="text-muted-foreground text-sm">You've reached the end of the posts</p>
+          </div>
+        </div>
+      );
+    }
     
     if (currentView === 'chat') {
       return (
         <ChatView 
           className="h-full" 
-          onActiveConversationChange={(isActive) => setIsInActiveChat(isActive)}
+
         />
-      );
-    }
-    
-    if (currentView === 'posts') {
-      return (
-        <div className="h-full overflow-y-auto p-4">
-          <h2 className="text-2xl font-bold mb-4">Posts</h2>
-          <p>Your posts will appear here.</p>
-        </div>
       );
     }
     
@@ -170,53 +233,53 @@ function RightPanelContent() {
       
       {/* Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {/* FAB - Hidden in active chat but shown in conversation list */}
-        {(currentView !== 'chat' || !isInActiveChat) && (
-          <div ref={fabRef} className="fixed bottom-6 right-4 z-30 flex flex-col items-end gap-2">
-            {/* FAB Options */}
-            <div className={`flex flex-col items-end gap-2 transition-all duration-200 ${isFabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-              <button 
-                onClick={() => {
-                  setIsFabOpen(false);
-                  setCurrentView('chat');
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span>New Message</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setIsFabOpen(false);
-                  setIsPostModalOpen(true);
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-foreground text-background rounded-full shadow-lg hover:bg-foreground/90 transition-colors"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                <span>New Post</span>
-              </button>
-            </div>
-            
-            {/* Main FAB Button */}
-            <button
-              onClick={() => setIsFabOpen(!isFabOpen)}
-              className={`flex items-center justify-center w-12 h-12 rounded-full ${isFabOpen ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-primary text-primary-foreground hover:bg-primary/90'} shadow-lg transition-all duration-200`}
-              aria-label="Create new"
-            >
-              <Plus className={`h-5 w-5 transition-transform duration-200 ${isFabOpen ? 'rotate-45' : ''}`} />
-            </button>
-          </div>
-        )}
+
         
         {/* Search Toggle Button */}
         <div className="absolute right-4 top-4 z-10">
-          <button
-            onClick={() => setIsSearchOpen(true)}
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Search"
-          >
-            <Search className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDropdownOpen(!isDropdownOpen);
+                }}
+                className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Create new"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              {isDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-background rounded-lg shadow-lg py-1 z-50 border border-border">
+                  <button
+                    onClick={() => {
+                  setIsPostModalOpen(true);
+                  setIsDropdownOpen(false);
+                }}
+                    className="w-full px-3 py-2 text-left hover:bg-accent/50 text-sm"
+                  >
+                    New Post
+                  </button>
+                  <button
+                    onClick={() => {
+                  setCurrentView('chat');
+                  setIsDropdownOpen(false);
+                }}
+                    className="w-full px-3 py-2 text-left hover:bg-accent/50 text-sm"
+                  >
+                    New Message
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Search Overlay */}
@@ -232,24 +295,92 @@ function RightPanelContent() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search..."
                   className="w-full rounded-lg border border-border bg-background/95 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-lg"
+                  style={{
+                    // Prevent zooming
+                    WebkitTextSizeAdjust: '100%',
+                    textZoom: '100%',
+                    zoom: 1,
+                    
+                    // Prevent keyboard zoom
+                    WebkitKeyboardDisplay: 'compact',
+                    WebkitTextSizeAdjust: 'none',
+                    
+                    // Prevent form zoom
+                    resize: 'none',
+                    overflow: 'hidden',
+                    
+                    // Prevent focus zoom
+                    outline: 'none',
+                    outlineWidth: 0,
+                    outlineStyle: 'none',
+                    outlineColor: 'transparent',
+                    
+                    // Prevent transform zoom
+                    WebkitTransform: 'none',
+                    transform: 'none',
+                    transformOrigin: '0 0',
+                    
+                    // Additional zoom prevention
+                    WebkitZoom: 1,
+                    MozZoom: 1,
+                    msZoom: 1,
+                    OZoom: 1,
+                    
+                    // Prevent scaling
+                    WebkitTransform: 'scale(1)',
+                    MozTransform: 'scale(1)',
+                    msTransform: 'scale(1)',
+                    OTransform: 'scale(1)',
+                    
+                    // Prevent keyboard scaling
+                    WebkitKeyboardDisplay: 'compact',
+                    WebkitTextSizeAdjust: 'none',
+                    
+                    // Prevent input scaling
+                    WebkitAppearance: 'textfield',
+                    WebkitFontSmoothing: 'antialiased',
+                    MozOsxFontSmoothing: 'grayscale',
+                    
+                    // Prevent tap highlight color
+                    WebkitTapHighlightColor: 'transparent',
+                    
+                    // Prevent user select
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                    
+                    // Prevent modify
+                    WebkitUserModify: 'read-write-plaintext-only',
+                    
+                    // Prevent touch callout
+                    WebkitTouchCallout: 'none',
+                    
+                    // Prevent overflow scrolling
+                    WebkitOverflowScrolling: 'touch',
+                    
+                    // Force hardware acceleration
+                    WebkitTransform: 'translateZ(0)',
+                    WebkitBackfaceVisibility: 'hidden',
+                    WebkitPerspective: '1000',
+                  }}
                   autoFocus
                 />
                 {searchQuery ? (
                   <button
-                    type="button"
                     onClick={clearSearch}
-                    className="absolute right-10 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setIsSearchOpen(false)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground px-2 py-1 text-sm"
-                >
-                  Esc
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchOpen(false)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </form>
             </div>
           </div>

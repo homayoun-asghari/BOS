@@ -1,15 +1,43 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { TimelineOverlay } from '@/components/posts/display/TimelineOverlay';
 
 interface TextPostProps {
   text: string;
   onChange: (text: string) => void;
   isMaxLength: boolean;
   category: 'roadmap' | 'milestone' | 'task';
+  user: {
+    name: string;
+    avatarUrl?: string;
+  };
+  timestamp: string | Date;
+  currentRoadmap: {
+    id: string;
+    title: string;
+  };
+  currentMilestone: {
+    id: string;
+    title: string;
+  };
+  currentTask: {
+    id: string;
+    title: string;
+  };
 }
 
-export function TextPost({ text, onChange, isMaxLength, category }: TextPostProps) {
+export function TextPost({ 
+  text, 
+  onChange, 
+  isMaxLength, 
+  category,
+  user,
+  timestamp,
+  currentRoadmap,
+  currentMilestone,
+  currentTask
+}: TextPostProps) {
   const [fontSize, setFontSize] = useState(48);
   const [isMaxHeight, setIsMaxHeight] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -135,11 +163,20 @@ export function TextPost({ text, onChange, isMaxLength, category }: TextPostProp
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto bg-black/50 backdrop-blur-md rounded-2xl overflow-hidden"
+      className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto rounded-2xl overflow-hidden"
     >
+      {/* Timeline Overlay */}
+      <TimelineOverlay
+        user={user}
+        timestamp={timestamp}
+        currentRoadmap={currentRoadmap}
+        currentMilestone={currentMilestone}
+        currentTask={currentTask}
+      />
+
       <div className="absolute inset-0 flex items-center justify-center p-8 overflow-hidden">
         <div className="w-full h-full flex items-center justify-center">
-          <div className="w-full max-w-full">
+          <div className="w-full max-w-full relative">
             {(isMaxLength || isMaxHeight) && (
               <div className="absolute top-2 right-2 bg-black/50 text-white/80 text-xs px-2 py-1 rounded">
                 Max length reached
@@ -174,6 +211,12 @@ export function TextPost({ text, onChange, isMaxLength, category }: TextPostProp
               }}
               autoFocus
             />
+
+            {/* Category Indicator */}
+            <div className="absolute bottom-4 left-4 flex items-center gap-2">
+              <span className={`text-2xl ${categoryStyles[category]}`}>{categoryIcons[category]}</span>
+              <span className="text-sm text-white/80">{category}</span>
+            </div>
           </div>
         </div>
       </div>

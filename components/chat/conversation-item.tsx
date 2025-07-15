@@ -62,6 +62,9 @@ export function ConversationItem({
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <h3 className="font-medium truncate">{displayName}</h3>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground truncate">{lastMessage}</p>
           {conversation.last_message?.created_at && (
             <span className="text-xs text-muted-foreground">
               {new Date(conversation.last_message.created_at).toLocaleTimeString([], {
@@ -71,7 +74,6 @@ export function ConversationItem({
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground truncate">{lastMessage}</p>
       </div>
     </button>
   );

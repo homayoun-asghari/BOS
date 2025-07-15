@@ -139,18 +139,29 @@ export default function KnowledgePage() {
           <div className="relative">
             <div className={`transition-all duration-300 ease-in-out ${isSearchActive || searchQuery || inputValue || tags.length > 0 ? 'w-full max-w-md' : 'w-10'}`}>
             {!isSearchActive && !searchQuery && !inputValue && tags.length === 0 ? (
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 transition-all duration-300"
-                onClick={() => {
-                  setIsSearchActive(true);
-                  // Use setTimeout to ensure the input is rendered before focusing
-                  setTimeout(() => inputRef.current?.focus(), 0);
-                }}
-              >
-                <Search className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 transition-all duration-300"
+                  onClick={() => {
+                    setIsSearchActive(true);
+                    // Use setTimeout to ensure the input is rendered before focusing
+                    setTimeout(() => inputRef.current?.focus(), 0);
+                  }}
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                <Link href="/notes/new" className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 transition-all duration-300"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             ) : (
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -241,33 +252,7 @@ export default function KnowledgePage() {
         </Tabs>
       </div>
       
-      {/* Floating Action Button - Matches right panel */}
-      <div className="fixed bottom-6 right-4 z-30 flex flex-col items-end gap-2">
-        {/* FAB Options - Only show on medium screens and up */}
-        <div className="hidden md:flex flex-col items-end gap-2 transition-all duration-200 opacity-0 translate-y-2 pointer-events-none">
-          <Button 
-            asChild
-            variant="default"
-            size="sm"
-            className="px-3 py-1.5 h-auto rounded-full shadow-lg gap-2"
-          >
-            <Link href="/notes/new" className="flex items-center gap-2">
-              <Plus className="h-3.5 w-3.5" />
-              <span>New Note</span>
-            </Link>
-          </Button>
-        </div>
-        
-        {/* Main FAB Button - Matches right panel */}
-        <Button
-          asChild
-          className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg transition-colors"
-        >
-          <Link href="/notes/new">
-            <Plus className="h-5 w-5" strokeWidth={2.5} />
-          </Link>
-        </Button>
-      </div>
+
     </div>
   );
 }

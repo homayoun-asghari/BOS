@@ -7,6 +7,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useMobileRightPanel } from "@/context/mobile-right-panel-context";
 import { ChatView } from "@/components/chat/chat-view";
 import { Search, X, Plus, MessageSquare, FileText } from "lucide-react";
+import { dummyPosts } from "@/components/posts/dummy-posts";
+import { TextDisplay } from "@/components/posts/display/TextDisplay";
+import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
+import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 import { CreatePostModal } from "@/components/posts/CreatePostModal";
 
 type RightPanelViewType = 'chat' | 'posts' | 'stats';
@@ -21,17 +25,16 @@ export function RightPanel({ className, children }: RightPanelProps) {
   const { currentView, openPanel } = useRightPanel();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFabOpen, setIsFabOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isInActiveChat, setIsInActiveChat] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const fabRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close FAB when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (fabRef.current && !fabRef.current.contains(event.target as Node)) {
-        setIsFabOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
       }
     };
 
@@ -40,6 +43,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
   // Using useAuth to ensure auth state is properly initialized
   useAuth();
 
@@ -81,7 +85,6 @@ export function RightPanel({ className, children }: RightPanelProps) {
       return (
         <ChatView 
           className="h-full" 
-          onActiveConversationChange={(isActive) => setIsInActiveChat(isActive)}
         />
       );
     }
@@ -89,8 +92,66 @@ export function RightPanel({ className, children }: RightPanelProps) {
     // For posts view
     if (currentView === 'posts') {
       return (
-        <div className="h-full overflow-y-auto">
-          {children}
+        <div className="h-full overflow-y-auto p-4 space-y-4">
+          {dummyPosts.map((post) => {
+            const timestamp = post.timestamp instanceof Date ? post.timestamp : new Date(post.timestamp);
+            switch (post.type) {
+              case 'text':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <TextDisplay
+                      id={post.id}
+                      content={post.content}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              case 'image':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <ImageDisplay
+                      id={post.id}
+                      imageUrl={post.imageUrl}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              case 'video':
+                return (
+                  <div key={post.id} className="rounded-2xl">
+                    <VideoDisplay
+                      id={post.id}
+                      videoUrl={post.videoUrl}
+                      timestamp={timestamp}
+                      user={post.user}
+                      currentRoadmap={post.currentRoadmap}
+                      currentMilestone={post.currentMilestone}
+                      currentTask={post.currentTask}
+                      likes={post.likes}
+                      onLike={() => console.log('Like clicked')}
+                    />
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })}
+          {/* End of posts indicator */}
+          <div className="h-64 flex items-center justify-center bg-background/50 border-t border-border/20">
+            <p className="text-muted-foreground text-sm">You've reached the end of the posts</p>
+          </div>
         </div>
       );
     }
@@ -155,54 +216,59 @@ export function RightPanel({ className, children }: RightPanelProps) {
       
       {/* Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {/* FAB - Hidden in active chat but shown in conversation list */}
-        {(currentView !== 'chat' || !isInActiveChat) && (
-          <div ref={fabRef} className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
-            {/* FAB Options */}
-            <div className={`flex flex-col items-end gap-3 transition-all duration-200 ${isFabOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-              <button 
-                onClick={() => {
-                  setIsFabOpen(false);
-                  // Handle new message
-                  console.log('New message');
+        {/* Search Toggle Button */}
+        <div className="absolute right-4 top-4 z-10">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDropdownOpen(!isDropdownOpen);
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+                className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
-                <MessageSquare className="h-4 w-4" />
-                <span>New Message</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setIsFabOpen(false);
-                  setIsPostModalOpen(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-foreground text-background rounded-full shadow-lg hover:bg-foreground/90 transition-colors"
-              >
-                <FileText className="h-4 w-4" />
-                <span>New Post</span>
+                <Plus className="h-4 w-4" />
               </button>
             </div>
-            
-            {/* Main FAB Button */}
-            <button
-              onClick={() => setIsFabOpen(!isFabOpen)}
-              className={`flex items-center justify-center w-14 h-14 rounded-full ${isFabOpen ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-primary text-primary-foreground hover:bg-primary/90'} shadow-lg transition-all duration-200`}
-              aria-label="Create new"
+          </div>
+        </div>
+
+        {/* Dropdown Menu */}
+        {isDropdownOpen && (
+          <div
+            ref={dropdownRef}
+            className="absolute right-4 top-12 z-20 w-48 rounded-md bg-background shadow-lg border border-border"
+          >
+            <button 
+              onClick={() => {
+                setIsDropdownOpen(false);
+                setIsPostModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <Plus className={`h-6 w-6 transition-transform duration-200 ${isFabOpen ? 'rotate-45' : ''}`} />
+              <FileText className="h-4 w-4" />
+              <span>New Post</span>
+            </button>
+            <button 
+              onClick={() => {
+                setIsDropdownOpen(false);
+                // Handle new message
+                console.log('New message');
+              }}
+              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span>New Message</span>
             </button>
           </div>
         )}
-        {/* Search Toggle Button */}
-        <div className="absolute right-4 top-4 z-10">
-          <button
-            onClick={() => setIsSearchOpen(true)}
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Search"
-          >
-            <Search className="h-5 w-5" />
-          </button>
-        </div>
         
         {/* Search Overlay */}
         {isSearchOpen && (
@@ -233,7 +299,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
                   onClick={() => setIsSearchOpen(false)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground px-2 py-1 text-sm"
                 >
-                  Esc
+                  <X className="h-4 w-4" />
                 </button>
               </form>
             </div>
