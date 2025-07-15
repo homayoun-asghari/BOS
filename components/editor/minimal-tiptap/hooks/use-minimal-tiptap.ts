@@ -1,8 +1,13 @@
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
-import type { UseEditorOptions } from "@tiptap/react"
+import type { UseEditorOptions as TiptapUseEditorOptions } from "@tiptap/react"
 import { StarterKit } from "@tiptap/starter-kit"
 import { useEditor } from "@tiptap/react"
+
+// Extend the base UseEditorOptions to include immediatelyRender
+interface UseEditorOptions extends TiptapUseEditorOptions {
+  immediatelyRender?: boolean;
+}
 import { Typography } from "@tiptap/extension-typography"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import { Underline } from "@tiptap/extension-underline"
@@ -86,13 +91,13 @@ const createExtensions = ({
       try {
         const url = uploader ? await uploader(file) : await fakeuploader(file);
         return url;
-      } catch (error) {
-        console.error('[Tiptap Image] Upload failed:', { 
+      } catch {
+        const errorMessage = `[Tiptap Image] Upload failed for file: ${file.name}`;
+        console.error(errorMessage, { 
           fileName: file.name, 
-          uploadId, 
-          error: error instanceof Error ? error.message : 'Unknown error'
+          uploadId
         });
-        throw error;
+        throw new Error(errorMessage);
       }
     },
     onToggle(editor, files, pos) {
@@ -243,8 +248,8 @@ const createExtensions = ({
           if (onFileUpload) {
             onFileUpload(src, file.name, file.type, uploadId, false);
           }
-        } catch (error) {
-          console.error('Error uploading file:', error);
+        } catch {
+          console.error('Error uploading file');
           
           // Remove the temporary node if upload fails
           const doc = editor.state.doc;
@@ -315,8 +320,8 @@ const createExtensions = ({
           if (onFileUpload) {
             onFileUpload(src, file.name, file.type, uploadId, false);
           }
-        } catch (error) {
-          console.error('Error uploading file:', error);
+        } catch {
+          console.error('Error uploading file');
           
           // Remove the temporary node if upload fails
           const doc = editor.state.doc;
@@ -407,7 +412,7 @@ export const useMinimalTiptapEditor = ({
             throttledSetValue(outputContent);
           }
         }
-      } catch (error) {
+      } catch {
         // Handle any errors silently
       }
     },
@@ -430,10 +435,10 @@ export const useMinimalTiptapEditor = ({
         if (editor.isEmpty) {
           editor.commands.setContent(content);
         }
-      } catch (error) {
+      } catch {
         // Log error only in development
         if (process.env.NODE_ENV !== 'production') {
-          console.error('Error setting editor content:', error);
+          console.error('Error setting editor content');
         }
         // If parsing fails, set as plain text
         if (editor.isEmpty) {
@@ -460,10 +465,10 @@ export const useMinimalTiptapEditor = ({
             onBlur?.(getOutput(editor, output) as TiptapContent);
           }
         }
-      } catch (error) {
+      } catch {
         // Handle errors silently in production
         if (process.env.NODE_ENV !== 'production') {
-          console.error('Error in editor blur:', error);
+          console.error('Error in editor blur');
         }
       }
     },
@@ -471,6 +476,8 @@ export const useMinimalTiptapEditor = ({
   )
 
   const editor = useEditor({
+    // Prevent hydration mismatch by not rendering on the server
+    immediatelyRender: false,
     extensions: createExtensions({
       placeholder,
       uploader,

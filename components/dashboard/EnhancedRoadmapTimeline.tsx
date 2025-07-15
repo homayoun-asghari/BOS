@@ -12,8 +12,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
-import { supabase } from '@/lib/supabase';
-import { useUser } from '@/hooks/useUser';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/auth/AuthProvider';
 import CustomTaskNode from '@/components/dashboard/CustomTaskNode'; // Import your custom node
 import { Zap, CheckCircle } from 'lucide-react';
 
@@ -88,7 +88,7 @@ export function EnhancedRoadmapTimeline({
   milestones, 
   onTaskStatusChange 
 }: EnhancedRoadmapTimelineProps) {
-  const { user } = useUser();
+  const { user } = useAuth();
   // We'll manage baseNodes and baseEdges separately for the main roadmap structure
   const [baseNodes, setBaseNodes, onNodesChange] = useNodesState([]);
   const [baseEdges, setBaseEdges, onEdgesChange] = useEdgesState([]);

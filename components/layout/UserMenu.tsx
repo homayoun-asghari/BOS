@@ -20,7 +20,7 @@ import {
   Loader2,
   Settings as SettingsIcon
 } from "lucide-react";
-import { signOut } from "@/lib/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import Link from "next/link";
 
 interface UserMenuProps {
@@ -39,23 +39,24 @@ interface UserMenuProps {
 
 export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHelp }: UserMenuProps) {
   const router = useRouter();
-  const [signOutLoading, setSignOutLoading] = useState(false);
-  
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const { signOut } = useAuth();
+
   const userInitial = user?.email?.[0]?.toUpperCase() || 'U';
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || '';
   const userAvatar = user?.user_metadata?.avatar_url || '';
 
   const handleSignOut = async () => {
+    setIsSigningOut(true);
     try {
-      setSignOutLoading(true);
       await signOut();
       router.push('/');
-      router.refresh();
+      router.refresh(); // Ensure the page refreshes to update auth state
     } catch (error) {
       console.error('Error signing out:', error);
     } finally {
-      setSignOutLoading(false);
+      setIsSigningOut(false);
     }
   };
 
@@ -139,14 +140,11 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHe
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <button 
-              className="w-full cursor-pointer flex items-center"
-              onClick={(e) => {
-                e.preventDefault();
-                handleSignOut();
-              }}
-              disabled={signOutLoading}
+              className="w-full cursor-pointer flex items-center text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
             >
-              {signOutLoading ? (
+              {isSigningOut ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   <span>Signing out...</span>

@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Note, NoteFormData } from '@/types/note';
-import { createClient } from '@/lib/supabase/browser';
-import { useUser } from './useUser';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/auth/AuthProvider';
 import type { TiptapContent } from '@/components/editor/minimal-tiptap/hooks/use-minimal-tiptap';
 
 // Define types for Tiptap nodes and marks
@@ -42,93 +42,230 @@ interface ExternalLink {
 
 type NoteLink = InternalLink | ExternalLink;
 
-function useNotes() {
+// Track in-flight requests to prevent race conditions
+const useNotes = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const { user } = useUser();
-  const supabase = createClient();
+  const { user } = useAuth();
+  const userId = user?.id ?? '';
+  
+  // Track in-flight requests
+  const activeRequests = useRef<Record<string, AbortController>>({});
+  const isMounted = useRef(true);
 
-  const fetchNotes = useCallback(async () => {
-    if (!user) return;
+  // Cleanup on unmount
+  useEffect(() => {
+    const currentRequests = activeRequests.current;
+    return () => {
+      isMounted.current = false;
+      // Abort all pending requests on unmount
+      Object.values(currentRequests).forEach(controller => {
+        controller.abort();
+      });
+    };
+  }, []);
+
+  // Helper function to handle API requests with abort controller
+  const makeRequest = useCallback(async <T>(
+    key: string,
+    requestFn: (signal: AbortSignal) => Promise<T>,
+    options: { skipAuthCheck?: boolean } = {}
+  ): Promise<T> => {
+    if (!options.skipAuthCheck && !user) {
+      throw new Error('Authentication required');
+    }
+
+    // Abort any existing request with the same key
+    if (activeRequests.current[key]) {
+      activeRequests.current[key].abort();
+    }
+
+    // Create new abort controller
+    const controller = new AbortController();
+    const currentActiveRequests = activeRequests.current;
+    currentActiveRequests[key] = controller;
+
+    try {
+      const result = await requestFn(controller.signal);
+      
+      // Remove this request from active requests
+      if (isMounted.current) {
+        delete currentActiveRequests[key];
+      }
+      
+      return result;
+    } catch (error) {
+      // Don't throw for aborted requests
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Request was cancelled');
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
+  }, [user]);
+
+  const fetchNotes = useCallback(async (options: { forceRefresh?: boolean } = {}) => {
+    if (!userId) return [];
+    
+    const requestKey = `fetch-notes-${userId}`;
     
     try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-        
-      if (error) throw error;
-      setNotes(data || []);
+      // Only set loading state if not already loading or if force refresh
+      if (!isLoading || options.forceRefresh) {
+        setIsLoading(true);
+        setError(null);
+      }
+      
+      const data = await makeRequest<Note[]>(
+        requestKey,
+        async (signal) => {
+          // Create a promise that will be rejected if the signal is aborted
+          const abortPromise = new Promise<never>((_, reject) => {
+            if (signal.aborted) {
+              reject(new Error('Request was cancelled'));
+            }
+            signal.addEventListener('abort', () => {
+              reject(new Error('Request was cancelled'));
+            });
+          });
+          
+          // Race between the actual request and the abort signal
+          const requestPromise = supabase
+            .from('notes')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .then(({ data, error }) => {
+              if (error) throw error;
+              return data || [];
+            });
+          
+          return Promise.race([requestPromise, abortPromise]);
+        }
+      );
+      
+      if (isMounted.current) {
+        setNotes(data);
+      }
+      
+      return data;
     } catch (err) {
-      console.error('Error fetching notes:', err);
-      setError(err as Error);
+      const error = err as Error;
+      console.error('Error in fetchNotes:', error);
+      
+      if (isMounted.current) {
+        setError(error);
+      }
+      
+      // Re-throw to allow error handling in components
+      throw error;
     } finally {
-      setIsLoading(false);
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
     }
-  }, [user, supabase]);
+  }, [userId, makeRequest, isLoading]);
 
   const createNote = useCallback(async (noteData: NoteFormData) => {
     if (!user) {
-      throw new Error('User not authenticated');
+      throw new Error('Authentication required to create notes');
     }
 
+    const requestKey = `create-note-${Date.now()}`;
+    
     try {
       setIsLoading(true);
+      setError(null);
+      
       const now = new Date().toISOString();
       
       // Extract the first line or first 50 characters as title if not provided
-      const content = noteData.content || '';
-      const title = noteData.title || content.split('\n')[0]?.trim().substring(0, 50) || 'Untitled Note';
+      const content = typeof noteData.content === 'string' ? noteData.content : '';
+      const firstLine = content ? content.split('\n')[0] : '';
+      const title = noteData.title || (firstLine ? firstLine.trim().substring(0, 50) : 'Untitled Note');
       
       const notePayload = {
         title,
         content,
         user_id: user.id,
         created_at: now,
-        updated_at: now
+        updated_at: now,
+        folder_id: noteData.folder_id || null,
+        is_archived: noteData.is_archived || false,
+        is_pinned: noteData.is_pinned || false,
+        color: noteData.color || null,
+        tags: noteData.tags || []
       };
-
-      console.log('Creating note with data:', notePayload);
       
-      const { data, error } = await supabase
-        .from('notes')
-        .insert(notePayload)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error('Supabase error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw new Error(error.message || 'Failed to create note');
+      const newNote = await makeRequest<Note>(
+        requestKey,
+        async (signal) => {
+          // Create a promise that will be rejected if the signal is aborted
+          const abortPromise = new Promise<never>((_, reject) => {
+            if (signal.aborted) {
+              reject(new Error('Request was cancelled'));
+            }
+            signal.addEventListener('abort', () => {
+              reject(new Error('Request was cancelled'));
+            });
+          });
+          
+          // Race between the actual request and the abort signal
+          const requestPromise = supabase
+            .from('notes')
+            .insert(notePayload)
+            .select()
+            .single()
+            .then(({ data, error }) => {
+              if (error) throw error;
+              return data;
+            });
+          
+          return Promise.race([requestPromise, abortPromise]);
+        }
+      );
+      
+      if (isMounted.current) {
+        setNotes(prevNotes => [newNote, ...prevNotes]);
       }
       
-      console.log('Note created successfully:', data);
-      return data;
+      return newNote;
     } catch (err) {
-      console.error('Error creating note:', err);
-      setError(err as Error);
-      throw err;
+      const error = err as Error;
+      console.error('Error creating note:', error);
+      
+      if (isMounted.current) {
+        setError(error);
+      }
+      
+      throw error;
     } finally {
-      setIsLoading(false);
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
     }
-  }, [user, supabase]);
+  }, [user, makeRequest]);
 
   const updateNote = useCallback(async (id: string, noteData: Partial<NoteFormData>) => {
     try {
+      // Get the current user from the hook
+      const currentUser = user;
+      
+      if (!currentUser) {
+        console.error('No authenticated user found when trying to update note');
+        throw new Error('Authentication required to update notes');
+      }
+      
       setIsLoading(true);
       const now = new Date().toISOString();
       
       // Prepare update payload with only defined fields
       const updatePayload: Partial<NoteFormData> = {
         ...noteData,
-        updated_at: now
+        updated_at: now,
+        user_id: currentUser.id // Ensure we're setting the correct user_id
       };
       
       // If content is updated, update the title if not explicitly set
@@ -139,10 +276,12 @@ function useNotes() {
 
       console.log('Updating note with data:', { id, ...updatePayload });
       
+      // Make the update with the latest user ID
       const { data, error } = await supabase
         .from('notes')
         .update(updatePayload)
         .eq('id', id)
+        .eq('user_id', currentUser.id) // Additional security check
         .select()
         .single();
         
@@ -165,23 +304,45 @@ function useNotes() {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase]);
+  }, [user, setIsLoading, setError]);
 
   const deleteNote = useCallback(async (id: string) => {
-  try {
-    setIsLoading(true);
-    console.log(`Starting deletion of note ${id}`);
-
-    // Step 1: Fetch all attachments related to this note
-    const { data: attachments, error: fetchError } = await supabase
-      .from('attachments')
-      .select('id, storage_path')
-      .eq('note_id', id);
-
-    if (fetchError) {
-      console.error('Error fetching attachments:', fetchError);
-      throw fetchError;
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      console.error('No authenticated user found when trying to delete note');
+      throw new Error('Authentication required to delete notes');
     }
+
+    try {
+      setIsLoading(true);
+      console.log(`Starting deletion of note ${id}`);
+
+      // Step 1: Verify the note exists and belongs to the user
+      const { data: note, error: noteError } = await supabase
+        .from('notes')
+        .select('id')
+        .eq('id', id)
+        .eq('user_id', currentUser.id)
+        .single();
+
+      if (noteError || !note) {
+        console.error('Note not found or access denied:', noteError);
+        throw new Error('Note not found or access denied');
+      }
+
+      // Step 2: Fetch all attachments related to this note
+      const { data: attachments, error: fetchError } = await supabase
+        .from('attachments')
+        .select('id, storage_path')
+        .eq('note_id', id)
+        .eq('user_id', currentUser.id); // Ensure user owns the attachments
+
+      if (fetchError) {
+        console.error('Error fetching attachments:', fetchError);
+        throw fetchError;
+      }
 
     console.log(`Found ${attachments?.length || 0} attachments`);
 
@@ -234,12 +395,18 @@ function useNotes() {
   } finally {
     setIsLoading(false);
   }
-}, [supabase]);
+}, [user, setIsLoading, setError]);
 
 
   // Search notes using full-text search
   const searchNotes = useCallback(async (query: string) => {
-    if (!user) return [];
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      console.error('No authenticated user found when searching notes');
+      return [];
+    }
     
     try {
       setIsLoading(true);
@@ -249,7 +416,7 @@ function useNotes() {
         const { data, error } = await supabase
           .from('notes')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', currentUser.id)
           .order('updated_at', { ascending: false })
           .limit(10);
           
@@ -261,7 +428,7 @@ function useNotes() {
       const { data: searchData, error: searchError } = await supabase
         .from('notes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .textSearch('content_search', query, {
           type: 'websearch',
           config: 'english'
@@ -278,7 +445,7 @@ function useNotes() {
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('notes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
         .order('updated_at', { ascending: false })
         .limit(10);
@@ -292,18 +459,26 @@ function useNotes() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, supabase, setIsLoading, setError]);
+  }, [user, setIsLoading, setError]);
 
   // Create an external link from a note to a URL
   const createExternalLink = useCallback(async (sourceNoteId: string, url: string, linkText?: string) => {
-    console.log('Starting createExternalLink with:', { sourceNoteId, url, linkText });
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      console.error('No authenticated user found when creating external link');
+      throw new Error('Authentication required to create external links');
+    }
+    
+    console.log('Starting createExternalLink with:', { 
+      sourceNoteId, 
+      url, 
+      linkText,
+      userId: currentUser.id
+    });
     
     try {
-      if (!user) {
-        console.error('No authenticated user found');
-        throw new Error('Authentication required');
-      }
-      
       setIsLoading(true);
       
       // Verify the source note exists and belongs to the user
@@ -312,32 +487,28 @@ function useNotes() {
         .from('notes')
         .select('id, title, user_id')
         .eq('id', sourceNoteId)
+        .eq('user_id', currentUser.id) // Add user_id check for security
         .single();
 
       console.log('Source note query result:', { sourceNote, sourceError });
 
       if (sourceError || !sourceNote) {
-        const error = new Error(`Source note not found: ${sourceError?.message || 'No data returned'}`);
+        const error = new Error(`Source note not found or access denied: ${sourceError?.message || 'No data returned'}`);
         console.error(error);
         throw error;
       }
 
-      if (sourceNote.user_id !== user.id) {
-        const error = new Error('You do not have permission to modify this note');
-        console.error(error);
-        throw error;
-      }
-
-      // Prepare the data to insert
+      // Prepare the data to insert with user context
       const linkData = {
         note_id: sourceNoteId,
+        user_id: currentUser.id, // Include user_id for RLS
         link_type: 'external',
         url: url,
         link_text: linkText || url,
         created_at: new Date().toISOString()
       };
       
-      console.log('Creating external link with data:', linkData);
+      console.log('Creating external link with data:', { ...linkData, url: '[REDACTED]' });
 
       // Create the link in the database
       const { data, error } = await supabase
@@ -348,25 +519,26 @@ function useNotes() {
 
       if (error) {
         console.error('Error creating external link:', {
-          error,
-          errorDetails: {
+          error: {
             message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
+            code: error.code,
+            details: error.details
           },
-          linkData
+          noteId: sourceNoteId,
+          userId: currentUser.id
         });
         
         // Check if the error is due to RLS
         if (error.message.includes('permission denied') || error.code === '42501') {
           console.error('RLS Policy Error: The operation was blocked by Row Level Security');
+          // Provide more context about the RLS error
+          console.error('This might be due to missing RLS policies on the note_links table');
         }
         
         throw new Error(`Failed to create external link: ${error.message} (Code: ${error.code})`);
       }
 
-      console.log('External link created successfully:', data);
+      console.log('External link created successfully with ID:', data?.id);
       return data;
     } catch (err) {
       console.error('Error in createExternalLink:', err);
@@ -375,73 +547,87 @@ function useNotes() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, supabase, setError, setIsLoading]);
+  }, [user, setIsLoading, setError]);
 
   // Create a link between two notes
   const createNoteLink = useCallback(async (sourceNoteId: string, targetNoteId: string, linkText?: string) => {
-    console.log('Starting createNoteLink with:', { sourceNoteId, targetNoteId, linkText });
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      console.error('No authenticated user found when creating note link');
+      throw new Error('Authentication required to create note links');
+    }
+    
+    console.log('Starting createNoteLink with:', { 
+      sourceNoteId, 
+      targetNoteId, 
+      linkText,
+      userId: currentUser.id
+    });
     
     try {
-      if (!user) {
-        console.error('No authenticated user found');
-        throw new Error('Authentication required');
-      }
-      
       setIsLoading(true);
       
-      // First, verify both notes exist and belong to the user
-      console.log('Verifying source note...');
-      const { data: sourceNote, error: sourceError } = await supabase
-        .from('notes')
-        .select('id, title, user_id')
-        .eq('id', sourceNoteId)
-        .single();
-
-      console.log('Source note query result:', { sourceNote, sourceError });
-
+      // Define types for the note responses
+      type NoteResponse = {
+        id: string;
+        user_id: string;
+        title?: string;
+      };
+      
+      // Verify both notes exist and belong to the user in a single query
+      console.log('Verifying source and target notes...');
+      const [
+        { data: sourceNote, error: sourceError },
+        { data: targetNote, error: targetError }
+      ] = await Promise.all([
+        supabase
+          .from('notes')
+          .select('id, user_id, title')
+          .eq('id', sourceNoteId)
+          .eq('user_id', currentUser.id)
+          .single<NoteResponse>(),
+        supabase
+          .from('notes')
+          .select('id, user_id, title')
+          .eq('id', targetNoteId)
+          .eq('user_id', currentUser.id)
+          .single<NoteResponse>()
+      ]);
+      
+      // Check for errors in source note
       if (sourceError || !sourceNote) {
-        const error = new Error(`Source note not found: ${sourceError?.message || 'No data returned'}`);
+        const error = new Error(`Source note not found or access denied: ${sourceError?.message || 'No data returned'}`);
         console.error(error);
         throw error;
       }
-
-      if (sourceNote.user_id !== user.id) {
-        const error = new Error('You do not have permission to modify this note');
-        console.error(error);
-        throw error;
-      }
-
-      console.log('Verifying target note...');
-      const { data: targetNote, error: targetError } = await supabase
-        .from('notes')
-        .select('id, title')
-        .eq('id', targetNoteId)
-        .single();
-
-      console.log('Target note query result:', { targetNote, targetError });
-
+      
+      // Check for errors in target note
       if (targetError || !targetNote) {
-        const error = new Error(`Target note not found: ${targetError?.message || 'No data returned'}`);
+        const error = new Error(`Target note not found or access denied: ${targetError?.message || 'No data returned'}`);
         console.error(error);
         throw error;
       }
 
       // Prepare the data to insert
+      // Note: We're not including user_id as it's not in the note_links table
+      // We're relying on RLS (Row Level Security) to ensure users can only access their own data
       const linkData = {
         note_id: sourceNoteId,
         link_type: 'internal',
         target_note_id: targetNoteId,
         url: null, // Explicitly set to null for internal links
-        link_text: linkText || targetNote.title,
+        link_text: linkText || targetNote.title || 'Untitled Note',
         created_at: new Date().toISOString()
       };
       
-      console.log('Creating note link with data:', linkData);
-
-      console.log('Attempting to insert link with data:', linkData);
+      console.log('Creating note link with data:', { 
+        ...linkData, 
+        link_text: linkData.link_text ? '[text]' : 'empty' 
+      });
 
       // Create the link in the database
-      console.log('Attempting to insert into note_links table');
       const { data, error } = await supabase
         .from('note_links')
         .insert(linkData)
@@ -450,22 +636,19 @@ function useNotes() {
 
       if (error) {
         console.error('Error creating note link:', {
-          error,
-          errorDetails: {
+          error: {
             message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
+            code: error.code,
+            details: error.details
           },
-          linkData
+          noteId: sourceNoteId,
+          targetNoteId,
+          userId: currentUser.id
         });
         
         // Check if the error is due to RLS
         if (error.message.includes('permission denied') || error.code === '42501') {
           console.error('RLS Policy Error: The operation was blocked by Row Level Security');
-          // Check if the user has the right permissions
-          const { data: userPerms } = await supabase.rpc('current_user_permissions');
-          console.log('Current user permissions:', userPerms);
         }
         
         // Check if the error is due to a foreign key constraint
@@ -476,7 +659,7 @@ function useNotes() {
         throw new Error(`Failed to create note link: ${error.message} (Code: ${error.code})`);
       }
 
-      console.log('Note link created successfully:', data);
+      console.log('Note link created successfully with ID:', data?.id);
       return data;
     } catch (err) {
       console.error('Error in createNoteLink:', err);
@@ -485,78 +668,251 @@ function useNotes() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, supabase, setError, setIsLoading]);
+  }, [user, setIsLoading, setError]);
 
   // Get all links for a specific note
   const getNoteLinks = useCallback(async (noteId: string) => {
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      const error = new Error('Authentication required to fetch note links');
+      console.error('No authenticated user found when fetching note links');
+      setError(error);
+      throw error;
+    }
+    
+    if (!noteId) {
+      const error = new Error('Note ID is required to fetch note links');
+      console.error('No noteId provided to getNoteLinks');
+      setError(error);
+      throw error;
+    }
+    
+    setIsLoading(true);
+    
+    console.log('Fetching note links for note:', { 
+      noteId, 
+      userId: currentUser.id,
+      timestamp: new Date().toISOString()
+    });
+    
     try {
+      // First verify the note exists and belongs to the user
+      const { data: note, error: noteError } = await supabase
+        .from('notes')
+        .select('id')
+        .eq('id', noteId)
+        .eq('user_id', currentUser.id)
+        .single();
+        
+      if (noteError || !note) {
+        const error = new Error(`Note not found or access denied: ${noteError?.message || 'No data returned'}`);
+        console.error('Note access error:', {
+          error: noteError,
+          noteId,
+          userId: currentUser.id,
+          noteExists: !!note
+        });
+        setError(error);
+        throw error;
+      }
+      
+      // Now fetch the links - removed user_id filter since the column doesn't exist
+      // We're relying on RLS (Row Level Security) to ensure users can only access their own data
       const { data, error } = await supabase
         .from('note_links')
         .select('*')
         .eq('note_id', noteId);
         
-      if (error) throw error;
+      if (error) {
+        const errorDetails = {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          noteId,
+          userId: currentUser.id
+        };
+        
+        console.error('Error fetching note links:', errorDetails);
+        
+        // Check if the error is due to RLS
+        if (error.message?.includes('permission denied') || error.code === '42501') {
+          console.error('RLS Policy Error: The operation was blocked by Row Level Security');
+        }
+        
+        const enhancedError = new Error(`Failed to fetch note links: ${error.message}`);
+        Object.assign(enhancedError, errorDetails);
+        setError(enhancedError);
+        throw enhancedError;
+      }
+      
+      console.log(`Found ${data?.length || 0} links for note ${noteId}`);
       return data || [];
     } catch (err) {
-      console.error('Error fetching note links:', err);
-      setError(err as Error);
-      throw err;
+      const error = err as Error;
+      console.error('Unexpected error in getNoteLinks:', {
+        error: error.message,
+        stack: error.stack,
+        noteId,
+        userId: currentUser?.id || 'no-user'
+      });
+      setError(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [supabase, setError]);
+  }, [user, setIsLoading, setError]);
 
   // Delete a specific note link
   const deleteNoteLink = useCallback(async (linkId: string) => {
+    // Get the current user from the hook
+    const currentUser = user;
+    
+    if (!currentUser) {
+      console.error('No authenticated user found when deleting note link');
+      throw new Error('Authentication required to delete note links');
+    }
+    
     try {
+      setIsLoading(true);
+      
+      console.log('Deleting note link:', { 
+        linkId, 
+        userId: currentUser.id 
+      });
+      
+      // First verify the link exists
+      // We're not checking user_id here as it's not in the note_links table
+      // RLS (Row Level Security) will handle access control
+      const { data: link, error: fetchError } = await supabase
+        .from('note_links')
+        .select('id')
+        .eq('id', linkId)
+        .single();
+        
+      if (fetchError || !link) {
+        const error = new Error(`Link not found or access denied: ${fetchError?.message || 'No data returned'}`);
+        console.error(error);
+        throw error;
+      }
+      
+      // Now delete the link
+      // We're not filtering by user_id as it's not in the note_links table
+      // RLS (Row Level Security) will handle access control
       const { error } = await supabase
         .from('note_links')
         .delete()
         .eq('id', linkId);
         
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting note link:', {
+          error: {
+            message: error.message,
+            code: error.code,
+            details: error.details
+          },
+          linkId,
+          userId: currentUser.id
+        });
+        
+        // Check if the error is due to RLS
+        if (error.message.includes('permission denied') || error.code === '42501') {
+          console.error('RLS Policy Error: The operation was blocked by Row Level Security');
+        }
+        
+        throw error;
+      }
+      
+      console.log('Successfully deleted note link:', linkId);
       return true;
     } catch (err) {
-      console.error('Error deleting note link:', err);
+      console.error('Error in deleteNoteLink:', err);
       setError(err as Error);
       throw err;
+    } finally {
+      setIsLoading(false);
     }
-  }, [supabase, setError]);
+  }, [user, setIsLoading, setError]);
 
-  // Extract note links from markdown content
+  /**
+   * Extracts note links from markdown content
+   * @param content - The markdown content to extract links from
+   * @returns Array of extracted note links matching the NoteLink type
+   */
   const extractNoteLinks = useCallback((content: string): NoteLink[] => {
-    if (!content) return [];
+    if (!content || typeof content !== 'string') {
+      console.warn('extractNoteLinks: Invalid content provided');
+      return [];
+    }
 
     const links: NoteLink[] = [];
 
-    // Match internal links like [[note-id]]
-    const internalLinkRegex = /\[\[([^\]]+)\]\]/g;
-    let internalMatch;
-    while ((internalMatch = internalLinkRegex.exec(content)) !== null) {
-      const [, id] = internalMatch; // Removed unused fullMatch
-      if (id) {
-        links.push({
-          type: 'internal',
-          id: id.trim(),
-          text: `[[${id.trim()}]]`,
-        });
+    try {
+      // Match internal links like [[note-id]] or [[note-id|display text]]
+      const internalLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+      let internalMatch;
+      
+      // Reset the regex lastIndex in case the regex is reused
+      internalLinkRegex.lastIndex = 0;
+      
+      while ((internalMatch = internalLinkRegex.exec(content)) !== null) {
+        try {
+          const [, noteId, displayText] = internalMatch;
+          if (!noteId) continue;
+          
+          // Create an InternalLink
+          const linkText = displayText?.trim() || noteId.trim();
+          links.push({
+            type: 'internal',
+            id: noteId.trim(),
+            text: linkText
+          });
+        } catch (err) {
+          console.warn('Error processing internal link match:', { 
+            match: internalMatch, 
+            error: err instanceof Error ? err.message : String(err) 
+          });
+          continue;
+        }
       }
-    }
 
-    // Match external links like [text](url)
-    const externalLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    let externalMatch;
-    while ((externalMatch = externalLinkRegex.exec(content)) !== null) {
-      const [, text, url] = externalMatch;
-      if (text && url) {
-        links.push({
-          type: 'external',
-          url: url.trim(),
-          text: text.trim(),
-        });
+      // Match external links like [text](url)
+      const externalLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let externalMatch;
+      
+      // Reset the regex lastIndex
+      externalLinkRegex.lastIndex = 0;
+      
+      while ((externalMatch = externalLinkRegex.exec(content)) !== null) {
+        try {
+          const [, text, url] = externalMatch;
+          if (!text || !url) continue;
+          
+          // Create an ExternalLink
+          links.push({
+            type: 'external',
+            url: url.trim(),
+            text: text.trim()
+          });
+        } catch (err) {
+          console.warn('Error processing external link match:', { 
+            match: externalMatch, 
+            error: err instanceof Error ? err.message : String(err) 
+          });
+          continue;
+        }
       }
+      
+      console.log(`Extracted ${links.length} note links from content`);
+      return links;
+    } catch (err) {
+      console.error('Error in extractNoteLinks:', err);
+      // Don't throw, return empty array as a fallback
+      return [];
     }
-
-    return links;
-  }, []);
+  }, []); // No external dependencies needed
 
   // Helper function to extract text from Tiptap nodes
   const extractTextFromNodes = useCallback((nodes: TiptapNode[]): string => {
@@ -930,38 +1286,54 @@ function useNotes() {
   }, [user, getNoteLinks, deleteNoteLink, createNoteLink, createExternalLink, setError, extractLinksFromContent]);
 
   // Memoize the API to prevent unnecessary re-renders
-  const api = useMemo(() => ({
-    notes,
-    isLoading,
-    error,
-    fetchNotes,
-    createNote,
-    updateNote,
-    deleteNote,
-    syncNoteLinks,
-    createExternalLink,
-    getNoteById: async (id: string) => {
+  const api = useMemo(() => {
+    const getNoteById = async (id: string) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+      
       try {
         setIsLoading(true);
         const { data, error } = await supabase
           .from('notes')
           .select('*')
           .eq('id', id)
+          .eq('user_id', user.id) // Ensure user can only access their own notes
           .single();
           
         if (error) throw error;
         return data || null;
       } catch (err) {
-        console.error('Error fetching note:', err);
-        setError(err as Error);
-        throw err;
+        const error = err as Error;
+        console.error('Error fetching note:', error);
+        
+        if (isMounted.current) {
+          setError(error);
+        }
+        
+        throw error;
       } finally {
-        setIsLoading(false);
+        if (isMounted.current) {
+          setIsLoading(false);
+        }
       }
-    },
-    searchNotes,
-    createNoteLink,
-  }), [
+    };
+    
+    return {
+      notes,
+      isLoading,
+      error,
+      fetchNotes,
+      createNote,
+      updateNote,
+      deleteNote,
+      syncNoteLinks,
+      createExternalLink,
+      getNoteById,
+      searchNotes,
+      createNoteLink,
+    };
+  }, [
     notes,
     isLoading,
     error,
@@ -971,13 +1343,12 @@ function useNotes() {
     deleteNote,
     syncNoteLinks,
     createExternalLink,
-    supabase,
-    setIsLoading,
-    setError,
     searchNotes,
-    createNoteLink
+    createNoteLink,
+    user,
+    isMounted
   ]);
-  
+
   return api;
 };
 

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Check, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabase/client"
 import { Input } from "@/components/ui/input"
 
 interface NoteSearchProps {
@@ -16,7 +16,6 @@ export function NoteSearch({ value: initialValue, onChange, onSelect, className 
   const [open, setOpen] = React.useState(false)
   const [notes, setNotes] = React.useState<{ id: string; title: string }[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
-  const supabase = createClient()
   
   // Sync with parent value if it changes
   React.useEffect(() => {

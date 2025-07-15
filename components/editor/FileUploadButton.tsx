@@ -5,7 +5,7 @@ import { File, Image as ImageIcon } from 'lucide-react';
 import { useCallback, ChangeEvent, useId } from 'react';
 import { uploadFile } from '@/lib/supabase/storage';
 import { saveAttachment } from '@/lib/supabase/attachments';
-import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export interface FileUploadButtonProps {
   onUpload: (fileUrl: string, fileName: string, fileType: string, uploadId?: string, isError?: boolean) => void;
@@ -33,7 +33,7 @@ export function FileUploadButton({
   'aria-label': ariaLabel = 'Upload file'
 }: FileUploadButtonProps) {
   const inputId = useId();
-  const { user } = useUser();
+  const { user } = useAuth();
 
   const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

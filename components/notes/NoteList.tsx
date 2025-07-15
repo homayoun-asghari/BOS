@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/AuthProvider';
 import NoteCard from './NoteCard';
 
 // Create a local Skeleton component
@@ -38,6 +39,7 @@ export default function NoteList({ searchParams }: NoteListProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     setIsClient(true);
@@ -45,13 +47,19 @@ export default function NoteList({ searchParams }: NoteListProps) {
 
   useEffect(() => {
     const loadNotes = async () => {
+      if (!user?.id) {
+        console.log('User not authenticated, skipping note load');
+        return;
+      }
+
       try {
         setIsLoading(true);
-        const data = await fetchNotesWithTags();
+        const data = await fetchNotesWithTags(user.id);
         
         if (!data) {
           console.error('No data returned from fetchNotesWithTags');
-          throw new Error('No data returned from fetchNotesWithTags');
+          setError('No notes found');
+          return;
         }
 
         setAllNotes(data);
@@ -66,13 +74,18 @@ export default function NoteList({ searchParams }: NoteListProps) {
     if (isClient) {
       loadNotes();
     }
-  }, [isClient]);
+  }, [isClient, user?.id]); // Add user?.id to dependencies
 
   const handlePinToggle = async (noteId: string, pinned: boolean) => {
+    if (!user?.id) {
+      console.error('User not authenticated');
+      return;
+    }
+    
     try {
-      await toggleNotePin(noteId, pinned);
+      await toggleNotePin(noteId, user.id, pinned);
       // Refresh the entire list from the database
-      const data = await fetchNotesWithTags();
+      const data = await fetchNotesWithTags(user.id);
       setAllNotes(data || []);
     } catch (err) {
       console.error('Failed to toggle pin:', err);
@@ -80,10 +93,15 @@ export default function NoteList({ searchParams }: NoteListProps) {
   };
 
   const handleDelete = async (noteId: string) => {
+    if (!user?.id) {
+      console.error('User not authenticated');
+      return;
+    }
+    
     try {
-      await deleteNote(noteId);
+      await deleteNote(noteId, user.id);
       // Refresh the entire list from the database
-      const data = await fetchNotesWithTags();
+      const data = await fetchNotesWithTags(user.id);
       setAllNotes(data || []);
     } catch (err) {
       console.error('Failed to delete note:', err);

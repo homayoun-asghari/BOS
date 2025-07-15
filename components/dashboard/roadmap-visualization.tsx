@@ -5,7 +5,6 @@ import { RoadmapModal } from '@/components/roadmap/roadmap-modal';
 import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { RoadmapHeader } from './RoadmapHeader';
 import { BackupRoadmapTimeline } from './BackupRoadmapTimeline';
-import { RoadmapPostsSheet } from './roadmap-posts-sheet';
 import { toast } from 'sonner';
 
 export interface TaskType {
@@ -224,9 +223,6 @@ export function RoadmapVisualization() {
           />
         </div>
       )}
-      
-      {/* Roadmap Posts Sheet */}
-      <RoadmapPostsSheet />
     </div>
   );
 }

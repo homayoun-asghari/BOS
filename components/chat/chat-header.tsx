@@ -16,7 +16,7 @@ interface ChatHeaderProps {
 export function ChatHeader({ conversation, currentUserId, className, onBack }: ChatHeaderProps) {
   if (!conversation) {
     return (
-      <div className={cn('border-b p-4', className)}>
+      <div className={cn('p-4', className)}>
         <h2 className="text-lg font-semibold">Select a conversation</h2>
       </div>
     );
@@ -36,7 +36,7 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
     : otherParticipant?.avatar_url;
 
   return (
-    <div className={cn('border-b p-4', className)}>
+    <div className={cn('p-4', className)}>
       <div className="flex items-center gap-3">
         {onBack && (
           <Button

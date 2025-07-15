@@ -1,10 +1,19 @@
 import { useCallback, useState, useEffect } from 'react';
 import { tagService } from '@/lib/supabase/services/tagService';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export const useTags = (noteId?: string) => {
+  const { user } = useAuth();
   const [tags, setTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  
+  const getUserId = useCallback(() => {
+    if (!user?.id) {
+      throw new Error('User must be authenticated to manage tags');
+    }
+    return user.id;
+  }, [user]);
 
   // Load tags for a specific note
   const loadNoteTags = useCallback(async () => {
@@ -32,7 +41,8 @@ export const useTags = (noteId?: string) => {
     setError(null);
     
     try {
-      await tagService.addTagsToNote(noteId, tagNames);
+      const userId = getUserId();
+      await tagService.addTagsToNote(noteId, tagNames, userId);
       await loadNoteTags(); // Refresh the tags
       return tagNames;
     } catch (err) {
@@ -42,7 +52,7 @@ export const useTags = (noteId?: string) => {
     } finally {
       setIsLoading(false);
     }
-  }, [noteId, loadNoteTags]);
+  }, [noteId, loadNoteTags, getUserId]);
 
   // Remove tags from a note
   const removeTags = useCallback(async (tagNames: string[]) => {
@@ -52,7 +62,8 @@ export const useTags = (noteId?: string) => {
     setError(null);
     
     try {
-      await tagService.removeTagsFromNote(noteId, tagNames);
+      const userId = getUserId();
+      await tagService.removeTagsFromNote(noteId, tagNames, userId);
       setTags(prev => prev.filter(tag => !tagNames.includes(tag)));
     } catch (err) {
       console.error('Failed to remove tags:', err);
@@ -60,7 +71,7 @@ export const useTags = (noteId?: string) => {
     } finally {
       setIsLoading(false);
     }
-  }, [noteId]);
+  }, [noteId, getUserId]);
 
   // Load tags when the component mounts or noteId changes
   useEffect(() => {

@@ -1,14 +1,9 @@
-import { createClient } from './client';
-import { NoteWithTags } from '@/types/note';
+import { supabase } from './client';
+import type { NoteWithTags } from '@/types/note';
 
-export async function fetchNotesWithTags(): Promise<NoteWithTags[]> {
-  const supabase = createClient();
-  
-  // First, get the current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    throw new Error('User not authenticated');
+export async function fetchNotesWithTags(userId: string): Promise<NoteWithTags[]> {
+  if (!userId) {
+    throw new Error('User ID is required');
   }
 
   try {
@@ -30,7 +25,7 @@ export async function fetchNotesWithTags(): Promise<NoteWithTags[]> {
           created_at
         )
       `)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -64,51 +59,41 @@ export async function fetchNotesWithTags(): Promise<NoteWithTags[]> {
   }
 }
 
-export async function toggleNotePin(noteId: string, pinned: boolean) {
-  const supabase = createClient();
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    throw new Error('User not authenticated');
+export async function toggleNotePin(noteId: string, userId: string, pinned: boolean) {
+  if (!userId) {
+    throw new Error('User ID is required');
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('notes')
-    .update({ 
-      is_pinned: pinned,
-      updated_at: new Date().toISOString() 
-    })
+    .update({ is_pinned: pinned, updated_at: new Date().toISOString() })
     .eq('id', noteId)
-    .eq('user_id', user.id);
+    .eq('user_id', userId)
+    .select()
+    .single();
 
   if (error) {
-    console.error('Error toggling note pin:', error);
+    console.error('Error toggling pin status:', error);
     throw error;
   }
 
-  return { success: true };
+  return data;
 }
 
-export async function deleteNote(noteId: string) {
-  const supabase = createClient();
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    throw new Error('User not authenticated');
+export async function deleteNote(noteId: string, userId: string) {
+  if (!userId) {
+    throw new Error('User ID is required');
   }
 
   const { error } = await supabase
     .from('notes')
     .delete()
     .eq('id', noteId)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   if (error) {
     console.error('Error deleting note:', error);
     throw error;
   }
-
   return { success: true };
 }

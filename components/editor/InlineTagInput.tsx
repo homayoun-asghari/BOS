@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, KeyboardEvent, useRef, useEffect } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tagService } from '@/lib/supabase/services/tagService';
 import { toast } from 'sonner';
 import { useTagSuggestions } from '@/hooks/useTagSuggestions';
 import { TagSuggestions } from './TagSuggestions';
 import { useOnClickOutside } from 'usehooks-ts';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface InlineTagInputProps extends React.HTMLAttributes<HTMLDivElement> {
   noteId?: string;  // Made optional
@@ -34,72 +35,77 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
   onEnterPress,
   className,
   ...props
-}, ref) => {
+}, forwardedRef) => {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const { suggestions, isLoading } = useTagSuggestions(inputValue);
+  const [operationsInProgress, setOperationsInProgress] = useState<Set<string>>(new Set());
+  const { user } = useAuth();
+  const { suggestions, isLoading } = useTagSuggestions(inputValue, user?.id);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   const handleAddTagWithBackend = async (tag: string) => {
-    if (!tag) return;
+    if (!tag || !user?.id || !noteId) return;
+    
+    const normalizedTag = normalizeTag(tag);
+    if (!normalizedTag) return;
+    
+    const operationKey = `add:${normalizedTag}`;
+    if (operationsInProgress.has(operationKey)) return;
+    
+    // Mark operation as in progress
+    setOperationsInProgress(prev => new Set(prev).add(operationKey));
     
     // Update UI immediately
-    onAddTag(tag);
+    onAddTag(normalizedTag);
     
-    if (!noteId) {
-      return;
+    try {
+      await tagService.addTagsToNote(noteId, [normalizedTag], user.id);
+    } catch (error) {
+      console.error('Failed to add tag:', error);
+      onRemoveTag(normalizedTag);
+      toast.error('Failed to add tag');
+    } finally {
+      setOperationsInProgress(prev => {
+        const next = new Set(prev);
+        next.delete(operationKey);
+        return next;
+      });
     }
-    
-    if (isProcessing) {
-      return;
-    }
-    
-    setIsProcessing(true);
-    
-    // Process in background
-    (async () => {
-      try {
-        await tagService.addTagsToNote(noteId, [tag]);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to add tag';
-        toast.error(errorMessage);
-        // Revert the UI if the backend call fails
-        onRemoveTag(tag);
-      } finally {
-        setIsProcessing(false);
-      }
-    })();
   };
 
   const handleRemoveTagWithBackend = async (tag: string) => {
+    if (!tag || !user?.id || !noteId) return;
+    
+    const normalizedTag = normalizeTag(tag);
+    if (!normalizedTag) return;
+    
+    const operationKey = `remove:${normalizedTag}`;
+    if (operationsInProgress.has(operationKey)) return;
+    
+    // Mark operation as in progress
+    setOperationsInProgress(prev => new Set(prev).add(operationKey));
+    
+    // Store the tag for potential rollback
+    const tagForRollback = tags.find(t => normalizeTag(t) === normalizedTag);
+    
     // Update UI immediately
-    onRemoveTag(tag);
+    onRemoveTag(normalizedTag);
     
-    if (!noteId) {
-      return;
+    try {
+      await tagService.removeTagsFromNote(noteId, [normalizedTag], user.id);
+    } catch (error) {
+      console.error('Failed to remove tag:', error);
+      if (tagForRollback) onAddTag(tagForRollback);
+      toast.error('Failed to remove tag');
+    } finally {
+      setOperationsInProgress(prev => {
+        const next = new Set(prev);
+        next.delete(operationKey);
+        return next;
+      });
     }
-    
-    if (isProcessing) return;
-    
-    setIsProcessing(true);
-    
-    // Process in background
-    (async () => {
-      try {
-        await tagService.removeTagsFromNote(noteId, [tag]);
-      } catch (error) {
-        console.error('Background error removing tag:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to remove tag';
-        toast.error(errorMessage);
-        // Re-add the tag if the backend call fails
-        onAddTag(tag);
-      } finally {
-        setIsProcessing(false);
-      }
-    })();
   };
 
   const normalizeTag = (tag: string): string => {
@@ -229,12 +235,17 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
 
   // Focus the input when component mounts or when ref changes
   useEffect(() => {
-    if (inputRef.current && ref) {
-      // @ts-ignore - We know the ref is compatible
-      ref.current = inputRef.current;
+    if (inputRef.current) {
+      if (forwardedRef) {
+        if (typeof forwardedRef === 'function') {
+          forwardedRef(inputRef.current);
+        } else {
+          forwardedRef.current = inputRef.current;
+        }
+      }
       inputRef.current.focus();
     }
-  }, [ref]);
+  }, [forwardedRef]);
 
   // Show warning if noteId is not available
   useEffect(() => {
@@ -244,7 +255,8 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
   }, [noteId]);
 
   // Handle clicks outside to close suggestions
-  useOnClickOutside(containerRef, () => {
+  useOnClickOutside(containerRef as React.RefObject<HTMLElement>, () => {
+    if (operationsInProgress.size > 0) return;
     setIsFocused(false);
   });
 
@@ -252,14 +264,8 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
   useEffect(() => {
     setSelectedSuggestionIndex(-1);
   }, [inputValue]);
-  
-  // Scroll selected suggestion into view
-  useEffect(() => {
-    if (selectedSuggestionIndex >= 0 && containerRef.current) {
-      const selectedElement = containerRef.current.querySelector('[data-selected="true"]');
-      selectedElement?.scrollIntoView({ block: 'nearest' });
-    }
-  }, [selectedSuggestionIndex]);
+
+  // ... (rest of the code remains the same)
 
   return (
     <div className="relative w-full" ref={containerRef} {...props}>
@@ -303,7 +309,7 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
                 handleRemoveTagWithBackend(tag);
               }}
               className="rounded-full p-0.5 hover:bg-muted-foreground/10 transition-colors"
-              disabled={isProcessing}
+              disabled={operationsInProgress.size > 0}
             >
               <X className="h-3 w-3" />
             </button>
@@ -319,11 +325,11 @@ const InlineTagInput = React.forwardRef<HTMLInputElement, InlineTagInputProps>((
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             className={cn(
-              "w-full bg-transparent outline-none",
-              isProcessing && "opacity-50 cursor-not-allowed"
+              "w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground/50",
+              operationsInProgress.size > 0 && "opacity-50 cursor-not-allowed"
             )}
             placeholder={type || status || tags.length > 0 ? '' : "#Type #Status #Topic ..."}
-            disabled={isProcessing}
+            disabled={operationsInProgress.size > 0}
           />
           
           <div className="absolute top-full left-0 z-10 w-48">

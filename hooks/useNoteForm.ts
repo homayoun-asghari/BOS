@@ -1,26 +1,13 @@
-import { useState, useCallback, useMemo } from 'react';
-import { createClient } from '@/lib/supabase/browser';
-import { useUser } from './useUser';
+import { useState, useCallback } from 'react';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/auth/AuthProvider';
 import useNotes from './useNotes';
 import { NoteFormValues, DEFAULT_NOTE_VALUES } from '@/types/note-form';
 import { cleanupNoteAttachments } from '@/lib/editor/attachments';
 import { TiptapNode, TiptapContent } from '@/types/tiptap';
 
-// Helper type for Supabase client
-type SupabaseClient = ReturnType<typeof createClient>;
-
 type SaveNoteFunction = (contentToSave?: unknown) => Promise<NoteFormValues>;
 
-// Helper function to safely convert date to ISO string
-const toSafeISOString = (date: Date | string | null | undefined, fallback: Date): string => {
-  try {
-    if (!date) return fallback.toISOString();
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return isNaN(d.getTime()) ? fallback.toISOString() : d.toISOString();
-  } catch {
-    return fallback.toISOString();
-  }
-};
 
 interface UseNoteFormReturn {
   // Form state
@@ -57,14 +44,10 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const { user } = useUser();
+  const { user } = useAuth();
   const { syncNoteLinks } = useNotes();
   
-  // Memoize Supabase client
-  const supabase = useMemo(() => createClient(), []);
-
-
-
+  // Using singleton Supabase client
   // Extract plain text title from content (first line only)
   // Process content for saving
   const processContent = useCallback((content: unknown): TiptapNode | null => {
@@ -148,6 +131,11 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
     if (!user) {
       throw new Error('User must be authenticated to save notes');
     }
+    
+    // Verify we have a valid Supabase client
+    if (!supabase) {
+      throw new Error('Database connection not available');
+    }
 
     setIsSaving(true);
     setSaveError(null);
@@ -177,12 +165,48 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
         noteData.created_at = values.created_at || now;
       }
 
-      const { data: savedNote, error } = values.id
-        ? await updateExistingNote(supabase, values.id, noteData as NoteFormValues)
-        : await createNewNote(supabase, noteData as NoteFormValues);
-
-      if (error) throw error;
-      if (!savedNote) throw new Error('Failed to save note');
+      let savedNote;
+      try {
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Error getting session:', sessionError);
+          throw new Error('Authentication error: Could not verify session');
+        }
+        
+        if (!session) {
+          throw new Error('No active session. User must be logged in to save notes.');
+        }
+        
+        console.log('Saving note data:', {
+          noteId: values.id,
+          noteData,
+          userId: session.user.id,
+          session: {
+            expiresAt: session.expires_at,
+            expiresIn: session.expires_in,
+            accessToken: session.access_token ? '***' : 'missing',
+            refreshToken: session.refresh_token ? '***' : 'missing'
+          }
+        });
+        
+        const result = values.id
+          ? await updateExistingNote(values.id, noteData as NoteFormValues)
+          : await createNewNote(noteData as NoteFormValues);
+        
+        if (!result) {
+          throw new Error('No result returned from save operation');
+        }
+        savedNote = result;
+      } catch (error) {
+        console.error('Error in save operation:', {
+          error,
+          noteId: values.id,
+          noteData
+        });
+        throw new Error(`Failed to save note: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       // Update local state
       setValues(prev => ({
@@ -219,7 +243,7 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
     } finally {
       setIsSaving(false);
     }
-  }, [user, syncNoteLinks, values, supabase, extractTitleFromContent, processContent, setIsSaving, setSaveError, setValues]);
+  }, [user, syncNoteLinks, values, extractTitleFromContent, processContent, setIsSaving, setSaveError, setValues]);
 
   // Return all values and methods
   const result: UseNoteFormReturn = {
@@ -253,40 +277,58 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
 }
 
 // Database operations
-async function updateExistingNote(
-  supabase: SupabaseClient,
-  id: string, 
-  data: NoteFormValues
-) {
-  const response = await supabase
-    .from('notes')
-    .update(data)
-    .eq('id', id)
-    .select()
-    .single();
-  
-  if (response.error) {
-    console.error('Error updating note:', response.error);
-    throw response.error;
+async function updateExistingNote(id: string, data: NoteFormValues) {
+  try {
+    console.log('Updating note:', { id, data });
+    const { data: updatedNote, error } = await supabase
+      .from('notes')
+      .update({
+        ...data,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating note:', error);
+      throw error;
+    }
+    
+    if (!updatedNote) {
+      throw new Error('No data returned after update');
+    }
+    
+    console.log('Note updated successfully:', updatedNote);
+    return updatedNote;
+  } catch (error) {
+    console.error('Error in updateExistingNote:', error);
+    throw error;
   }
-  
-  return response;
 }
 
-async function createNewNote(
-  supabase: SupabaseClient,
-  data: NoteFormValues
-) {
-  const response = await supabase
-    .from('notes')
-    .insert([data])
-    .select()
-    .single();
-  
-  if (response.error) {
-    console.error('Error creating note:', response.error);
-    throw response.error;
+async function createNewNote(data: NoteFormValues) {
+  try {
+    console.log('Creating new note:', data);
+    const { data: newNote, error } = await supabase
+      .from('notes')
+      .insert([data])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating note:', error);
+      throw error;
+    }
+    
+    if (!newNote) {
+      throw new Error('No data returned after insert');
+    }
+    
+    console.log('Note created successfully:', newNote);
+    return newNote;
+  } catch (error) {
+    console.error('Error in createNewNote:', error);
+    throw error;
   }
-  
-  return response;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { ChatMessage, Conversation } from '@/types/chat';
-import { useUser } from './useUser';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { dummyRooms, dummyUsers, dummyMessages, dummyParticipants, currentUser } from '@/lib/chatData';
 
 type DummyMessage = {
@@ -14,7 +14,7 @@ type DummyMessage = {
 };
 
 export function useChat() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const userId = user?.id;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -25,7 +25,7 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const supabase = createClient();
+
 
   // Get current conversation details
   const currentConversation = useMemo<Conversation | null>(() => {

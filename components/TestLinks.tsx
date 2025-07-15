@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-
-const supabase = createClient();
+import { supabase } from '@/lib/supabase/client';
 
 export function TestLinks() {
   const params = useParams();
   const noteId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [links, setLinks] = useState<any[]>([]);
+  const [links, setLinks] = useState<Array<{id: string, note_id: string, linked_note_id: string, created_at: string}>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

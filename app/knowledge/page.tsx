@@ -22,6 +22,7 @@ export default function KnowledgePage() {
   const [view, setView] = useState<'list' | 'graph'>('graph');
   const [tags, setTags] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
   const router = useRouter();
   const searchParamsObj = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,46 +136,72 @@ export default function KnowledgePage() {
       <div className="flex flex-col flex-1 space-y-4">
         {/* Search and View Toggle */}
         <div className="flex items-center justify-between w-full gap-2">
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <div className="relative flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-              {tags.map(tag => (
-                <Badge
-                  key={tag}
-                  variant="outline"
-                  className="flex items-center gap-1"
-                >
-                  <span>#{tag}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveTag(tag);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </Badge>
-              ))}
-              <Input
-                ref={inputRef}
-                placeholder="Filter by tags and search notes..."
-                value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                  // Update search query immediately if not typing a tag
-                  if (!e.target.value.startsWith('#')) {
-                    setSearchQuery(e.target.value);
-                    const params = new URLSearchParams(window.location.search);
-                    params.set('search', e.target.value);
-                    router.push(`?${params.toString()}`);
-                  }
+          <div className="relative">
+            <div className={`transition-all duration-300 ease-in-out ${isSearchActive || searchQuery || inputValue || tags.length > 0 ? 'w-full max-w-md' : 'w-10'}`}>
+            {!isSearchActive && !searchQuery && !inputValue && tags.length === 0 ? (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 transition-all duration-300"
+                onClick={() => {
+                  setIsSearchActive(true);
+                  // Use setTimeout to ensure the input is rendered before focusing
+                  setTimeout(() => inputRef.current?.focus(), 0);
                 }}
-                onKeyDown={handleKeyDown}
-                className="flex-1 border-0 bg-transparent px-0 py-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            ) : (
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  {tags.map(tag => (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="flex items-center gap-1"
+                    >
+                      <span>#{tag}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-3.5 w-3.5 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveTag(tag);
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                  <Input
+                    ref={inputRef}
+                    placeholder="Filter by tags and search notes..."
+                    value={inputValue}
+                    onChange={(e) => {
+                      setInputValue(e.target.value);
+                      // Update search query immediately if not typing a tag
+                      if (!e.target.value.startsWith('#')) {
+                        setSearchQuery(e.target.value);
+                        const params = new URLSearchParams(window.location.search);
+                        params.set('search', e.target.value);
+                        router.push(`?${params.toString()}`);
+                      }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onBlur={(e) => {
+                      // Only collapse if clicking outside and there's no content
+                      if (!e.currentTarget.contains(e.relatedTarget as Node) && 
+                          !inputValue && !searchQuery && tags.length === 0) {
+                        setIsSearchActive(false);
+                      }
+                    }}
+                    className="flex-1 border-0 bg-transparent px-0 py-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-[10px] placeholder:leading-none placeholder:tracking-tight h-6"
+                  />
+                </div>
+              </div>
+            )}
             </div>
           </div>
           
@@ -214,15 +241,30 @@ export default function KnowledgePage() {
         </Tabs>
       </div>
       
-      {/* Floating Action Button */}
-      <div className="fixed bottom-6 right-6 z-10">
-        <Button 
-          asChild 
-          size="icon" 
-          className="rounded-full h-12 w-12 shadow-lg"
+      {/* Floating Action Button - Matches right panel */}
+      <div className="fixed bottom-6 right-4 z-30 flex flex-col items-end gap-2">
+        {/* FAB Options - Only show on medium screens and up */}
+        <div className="hidden md:flex flex-col items-end gap-2 transition-all duration-200 opacity-0 translate-y-2 pointer-events-none">
+          <Button 
+            asChild
+            variant="default"
+            size="sm"
+            className="px-3 py-1.5 h-auto rounded-full shadow-lg gap-2"
+          >
+            <Link href="/notes/new" className="flex items-center gap-2">
+              <Plus className="h-3.5 w-3.5" />
+              <span>New Note</span>
+            </Link>
+          </Button>
+        </div>
+        
+        {/* Main FAB Button - Matches right panel */}
+        <Button
+          asChild
+          className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg transition-colors"
         >
           <Link href="/notes/new">
-            <Plus className="h-5 w-5" />
+            <Plus className="h-5 w-5" strokeWidth={2.5} />
           </Link>
         </Button>
       </div>

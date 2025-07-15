@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useUser } from '@/hooks/useUser';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { supabase } from '@/lib/supabase/client';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -197,7 +197,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     })));
   };
 
-  const { user } = useUser();
+  const { user } = useAuth();
 
   const handleSave = useCallback(async () => {
     if (!user) {

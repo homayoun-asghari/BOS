@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useRef as useReactRef } from 
 import { useNoteForm, NoteFormValues } from '@/hooks/useNoteForm';
 import { NewTipTapEditor as TipTapEditor, TipTapEditorRef } from '../editor/NewTipTapEditor';
 import { saveAttachment } from '@/lib/supabase/attachments';
-import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { useTags } from '@/hooks/useTags';
 
 interface NoteItem {
@@ -35,7 +35,7 @@ export default function NoteForm({
   const [content, setContent] = useState(initialData?.content || '');
   const prevContentRef = useRef(content);
   const isSavingRef = useRef(false);
-  const { user } = useUser();
+  const { user } = useAuth();
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);

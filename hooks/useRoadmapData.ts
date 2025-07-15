@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useUser } from '@/hooks/useUser';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 // Simple cache implementation with proper typing
@@ -65,7 +65,7 @@ const EMPTY_ROADMAP: Roadmap = {
 };
 
 export const useRoadmapData = () => {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

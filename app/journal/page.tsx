@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { JournalDatePicker } from '@/components/journal/JournalDatePicker';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { MinimalEditorWrapper } from '@/components/editor/MinimalEditorWrapper';
 
 interface JSONContent {
@@ -34,7 +34,6 @@ export default function JournalPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [journal, setJournal] = useState<JournalEntry | null>(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
-  const supabase = createClient();
 
   // Format date as "YYYY DayOfWeek" (e.g., "2025 Friday")
   const formatDateHeader = useCallback((date: Date): string => {
@@ -464,19 +463,16 @@ export default function JournalPage() {
     <TooltipProvider>
       <div className="flex flex-col h-screen w-full">
         <div className="px-6 pt-6 w-full flex-shrink-0">
-          <div className="flex justify-between items-center w-full">
-            <h1 className="text-2xl font-semibold">How was your day?</h1>
-            <div>
-              <JournalDatePicker 
-                selectedDate={selectedDate}
-                onDateChange={handleDateChange}
-              />
-            </div>
+          <div className="flex justify-end w-full">
+            <JournalDatePicker 
+              selectedDate={selectedDate}
+              onDateChange={handleDateChange}
+            />
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col w-full overflow-hidden">
-          <div className="w-full px-6 py-4 h-full">
+        <div className="flex-1 flex flex-col w-full overflow-hidden p-0 sm:p-4">
+          <div className="w-full h-full">
             <div className="w-full h-full">
               <div className="h-full w-full relative">
                 {journal && (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { useUser } from '@/hooks/useUser';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Navbar } from '@/components/layout/navbar';
 import { SettingsModal } from '@/components/settings/settings-modal';
@@ -20,7 +20,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
-  const { user, loading: userLoading } = useUser();
+  const { user, isLoading: userLoading } = useAuth();
 
   useEffect(() => {
     if (mainRef.current) {

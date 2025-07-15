@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@/lib/supabase/browser';
+import { supabase } from '@/lib/supabase/client';
 import NoteForm from '@/components/notes/NoteForm';
 import { v4 as uuidv4 } from 'uuid';
 import { useRouter } from 'next/navigation';
 
-const supabase = createClient();
 
 export default function NewNotePage() {
   const router = useRouter();

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingCard } from "@/components/pricing/pricing-card";
-import { useUser } from "@/hooks/useUser";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 type BillingCycle = "monthly" | "annually";
 
@@ -26,8 +26,8 @@ const item = {
 
 export default function UpgradePage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  // User data could be used for checking current plan
-  useUser();
+  // Using useAuth to ensure auth state is properly initialized
+  useAuth();
 
   const features = {
     projects: "Projects",

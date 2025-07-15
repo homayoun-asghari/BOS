@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from '@/lib/supabase';
-import { useUser } from '@/hooks/useUser';
+import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useShuffleSettings } from '@/hooks/useShuffleSettings';
 
@@ -28,7 +28,7 @@ interface PersonalCode {
 }
 
 const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, onOpenChange }, ref) => {
-  const { user } = useUser();
+  const { user } = useAuth();
 
   const [isOpen, setIsOpen] = useState(propIsOpen || false);
   
@@ -159,9 +159,9 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
     }
   };
 
-  // Memoize fetchPersonalCodes to prevent unnecessary re-renders
+  // Memoize fetchPersonalCodes with user.id as the only dependency
   const fetchPersonalCodesMemoized = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     
     try {
       setIsLoading(true);
@@ -172,13 +172,15 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
         .order('created_at', { ascending: false });
       
       if (error) throw error;
+      
+      // Update state with the new data
       setCodes(data || []);
     } catch (error) {
       console.error('Error fetching personal codes:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.id]); // Only depend on user.id
 
   // Set up the shuffle interval when codes or shuffleInterval changes
   useEffect(() => {
@@ -255,13 +257,21 @@ const TheCode = forwardRef<TheCodeHandles, TheCodeProps>(({ isOpen: propIsOpen, 
   
   // Fetch codes when component mounts or user changes
   useEffect(() => {
-    fetchPersonalCodesMemoized();
+    if (user?.id) {  // Only fetch if user.id is available
+      fetchPersonalCodesMemoized();
+    }
+    
+    // Cleanup function
     return () => {
       if (shuffleTimerRef.current) {
         clearInterval(shuffleTimerRef.current);
+        shuffleTimerRef.current = null;
       }
     };
-  }, [fetchPersonalCodesMemoized]);
+    // We're intentionally omitting fetchPersonalCodesMemoized from dependencies
+    // because we only want to fetch when user.id changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Close dropdown when clicking outside or on user menu
   useEffect(() => {

@@ -5,6 +5,7 @@ import { NoteGraphView, NoteGraphModel } from 'note-graph';
 
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { fetchKnowledgeGraphData } from '@/lib/supabase/services/knowledgeGraph';
 
 // Simple loading skeleton component
@@ -36,6 +37,7 @@ export default function KnowledgeGraph({
 }: KnowledgeGraphProps) {
   const router = useRouter();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphViewRef = useRef<NoteGraphView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -260,7 +262,11 @@ export default function KnowledgeGraph({
       try {
         setIsLoading(true);
         setError(null);
-        const data = await fetchKnowledgeGraphData();
+        if (!user?.id) {
+          console.log('User not authenticated, skipping graph data load');
+          return;
+        }
+        const data = await fetchKnowledgeGraphData(user.id);
         if (isMounted) {
           setGraphData(data);
         }

@@ -1,34 +1,35 @@
-import { createClient } from '@/lib/supabase/client';
-import { Database } from '@/lib/supabase/database.types';
+import { supabase } from '@/lib/supabase/client';
+import { getCurrentUser } from '@/lib/supabase/auth';
 
-type Tag = {
+interface Tag {
   id: string;
-  user_id: string;
   name: string;
+  user_id: string;
   created_at: string;
-};
+  updated_at: string;
+}
 
-type NoteTag = {
+interface NoteTag {
   note_id: string;
   tag_id: string;
-};
+}
 
 class TagService {
-  private supabase = createClient();
+  private supabase = supabase;
 
   /**
    * Get all tags for the current user
    */
-  async getUserTags(): Promise<Tag[]> {
-    const { data: { user } } = await this.supabase.auth.getUser();
-    if (!user) return [];
+  async getUserTags(userId: string): Promise<Tag[]> {
+    if (!userId) return [];
 
     const { data, error } = await this.supabase
       .from('tags')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (error) {
+      console.error('Error fetching tags:', error);
       return [];
     }
 
@@ -38,14 +39,13 @@ class TagService {
   /**
    * Ensure tags exist and return their IDs
    */
-  private async ensureTags(tagNames: string[]): Promise<string[]> {
+  private async ensureTags(tagNames: string[], userId: string): Promise<string[]> {
     if (tagNames.length === 0) {
       return [];
     }
     
-    const { data: { user }, error: authError } = await this.supabase.auth.getUser();
-    if (!user || authError) {
-      throw new Error('User not authenticated');
+    if (!userId) {
+      throw new Error('User ID is required');
     }
 
     // Get existing tags
@@ -53,7 +53,7 @@ class TagService {
       .from('tags')
       .select('id, name')
       .in('name', tagNames)
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (fetchError) {
       throw fetchError;
@@ -70,7 +70,7 @@ class TagService {
         .from('tags')
         .insert({
           name,
-          user_id: user.id,
+          user_id: userId,
           created_at: new Date().toISOString()
         })
         .select('id')
@@ -95,14 +95,13 @@ class TagService {
   /**
    * Add tags to a note
    */
-  async addTagsToNote(noteId: string, tagNames: string[]): Promise<NoteTag[]> {
+  async addTagsToNote(noteId: string, tagNames: string[], userId: string): Promise<NoteTag[]> {
     if (tagNames.length === 0) {
       return [];
     }
     
-    const { data: { user }, error: authError } = await this.supabase.auth.getUser();
-    if (!user || authError) {
-      throw new Error('User not authenticated');
+    if (!userId) {
+      throw new Error('User ID is required');
     }
     
     console.log('[addTagsToNote] Verifying note ownership');
@@ -111,14 +110,14 @@ class TagService {
       .from('notes')
       .select('id')
       .eq('id', noteId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
       
     if (noteError || !note) {
       throw new Error('Note not found or access denied');
     }
     
-    const tagIds = await this.ensureTags(tagNames);
+    const tagIds = await this.ensureTags(tagNames, userId);
     
     if (tagIds.length === 0) {
       return [];
@@ -177,18 +176,17 @@ class TagService {
   /**
    * Remove tags from a note
    */
-  async removeTagsFromNote(noteId: string, tagNames: string[]): Promise<void> {
+  async removeTagsFromNote(noteId: string, tagNames: string[], userId: string): Promise<void> {
     if (tagNames.length === 0) return;
     
-    const { data: { user } } = await this.supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    if (!userId) throw new Error('User ID is required');
 
     // Get tag IDs for the given names and user
     const { data: tags } = await this.supabase
       .from('tags')
       .select('id')
       .in('name', tagNames)
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (!tags || tags.length === 0) return;
 
@@ -210,19 +208,33 @@ class TagService {
    * Get all tags for a specific note
    */
   async getNoteTags(noteId: string): Promise<Tag[]> {
-    const { data, error } = await this.supabase
-      .from('note_tags')
-      .select(`
-        tag:tags!inner(*)
-      `)
-      .eq('note_id', noteId);
+    try {
+      // First, get the tag IDs for the note
+      const { data: noteTags, error: noteTagsError } = await this.supabase
+        .from('note_tags')
+        .select('tag_id')
+        .eq('note_id', noteId);
 
-    if (error) {
+      if (noteTagsError) throw noteTagsError;
+      if (!noteTags || noteTags.length === 0) return [];
+
+      // Extract tag IDs
+      const tagIds = noteTags.map(nt => nt.tag_id);
+
+      // Then fetch the actual tags
+      const { data: tags, error: tagsError } = await this.supabase
+        .from('tags')
+        .select('*')
+        .in('id', tagIds);
+
+      if (tagsError) throw tagsError;
+      
+      // Ensure we return an array of Tag objects
+      return (tags || []) as Tag[];
+    } catch (error) {
       console.error('Error fetching note tags:', error);
       return [];
     }
-
-    return data.map(({ tag }) => tag as Tag);
   }
 }
 

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookOpen, Book, MoreHorizontal } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Book, Users } from 'lucide-react';
 
 type SidebarItem = {
   name: string;
@@ -98,10 +98,10 @@ export function Sidebar({ className }: SidebarProps) {
                   ? 'bg-primary/10 text-primary' 
                   : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
               }`}
-              aria-label="More options"
+              aria-label="Community"
             >
               <div className="h-6 w-6 flex items-center justify-center">
-                <MoreHorizontal className="h-5 w-5" />
+                <Users className="h-5 w-5" />
               </div>
             </Link>
           </nav>

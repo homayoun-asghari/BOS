@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import { uploadEditorFile, type UploadResult } from '@/lib/supabase/editor-uploads';
 import { saveAttachment } from '@/lib/supabase/attachments';
-import { useUser } from './useUser';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export type { UploadResult };
 
 export function useEditorUpload(noteId?: string) {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 

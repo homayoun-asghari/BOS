@@ -1,7 +1,6 @@
-import { createClient } from './client';
+import { supabase } from './client';
 import { v4 as uuidv4 } from 'uuid';
 
-const supabase = createClient();
 const BUCKET_NAME = 'notes-attachments';
 
 export interface UploadResult {

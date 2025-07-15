@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/browser';
+import { supabase } from '@/lib/supabase/client';
 import NoteForm from '@/components/notes/NoteForm';
 import { Note } from '@/types/note';
 
@@ -14,7 +14,6 @@ export default function NotePage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
   
   const fetchNotes = useCallback(async () => {
     try {

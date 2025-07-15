@@ -36,7 +36,7 @@ export interface NoteWithTags {
 export interface NoteFormData {
   id?: string;
   title?: string;
-  content?: Record<string, unknown>;
+  content?: Record<string, unknown> | string;
   tags?: string[];
   type?: string | null;
   status?: string | null;
@@ -44,6 +44,9 @@ export interface NoteFormData {
   updated_at?: string;
   user_id?: string;
   is_pinned?: boolean;
+  folder_id?: string | null;
+  is_archived?: boolean;
+  color?: string | null;
 }
 
 // Component props

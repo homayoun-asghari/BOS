@@ -1,6 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
-
-const supabase = createClient();
+import { supabase } from '@/lib/supabase/client';
 
 // Cache for signed URLs to avoid unnecessary API calls
 interface UrlCacheEntry {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { tagService } from '@/lib/supabase/services/tagService';
 
-export const useTagSuggestions = (inputValue: string) => {
+export const useTagSuggestions = (inputValue: string, userId?: string) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -17,7 +17,11 @@ export const useTagSuggestions = (inputValue: string) => {
       setError(null);
 
       try {
-        const userTags = await tagService.getUserTags();
+        if (!userId) {
+          setSuggestions([]);
+          return;
+        }
+        const userTags = await tagService.getUserTags(userId);
         const searchTerm = inputValue.toLowerCase().replace(/^#/, '');
         
         const matchedTags = userTags
@@ -43,7 +47,7 @@ export const useTagSuggestions = (inputValue: string) => {
 
     const debounceTimer = setTimeout(fetchSuggestions, 200);
     return () => clearTimeout(debounceTimer);
-  }, [inputValue]);
+  }, [inputValue, userId]);
 
   return { suggestions, isLoading, error };
 };

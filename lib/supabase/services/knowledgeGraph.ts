@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 
 // Define our types
 type Tag = {
@@ -6,28 +6,32 @@ type Tag = {
   name: string;
 };
 
-export interface KnowledgeGraphNode {
+interface KnowledgeGraphNode {
   id: string;
-  title: string;
+  label: string;
+  title?: string;
+  type: 'note' | 'tag' | 'link';
+  x: number;
+  y: number;
+  size: number;
+  color: string;
   linkTo: string[];
   referencedBy: string[];
   tags?: Tag[];
   content_search?: string;
+  // Add other known properties here
+  [key: string]: unknown; // For any additional properties that might be added dynamically
 }
 
-export async function fetchKnowledgeGraphData(): Promise<KnowledgeGraphNode[]> {
-  const supabase = createClient();
-  
-  // Get the current user's ID
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+export async function fetchKnowledgeGraphData(userId: string): Promise<KnowledgeGraphNode[]> {
+  if (!userId) return [];
 
   try {
     // First, fetch all notes for the current user
     const { data: notes, error: notesError } = await supabase
       .from('notes')
       .select('id, title, content_search')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (notesError) throw notesError;
     if (!notes?.length) return [];
@@ -71,17 +75,24 @@ export async function fetchKnowledgeGraphData(): Promise<KnowledgeGraphNode[]> {
     // Create a map to store the relationships
     const noteMap = new Map<string, KnowledgeGraphNode>();
     
-    // Initialize all nodes with their data
-    notes.forEach(note => {
-      noteMap.set(note.id, {
-        id: note.id,
-        title: note.title,
-        linkTo: [],
-        referencedBy: [],
-        tags: tagsByNoteId.get(note.id) || [],
-        content_search: note.content_search
-      });
-    });
+    // Create nodes for each note
+    const noteNodes = notes.map(note => ({
+      id: note.id,
+      label: note.title || 'Untitled',
+      type: 'note' as const,
+      title: note.title,
+      linkTo: [],
+      referencedBy: [],
+      tags: tagsByNoteId.get(note.id) || [],
+      content_search: note.content_search,
+      x: 0,
+      y: 0,
+      size: 1,
+      color: '#4f46e5' // Default color
+    }));
+
+    // Add nodes to the map
+    noteNodes.forEach(node => noteMap.set(node.id, node));
 
     // Process the links to build the relationships
     links?.forEach(link => {

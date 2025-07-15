@@ -1,29 +1,31 @@
-import { createClient } from './client';
-import { getCurrentUser, getSession } from './auth';
+import { supabase } from './client';
 
 const BUCKET_NAME = 'notes-attachments';
 
-// Initialize Supabase client
-const supabase = createClient();
+export interface UploadResult {
+  path: string;
+  storagePath: string;
+  fullPath: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+}
 
-// Get authenticated Supabase client with user session
-const getAuthClient = async () => {
-  try {
-    const session = await getSession();
-    if (!session) {
-      throw new Error('No active session. Please sign in.');
-    }
-    return supabase;
-  } catch (error) {
-    console.error('Authentication error:', error);
-    throw new Error('Failed to authenticate. Please try signing in again.');
-  }
-};
+export interface SignedUrlResult {
+  signedUrl: string;
+  path: string;
+  expiresAt: Date;
+}
+
+interface DeleteResult {
+  success: boolean;
+  message?: string;
+}
 
 /**
  * Ensures the storage bucket exists and is properly configured
  */
-export const ensureBucketExists = async () => {
+export const ensureBucketExists = async (): Promise<boolean> => {
   try {
     console.log(`Using bucket: ${BUCKET_NAME}`);
     
@@ -39,7 +41,6 @@ export const ensureBucketExists = async () => {
     }
     
     console.log('Bucket access verified. Bucket contents:', bucketList);
-    
     return true;
   } catch (error) {
     console.error('Error in ensureBucketExists:', error);
@@ -50,35 +51,36 @@ export const ensureBucketExists = async () => {
 /**
  * Uploads a file to Supabase Storage
  */
-export const uploadFile = async (file: File, pathPrefix: string = '') => {
+export const uploadFile = async (file: File, pathPrefix = ''): Promise<UploadResult> => {
+  // Validate file
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  // Check file size (limit to 5MB)
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File size exceeds the limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+  }
+
   try {
-    // Validate file
-    if (!file) {
-      throw new Error('No file provided');
-    }
-
-    // Check file size (limit to 5MB)
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds the limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
-    }
-
-    // Ensure the bucket exists and we have an authenticated client
     await ensureBucketExists();
-    const authClient = await getAuthClient();
     
-    // Get user ID for path organization
-    const user = await getCurrentUser();
-    const userId = user?.id || 'anonymous';
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    // Create a unique filename with timestamp and random string
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    if (userError || !user) {
+      throw new Error(userError?.message || 'User not authenticated');
+    }
+    
+    // Generate a unique filename with user ID and timestamp
+    const fileExt = file.name.split('.').pop() || 'bin';
+    const fileName = `${user.id}_${Date.now()}.${fileExt}`;
     
     // Construct the file path with proper folder structure
     const pathSegments = [
-      userId,
-      ...(pathPrefix ? [pathPrefix] : [])
+      user.id,
+      ...(pathPrefix ? [pathPrefix] : []),
     ].filter(Boolean);
     
     const directoryPath = pathSegments.join('/');
@@ -87,7 +89,7 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
     console.log('Uploading file to path:', filePath);
     
     // Upload the file with proper content type
-    const { data, error } = await authClient.storage
+    const { data, error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -95,78 +97,89 @@ export const uploadFile = async (file: File, pathPrefix: string = '') => {
         contentType: file.type || 'application/octet-stream',
       });
     
-    if (error) {
-      console.error('Error uploading file:', error);
-      throw new Error(`Upload failed: ${error.message}`);
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
     }
     
-    // Return the full storage path in a consistent format
-    const storagePath = `${BUCKET_NAME}/${data.path}`;
+    if (!data) {
+      throw new Error('No data returned from upload');
+    }
     
-    console.log('File uploaded successfully:', {
+    // Return the file information
+    const storagePath = `${BUCKET_NAME}/${data.path}`;
+    return {
       path: data.path,
       storagePath,
-      fullPath: storagePath
-    });
-    
-    // Return a consistent response format with both path and storagePath
-    return {
-      path: data.path, // Relative path within the bucket
-      storagePath,     // Full storage path including bucket name
+      fullPath: storagePath,
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size
     };
   } catch (error) {
     console.error('Error in uploadFile:', error);
-    throw error;
+    throw error instanceof Error ? error : new Error('Failed to upload file');
   }
 };
 
 /**
- * Get a signed URL for a private file
+ * Gets a signed URL for a private file
  * @param filePath Path to the file in the bucket (without the bucket name prefix)
  * @param expiresIn Expiration time in seconds (default: 1 hour)
- * @returns Signed URL string
+ * @returns Signed URL result with expiration information
  */
-export const getSignedUrl = async (filePath: string, expiresIn = 3600): Promise<string | null> => {
+export const getSignedUrl = async (
+  filePath: string,
+  expiresIn = 3600
+): Promise<SignedUrlResult> => {
   try {
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .createSignedUrl(filePath, expiresIn);
 
     if (error) {
-      console.error('Error creating signed URL:', error);
-      return null;
+      throw new Error(`Failed to create signed URL: ${error.message}`);
     }
 
-    return data.signedUrl;
+    if (!data) {
+      throw new Error('No data returned when creating signed URL');
+    }
+
+    return {
+      signedUrl: data.signedUrl,
+      path: filePath,
+      expiresAt: new Date(Date.now() + expiresIn * 1000)
+    };
   } catch (error) {
     console.error('Error in getSignedUrl:', error);
-    return null;
+    throw error instanceof Error ? error : new Error('Failed to get signed URL');
   }
 };
 
 /**
  * Deletes a file from Supabase Storage
  * @param filePath Path to the file to delete (relative to the bucket)
+ * @returns Delete result with success status and optional message
  */
-export const deleteFile = async (filePath: string) => {
+export const deleteFile = async (filePath: string): Promise<DeleteResult> => {
   try {
-    // Get authenticated client and delete the file
-    const authClient = await getAuthClient();
-    const { error } = await authClient.storage
+    const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .remove([filePath]);
-    
+
     if (error) {
       console.error('Error deleting file:', error);
-      throw error;
+      return {
+        success: false,
+        message: error.message
+      };
     }
-    
-    return true;
+
+    return { success: true };
   } catch (error) {
     console.error('Error in deleteFile:', error);
-    throw error;
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to delete file'
+    };
   }
 };
