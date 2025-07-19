@@ -4,6 +4,23 @@
 @import "./partials/typography.css";
 @import "./partials/zoom.css";
 
+/* Ensure editor content is always visible regardless of aria-hidden */
+.minimal-tiptap-editor[aria-hidden="true"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure the editor content container is always visible */
+.minimal-tiptap-editor .ProseMirror[aria-hidden="true"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+
 /* Safari sticky header fixes */
 @supports (-webkit-touch-callout: none) {
   /* Target Safari on iOS specifically */

@@ -2,9 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile viewport fixes */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    height: 100%;
+  }
+  
+  body {
+    min-height: 100%;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Improve scrolling on iOS */
+  html, body {
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+  }
+  
+  /* Allow scrolling in content areas */
+  .scrollable-content {
+    -webkit-overflow-scrolling: touch;
+    height: auto;
+    width: 100%;
+  }
+  
+  /* Mobile keyboard handling - styles applied via JavaScript */
+  
+  /* Ensure bottom navigation is above the keyboard */
+  .keyboard-visible .bottom-nav {
+    position: relative;
+    z-index: 1000;
+  }
+  
+  /* Adjust editor content when keyboard is visible */
+  .keyboard-visible .editor-content {
+    padding-bottom: 60px; /* Adjust based on your bottom nav height */
+  }
+}
+
 /* TipTap Editor Styles */
 .ProseMirror {
-  @apply min-h-[calc(100vh-200px)] p-4 outline-none;
+  @apply min-h-[1em] p-4 outline-none;
 }
 
 .ProseMirror:focus {
@@ -127,8 +169,8 @@
 /* ========== 🌞 Light Theme ========== */
 :root {
   /* Brand colors */
-  --arsenic: 219 13% 26%;          /* #3B444B */
-  --baby-powder: 60 100% 99%;      /* #FEFEFA */
+  --arsenic: 219 13% 26%;          /* #3B444B -> 0 0% 3% */
+  --baby-powder: 60 100% 99%;      /* #FEFEFA -> 0 0% 96% */ 
 
   /* Core tokens */
   --background: var(--baby-powder);

@@ -6,6 +6,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import NoteForm from '@/components/notes/NoteForm';
 import { Note } from '@/types/note';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function NotePage() {
   const router = useRouter();
@@ -48,42 +50,61 @@ export default function NotePage() {
 
   useEffect(() => {
     fetchNotes();
-    
-    // Prevent page scrolling
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    
-    // Cleanup function to re-enable scrolling when component unmounts
-    return () => {
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-    };
   }, [fetchNotes]);
 
-  const handleSave = async (noteData: { content: string; title: string }) => {
+  const handleSave = async (noteData: { content: string; title?: string }) => {
     // Note saved handler - add any additional logic here if needed
+    console.log('Note saved:', noteData);
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen overflow-hidden">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <Skeleton className="h-10 w-64 mb-6" />
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-5/6" />
+          <Skeleton className="h-6 w-4/6" />
+        </div>
       </div>
     );
   }
 
   if (error || !note) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen p-4 overflow-hidden">
-        <div className="container mx-auto py-8 px-4 h-full">
-          <NoteForm note={note} onSuccess={fetchNotes} />
+      <div className="flex flex-col h-full w-full">
+        <div className="px-6 pt-6 w-full">
+          <div className="flex justify-between items-center w-full">
+            <h1 className="text-2xl font-semibold">Create New Note</h1>
+          </div>
         </div>
-        <button
-          onClick={() => router.push('/notes/new')}
-          className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
-        >
-          Create New Note
-        </button>
+        <div className="flex-1 min-h-0 p-0 sm:p-4">
+          <NoteForm 
+            initialData={{
+              id: '',
+              content: '',
+              title: '',
+              type: null,
+              status: null,
+              tags: [],
+              created_at: new Date(),
+              updated_at: new Date(),
+              user_id: ''
+            }}
+            onSave={handleSave}
+            notes={[]}
+            autoSave={true}
+            className="h-full w-full"
+          />
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => router.push('/notes/new')}
+              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
+            >
+              Create New Note
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -91,28 +112,33 @@ export default function NotePage() {
   // Prepare initial data that matches NoteFormValues
   const initialData = {
     id: note.id,
-    content: note.content || '',
-    // Extract first line as title for the form
+    content: typeof note.content === 'string' ? note.content : JSON.stringify(note.content),
+    title: '', // Will be extracted from content if needed
     type: null,
     status: null,
-    tags: note.tags || [],
-    created_at: new Date(note.createdAt),
-    updated_at: new Date(note.updatedAt),
-    user_id: note.userId
+    tags: [],
+    created_at: note.created_at ? new Date(note.created_at) : new Date(),
+    updated_at: note.updated_at ? new Date(note.updated_at) : new Date(),
+    user_id: note.user_id || ''
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <div className="container mx-auto h-full flex flex-col">
-        <NoteForm 
-          key={note.id} // Force re-render when note changes
-          initialData={initialData}
-          onSave={handleSave}
-          notes={notes.filter(n => n.id !== note.id)} // Pass all notes except the current one
-          autoSave={true}
-        />
-
+    <TooltipProvider>
+      <div className="flex flex-col h-full w-full">
+        {/* Scrollable content - no fixed header */}
+        <div className="flex-1 min-h-0 p-0">
+          <NoteForm 
+            key={note.id}
+            initialData={initialData}
+            onSave={handleSave}
+            notes={notes.filter(n => n.id !== note.id).map(n => ({
+              ...n,
+              content: typeof n.content === 'string' ? n.content : JSON.stringify(n.content)
+            }))}
+            autoSave={true}
+          />
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

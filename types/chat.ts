@@ -15,21 +15,24 @@ export interface ChatMessage {
   updated_at?: string;
   user_id: string;
   room_id: string;
+  is_read: boolean;
+  media_urls?: string[];
   user: {
     id: string;
     username: string;
     avatar_url: string | null;
   };
-  is_read?: boolean;
 }
 
 export interface Conversation {
   id: string;
-  name: string;
+  name: string | null;
   is_group: boolean;
   last_message?: {
+    id: string;
     content: string;
     created_at: string;
+    user_id: string;
   };
   participants: Array<{
     id: string;
@@ -37,8 +40,9 @@ export interface Conversation {
     avatar_url: string | null;
   }>;
   media_urls?: string[];
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
+  unread_count?: number;
 }
 
 export interface MessageListProps {

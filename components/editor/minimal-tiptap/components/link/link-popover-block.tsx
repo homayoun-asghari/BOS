@@ -3,6 +3,7 @@ import { Separator } from "@/components/ui/separator"
 import { ToolbarButton } from "../toolbar-button"
 import {
   CopyIcon,
+  ExternalLinkIcon,
   LinkBreak2Icon,
 } from "@radix-ui/react-icons"
 
@@ -43,6 +44,16 @@ export const LinkPopoverBlock: React.FC<LinkPopoverBlockProps> = ({
           className="w-auto px-2"
         >
           Edit link
+        </ToolbarButton>
+        <Separator orientation="vertical" />
+        <ToolbarButton 
+          tooltip="Open link in new tab" 
+          onClick={(e) => {
+            e.preventDefault()
+            window.open(url, '_blank', 'noopener,noreferrer')
+          }}
+        >
+          <ExternalLinkIcon className="size-4" />
         </ToolbarButton>
         <Separator orientation="vertical" />
         <ToolbarButton tooltip="Clear link" onClick={onClear}>

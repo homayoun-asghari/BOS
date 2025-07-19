@@ -6,6 +6,7 @@ import LayoutWrapper from './LayoutWrapper';
 import { Toaster } from 'sonner';
 import { MobileRightPanelProvider } from '@/context/mobile-right-panel-context';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import { ProfileProvider } from '@/context/profile-context';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,20 +31,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} h-full`}>
+        <div className="flex flex-col h-full">
         <ThemeProvider>
           <AuthProvider>
-            <MobileRightPanelProvider>
-              <LayoutWrapper>
-                {children}
-              </LayoutWrapper>
-            </MobileRightPanelProvider>
+            <ProfileProvider>
+              <MobileRightPanelProvider>
+                <LayoutWrapper>
+                  {children}
+                </LayoutWrapper>
+              </MobileRightPanelProvider>
+            </ProfileProvider>
             <Toaster position="top-right" richColors />
           </AuthProvider>
         </ThemeProvider>
+        </div>
       </body>
     </html>
   );

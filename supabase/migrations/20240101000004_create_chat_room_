@@ -1,0 +1,78 @@
+-- Drop existing function if it exists
+DROP FUNCTION IF EXISTS public.get_user_chat_rooms(uuid);
+
+-- Function to get user's chat rooms with participants and last message
+CREATE OR REPLACE FUNCTION public.get_user_chat_rooms(user_id uuid)
+RETURNS TABLE (
+  id uuid,
+  name text,
+  is_group boolean,
+  created_at timestamptz,
+  updated_at timestamptz,
+  participants jsonb,
+  last_message jsonb,
+  unread_count integer
+)
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT 
+    r.id,
+    r.name,
+    r.is_group,
+    r.created_at,
+    r.updated_at,
+    (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', p.id,
+          'username', p.username,
+          'display_name', p.display_name,
+          'avatar_url', p.avatar_url
+        )
+      )
+      FROM chat_participants cp
+      JOIN profiles p ON cp.user_id = p.id
+      WHERE cp.room_id = r.id
+    ) as participants,
+    (
+      SELECT jsonb_build_object(
+        'id', m.id,
+        'content', m.content,
+        'created_at', m.created_at,
+        'user_id', m.sender_id,
+        'user', jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'display_name', u.display_name,
+          'avatar_url', u.avatar_url
+        )
+      )
+      FROM chat_messages m
+      JOIN profiles u ON m.sender_id = u.id
+      WHERE m.room_id = r.id
+      ORDER BY m.created_at DESC
+      LIMIT 1
+    ) as last_message,
+    (
+      SELECT COUNT(*)
+      FROM chat_messages m
+      WHERE m.room_id = r.id
+      AND m.is_read = false
+      AND m.sender_id != $1
+    ) as unread_count
+  FROM chat_rooms r
+  JOIN chat_participants cp ON r.id = cp.room_id
+  WHERE cp.user_id = user_id
+  GROUP BY r.id, r.name, r.is_group, r.created_at, r.updated_at
+  ORDER BY (
+    SELECT m.created_at
+    FROM chat_messages m
+    WHERE m.room_id = r.id
+    ORDER BY m.created_at DESC
+    LIMIT 1
+  ) DESC NULLS LAST;
+$$;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION public.get_user_chat_rooms(uuid) TO authenticated;

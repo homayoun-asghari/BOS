@@ -4,6 +4,9 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, BookOpen, Book, Users } from 'lucide-react';
+import { RightPanel } from '@/components/right-panel/right-panel';
+import { RightPanelProvider } from '@/components/right-panel/context/right-panel-context';
+import { useMobileRightPanel } from '@/context/mobile-right-panel-context';
 
 type SidebarItem = {
   name: string;
@@ -17,6 +20,7 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
+  const { showRightPanel, toggleRightPanel } = useMobileRightPanel();
 
 
   const items: SidebarItem[] = [
@@ -73,28 +77,45 @@ export function Sidebar({ className }: SidebarProps) {
       </div>
 
       {/* Bottom Navigation - Shown on medium and small screens */}
-      <div className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[18rem] md:w-[22rem]">
+      <div className="lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[18rem] md:w-[22rem]">
         <div className="bg-background/80 backdrop-blur-lg rounded-2xl p-2 shadow-lg border border-border/50 w-full">
           <nav className="flex items-center justify-between">
-            {items.map((item) => (
-              <Link
-                key={`mobile-${item.name}`}
-                href={item.href}
-                className={`p-2 rounded-xl transition-colors duration-200 ${
-                  pathname === item.href 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
-                }`}
-              >
-                <div className="h-6 w-6 flex items-center justify-center">
-                  {item.icon}
-                </div>
-              </Link>
-            ))}
-            <Link
-              href="/right-panel"
+            {items.map((item) => {
+              const handleClick = (e: React.MouseEvent) => {
+                // If right panel is open, close it first
+                if (showRightPanel) {
+                  e.preventDefault();
+                  toggleRightPanel();
+                  // Small delay to allow the panel to close before navigation
+                  setTimeout(() => {
+                    window.location.href = item.href;
+                  }, 100);
+                  return; // Exit early to prevent default navigation
+                }
+                // If right panel is closed, let the default Link behavior handle navigation
+              };
+
+              return (
+                <Link
+                  key={`mobile-${item.name}`}
+                  href={item.href}
+                  onClick={handleClick}
+                  className={`p-2 rounded-xl transition-colors duration-200 ${
+                    pathname === item.href 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
+                  }`}
+                >
+                  <div className="h-6 w-6 flex items-center justify-center">
+                    {item.icon}
+                  </div>
+                </Link>
+              );
+            })}
+            <button
+              onClick={toggleRightPanel}
               className={`p-2 rounded-xl transition-colors duration-200 ${
-                pathname === '/right-panel'
+                showRightPanel
                   ? 'bg-primary/10 text-primary' 
                   : 'text-foreground/60 hover:bg-foreground/5 hover:text-foreground/90'
               }`}
@@ -103,9 +124,22 @@ export function Sidebar({ className }: SidebarProps) {
               <div className="h-6 w-6 flex items-center justify-center">
                 <Users className="h-5 w-5" />
               </div>
-            </Link>
+            </button>
           </nav>
         </div>
+      </div>
+      
+      {/* Right Panel for Mobile */}
+      <div className={`lg:hidden fixed inset-0 z-[100] transition-transform duration-300 transform ${
+        showRightPanel ? 'translate-x-0' : 'translate-x-full'
+      }`}>
+        <RightPanelProvider>
+          <RightPanel>
+            <div className="h-full">
+              {/* Content will be rendered by the RightPanel component */}
+            </div>
+          </RightPanel>
+        </RightPanelProvider>
       </div>
     </>
   );

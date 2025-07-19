@@ -7,6 +7,7 @@ export interface Note {
   created_at: string;
   updated_at: string;
   is_pinned?: boolean;
+  is_public?: boolean;
 }
 
 export interface Tag {
@@ -44,6 +45,7 @@ export interface NoteFormData {
   updated_at?: string;
   user_id?: string;
   is_pinned?: boolean;
+  is_public?: boolean;
   folder_id?: string | null;
   is_archived?: boolean;
   color?: string | null;

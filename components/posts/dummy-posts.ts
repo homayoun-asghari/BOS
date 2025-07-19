@@ -6,6 +6,7 @@ export const dummyPosts = [
     timestamp: new Date('2025-07-15T07:00:00+03:00'),
     user: {
       name: 'John Doe',
+      username: 'johndoe',
       avatarUrl: 'https://randomuser.me/api/portraits/men/1.jpg'
     },
     category: 'task',
@@ -30,6 +31,7 @@ export const dummyPosts = [
     timestamp: new Date('2025-07-15T06:30:00+03:00'),
     user: {
       name: 'Jane Smith',
+      username: 'janesmith',
       avatarUrl: 'https://randomuser.me/api/portraits/women/1.jpg'
     },
     category: 'roadmap',

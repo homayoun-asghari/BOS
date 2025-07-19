@@ -3,13 +3,17 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { deleteRoadmapCover } from '@/lib/utils/roadmap-cover-utils';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { GoalSection } from './GoalSection';
 import { MilestoneItem } from './MilestoneItem';
 import type { Subtask } from './MilestoneItem';
+import { CoverImageUpload, type CoverImage } from './cover-image-upload';
 
 interface Milestone {
   id: string;
@@ -28,6 +32,7 @@ interface RoadmapModalProps {
     final_goal: string;
     start_date: string;
     end_date: string;
+    cover_image_url?: string | null;
     milestones: Array<{
       id: string;
       title: string;
@@ -40,7 +45,7 @@ interface RoadmapModalProps {
         title: string;
         description: string;
         due_date: string | null;
-        status: 'todo' | 'in_progress' | 'completed' | 'done';
+        status: 'todo' | 'in_progress' | 'done';
         priority: 'low' | 'medium' | 'high';
         order_index: number;
       }>;
@@ -56,6 +61,13 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
   const [goalEndDate, setGoalEndDate] = useState<Date | undefined>(
     roadmap?.end_date ? new Date(roadmap.end_date) : undefined
   );
+  // Cover image state
+  const [coverImage, setCoverImage] = useState<CoverImage | null>(
+    roadmap?.cover_image_url 
+      ? { url: roadmap.cover_image_url, path: '' } 
+      : null
+  );
+  const [pendingCoverRemoval, setPendingCoverRemoval] = useState(false);
   
   const [milestones, setMilestones] = useState<Milestone[]>(() => {
     if (roadmap?.milestones?.length) {
@@ -199,9 +211,21 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
 
   const { user } = useAuth();
 
+  const handleCoverImageChange = useCallback((newCoverImage: CoverImage | null) => {
+    setCoverImage(newCoverImage);
+    if (!newCoverImage) {
+      setPendingCoverRemoval(true);
+    }
+  }, []);
+
   const handleSave = useCallback(async () => {
-    if (!user) {
-      console.error('User not authenticated');
+    if (!user?.id) {
+      toast.error('You must be logged in to save a roadmap');
+      return;
+    }
+
+    if (!goal.trim()) {
+      toast.error('Please enter a goal');
       return;
     }
 
@@ -211,6 +235,37 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     }
 
     try {
+      // Track if we need to clean up the old cover image
+      let oldCoverImagePath: string | null = null;
+      
+      // If we're updating an existing roadmap and it has a cover image
+      if (roadmap?.id && roadmap.cover_image_url) {
+        // If we have a new cover image that's different from the old one
+        const isCoverChanged = coverImage?.url && coverImage.url !== roadmap.cover_image_url;
+        // Or if we're removing the cover image
+        const isCoverRemoved = !coverImage?.url && !pendingCoverRemoval;
+        
+        if (isCoverChanged || isCoverRemoved || pendingCoverRemoval) {
+          // Store the old cover image path for cleanup after successful update
+          oldCoverImagePath = roadmap.cover_image_url;
+          console.log('Marked old cover image for cleanup:', oldCoverImagePath);
+        }
+      }
+      
+      // Handle pending cover image removal if needed (for new cover images that were uploaded but then removed)
+      if (pendingCoverRemoval && coverImage?.path) {
+        try {
+          console.log('Removing unused uploaded cover image from storage:', coverImage.path);
+          await deleteRoadmapCover(coverImage.path);
+        } catch (error) {
+          console.error('Error removing unused cover image:', error);
+          // Continue with save even if cleanup fails
+        }
+        // Clear the pending removal flag
+        setPendingCoverRemoval(false);
+        // Clear the cover image since we're removing it
+        setCoverImage(null);
+      }
       const formatDateForDB = (date: Date): string => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -221,15 +276,26 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       let finalRoadmapId = roadmap?.id;
 
       if (roadmap?.id) {
+        // Prepare the update data
+        const updateData: any = {
+          final_goal: goal,
+          start_date: formatDateForDB(goalStartDate),
+          end_date: formatDateForDB(goalEndDate),
+          updated_at: new Date().toISOString()
+        };
+        
+        // If we have a pending removal or no cover image, set cover_image_url to null
+        // Otherwise, use the existing cover image URL
+        if (pendingCoverRemoval || !coverImage) {
+          updateData.cover_image_url = null;
+        } else if (coverImage?.url) {
+          updateData.cover_image_url = coverImage.url;
+        }
+        
         // Update existing roadmap
         const { error: roadmapError } = await supabase
           .from('roadmaps')
-          .update({
-            final_goal: goal,
-            start_date: formatDateForDB(goalStartDate),
-            end_date: formatDateForDB(goalEndDate),
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', roadmap.id);
 
         if (roadmapError) throw roadmapError;
@@ -251,6 +317,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             final_goal: goal,
             start_date: formatDateForDB(goalStartDate),
             end_date: formatDateForDB(goalEndDate),
+            cover_image_url: coverImage?.url || null,
             status: 'in_progress'
           })
           .select('id')
@@ -285,10 +352,18 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
           milestone_id: savedMilestone.id,
           title: subtask.title || 'Untitled Task',
           status: subtask.completed ? 'done' : 'todo',
-          priority: subtask.priority || 'medium',
+          priority: subtask.priority || 'medium', // Ensure priority is included
           due_date: subtask.dueDate ? formatDateForDB(subtask.dueDate) : null,
-          order_index: index
+          order_index: index,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         }));
+        
+        console.log('Inserting tasks with priorities:', tasksToInsert.map(t => ({
+          title: t.title,
+          priority: t.priority,
+          status: t.status
+        })));
 
         if (tasksToInsert.length > 0) {
           const { error: tasksError } = await supabase
@@ -296,6 +371,15 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             .insert(tasksToInsert);
 
           if (tasksError) throw tasksError;
+        }
+      }
+
+      // Clean up the old cover image if it was changed or removed
+      if (oldCoverImagePath) {
+        console.log('Cleaning up old cover image from modal:', oldCoverImagePath);
+        const deleted = await deleteRoadmapCover(oldCoverImagePath);
+        if (!deleted) {
+          console.warn('Failed to clean up old cover image from modal');
         }
       }
 
@@ -319,14 +403,39 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       toast.error('Failed to save roadmap. Please check the console for details.');
       console.error('Error saving roadmap:', error);
     }
-  }, [user, goal, goalStartDate, goalEndDate, milestones, onOpenChange, roadmap?.id, onSave]);
+  }, [
+    user, 
+    goal, 
+    goalStartDate, 
+    goalEndDate, 
+    milestones, 
+    onOpenChange, 
+    roadmap?.id, 
+    onSave, 
+    coverImage,
+    pendingCoverRemoval,
+    roadmap?.cover_image_url
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] sm:max-h-[80vh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader className="px-1">
-          <DialogTitle className="text-xl sm:text-2xl font-bold mb-2 sm:mb-3">What Do You Want?</DialogTitle>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{roadmap ? 'Edit Roadmap' : 'Create New Roadmap'}</DialogTitle>
         </DialogHeader>
+        
+        {/* Cover Image Upload */}
+        <div className="space-y-2 mb-6">
+          <label className="block text-sm font-medium text-foreground">
+            Cover Image (Optional)
+          </label>
+          <CoverImageUpload
+            coverImage={coverImage}
+            onCoverImageChange={handleCoverImageChange}
+            onPendingRemovalChange={setPendingCoverRemoval}
+            className="w-full"
+          />
+        </div>
 
         <div className="space-y-6">
           <GoalSection

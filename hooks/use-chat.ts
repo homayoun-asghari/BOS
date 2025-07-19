@@ -1,31 +1,55 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChatMessage, Conversation } from '@/types/chat';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { dummyRooms, dummyUsers, dummyMessages, dummyParticipants, currentUser } from '@/lib/chatData';
+import { chatService } from '@/lib/supabase/chat-service';
 
-type DummyMessage = {
+// Extend the User type to include additional properties
+interface UserProfile {
   id: string;
-  room_id: string;
-  sender_id: string;
-  content: string;
-  created_at: string;
-  is_read: boolean;
-};
+  username?: string;
+  avatar_url?: string | null;
+  email?: string;
+}
 
-export function useChat() {
-  const { user } = useAuth();
+interface ChatUser {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  email: string;
+}
+
+interface UseChatReturn {
+  conversations: Conversation[];
+  messages: ChatMessage[];
+  currentConversation: Conversation | null;
+  activeConversation: string | null;
+  searchResults: ChatUser[];
+  isSearching: boolean;
+  isLoading: boolean;
+  isLoadingMessages: boolean;
+  error: Error | null;
+  fetchConversations: () => Promise<Conversation[]>;
+  fetchMessages: (conversationId: string) => Promise<ChatMessage[]>;
+  sendMessage: (content: string, mediaUrls?: string[]) => Promise<ChatMessage | null>;
+  setActiveConversation: (conversationId: string | null) => void;
+  searchUsers: (query: string) => Promise<ChatUser[]>;
+  startDirectMessage: (otherUserId: string) => Promise<Conversation | null>;
+  createRoom: (userIds: string[], isGroup?: boolean, name?: string) => Promise<Conversation | null>;
+  markMessagesAsRead: (messageIds: string[], userId: string) => Promise<void>;
+}
+
+export function useChat(): UseChatReturn {
+  const { user } = useAuth() as { user: UserProfile | null };
   const userId = user?.id;
+  const [searchResults, setSearchResults] = useState<ChatUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    console.log('Initial messages state set');
-    return [];
-  });
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-
+  const subscriptionRef = useRef<(() => void) | null>(null);
 
   // Get current conversation details
   const currentConversation = useMemo<Conversation | null>(() => {
@@ -33,83 +57,18 @@ export function useChat() {
     return conversations.find(c => c.id === activeConversation) || null;
   }, [activeConversation, conversations]);
 
-  // Use dummy data for development
-  const useDummyData = useMemo(
-    () => true, // Always use dummy data for now
-    []
-  );
-  
-  console.log('useDummyData:', useDummyData);
-
-  // Memoize the dummy data processing to prevent recreation
-  const processDummyConversations = useCallback(() => {
-    if (!useDummyData) return [];
-    
-    console.log('Processing dummy conversations');
-    
-    // Get the most recent message for each room
-    const roomMessages = new Map<string, DummyMessage>();
-    dummyMessages.forEach((msg: DummyMessage) => {
-      const existing = roomMessages.get(msg.room_id);
-      if (!existing || new Date(existing.created_at) < new Date(msg.created_at)) {
-        roomMessages.set(msg.room_id, msg);
-      }
-    });
-    
-    return dummyRooms.map(room => {
-      // Get participants for this room
-      const participants = dummyParticipants
-        .filter((p: { room_id: string }) => p.room_id === room.id)
-        .map((p: { user_id: string }) => {
-          const user = dummyUsers.find(u => u.id === p.user_id) || currentUser;
-          return {
-            username: user.username,
-            avatar_url: user.avatar_url
-          };
-        });
-        
-      // Get the last message for this room
-      const lastMessage = roomMessages.get(room.id);
-      
-      return {
-        ...room,
-        participants,
-        last_message: lastMessage ? {
-          content: lastMessage.content || '',
-          created_at: lastMessage.created_at || new Date().toISOString()
-        } : undefined
-      } as Conversation;
-    });
-  }, [useDummyData]);
-
   // Fetch user's conversations
   const fetchConversations = useCallback(async (): Promise<Conversation[]> => {
-    if (isLoading) return conversations; // Prevent concurrent fetches
+    if (isLoading || !userId) return conversations; // Prevent concurrent fetches
     
     console.log('Fetching conversations...');
     setIsLoading(true);
     setError(null);
     
     try {
-      if (useDummyData) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-        const userConversations = processDummyConversations();
-        setConversations(userConversations);
-        return userConversations;
-      } else if (userId) {
-        const { data, error } = await supabase
-          .from('conversations')
-          .select('*')
-          .contains('participant_ids', [userId])
-          .order('updated_at', { ascending: false });
-          
-        if (error) throw error;
-        
-        const conversations = (data || []) as Conversation[];
-        setConversations(conversations);
-        return conversations;
-      }
-      return [];
+      const userConversations = await chatService.getConversations(userId);
+      setConversations(userConversations);
+      return userConversations;
     } catch (err) {
       const error = err as Error & { details?: string; hint?: string; code?: string };
       console.error('Error fetching conversations:', {
@@ -123,272 +82,161 @@ export function useChat() {
     } finally {
       setIsLoading(false);
     }
-  }, [userId, useDummyData, supabase, isLoading, conversations, processDummyConversations]);
+  }, [userId, isLoading, conversations]);
 
   // Fetch messages for a conversation
-  const fetchMessages = useCallback(async (conversationId: string) => {
-    if (!conversationId) {
-      console.log('No conversation ID provided, skipping message fetch');
-      return;
-    }
+  const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
+    if (isLoadingMessages) return [];
     
-    console.log('=== STARTING MESSAGE FETCH ===');
-    console.log('Conversation ID:', conversationId);
-    
-    // Process dummy messages function (moved inside to prevent recreation)
-    const processDummyMessages = (roomId: string): ChatMessage[] => {
-      console.log('Processing dummy messages for room:', roomId);
-      const roomMessages = dummyMessages.filter((msg: DummyMessage) => msg.room_id === roomId);
-      
-      // Create a mapping of user IDs to user objects
-      const userMap = new Map(dummyUsers.map(u => [u.id, u]));
-      
-      return roomMessages.map(msg => {
-        const sender = userMap.get(msg.sender_id) || {
-          id: msg.sender_id,
-          username: 'Unknown',
-          avatar_url: null
-        };
-        
-        return {
-          id: msg.id,
-          content: msg.content,
-          created_at: msg.created_at,
-          updated_at: msg.created_at,
-          user_id: sender.id,
-          room_id: msg.room_id,
-          user: {
-            id: sender.id,
-            username: sender.username,
-            avatar_url: sender.avatar_url || null
-          },
-          is_read: msg.is_read
-        };
-      }).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    };
-    
-    console.log('\n=== FETCHING MESSAGES ===');
-    console.log('Conversation ID:', conversationId);
-    console.log('Using dummy data:', useDummyData);
-    
+    console.log('Fetching messages for conversation:', conversationId);
     setIsLoadingMessages(true);
     setError(null);
     
     try {
-      if (useDummyData) {
-        console.log('\n=== USING DUMMY DATA ===');
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        const messages = processDummyMessages(conversationId);
-        console.log('Setting messages state with:', {
-          count: messages.length,
-          messages: messages.map(m => ({
-            id: m.id,
-            content: m.content,
-            user_id: m.user_id,
-            username: m.user?.username || 'Unknown'
-          }))
-        });
-        
-        setMessages(messages);
-      } else {
-        console.log('\n=== FETCHING FROM SUPABASE ===');
-        const { data, error: fetchError } = await supabase
-          .from('chat_messages')
-          .select(`
-            *,
-            user:profiles(username, avatar_url)
-          `)
-          .eq('room_id', conversationId)
-          .order('created_at', { ascending: true });
-
-        if (fetchError) throw fetchError;
-        
-        console.log('Fetched messages from supabase:', data);
-        setMessages(data || []);
-      }
+      const conversationMessages = await chatService.getMessages(conversationId);
+      setMessages(conversationMessages);
+      return conversationMessages;
     } catch (err) {
       console.error('Error fetching messages:', err);
       setError(err instanceof Error ? err : new Error('Failed to load messages'));
+      return [];
     } finally {
-      console.log('=== MESSAGE FETCH COMPLETE ===\n');
       setIsLoadingMessages(false);
     }
-  }, [useDummyData, supabase]); // Removed currentUser as it's a constant
+  }, [isLoadingMessages]);
 
-  // Send a new message
-  const sendMessage = useCallback(async (content: string) => {
-    if (!activeConversation || !userId || !content.trim()) return;
+  // Send a message handler
+  const handleSendMessage = useCallback(async (content: string, mediaUrls: string[] = []): Promise<ChatMessage | null> => {
+    if (!activeConversation || !userId) return null;
     
-    // Get user metadata
-    const username = user?.user_metadata?.name || 'You';
-    const avatarUrl = user?.user_metadata?.avatar_url || null;
-    const now = new Date().toISOString();
-    
-    // Create a new message object for optimistic update
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      content: content.trim(),
-      user_id: userId,
-      room_id: activeConversation,
-      created_at: now,
-      is_read: false,
-      user: {
-        id: userId,
-        username: username,
-        avatar_url: avatarUrl
-      }
-    };
-    
-    // Optimistic update
-    setMessages(prev => [...prev, newMessage]);
-    
-    // Update the conversation's last message
-    setConversations(prev => 
-      prev.map(conv => 
-        conv.id === activeConversation
-          ? {
-              ...conv,
-              last_message: {
-                content: content.trim(),
-                created_at: now
-              },
-              updated_at: now
-            }
-          : conv
-      )
-    );
-    
-    if (useDummyData) {
-      // In dummy data mode, we've already updated the UI optimistically
-      // Add the message to our dummy data for consistency
-      dummyMessages.push({
-        id: newMessage.id,
-        room_id: activeConversation,
-        sender_id: userId,
-        content: content.trim(),
-        created_at: now,
-        is_read: false
-      });
-      return newMessage;
-    }
+    console.log('Sending message to conversation:', activeConversation);
     
     try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .insert([
-          {
-            room_id: activeConversation,
-            sender_id: userId,
-            content: content.trim(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const newMessage = await chatService.sendMessage(activeConversation, userId, content, mediaUrls);
       
-      // Update the messages list
-      setMessages((prev) => [...prev, data as ChatMessage]);
+      if (!newMessage) return null;
       
-      // Update the conversation's last message
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === activeConversation
-            ? {
-                ...conv,
-                last_message: {
-                  content: content.trim(),
-                  created_at: new Date().toISOString(),
-                },
-                updated_at: new Date().toISOString(),
+      // Update messages list
+      setMessages(prev => [newMessage, ...prev]);
+      
+      // Update last message in conversations list
+      setConversations(prev => 
+        prev.map(conv => {
+          if (conv.id !== activeConversation) return conv;
+          
+          return {
+            ...conv,
+            last_message: {
+              id: newMessage.id,
+              content: newMessage.content,
+              created_at: newMessage.created_at,
+              user_id: userId,
+              user: {
+                id: userId,
+                username: user?.username || 'You',
+                avatar_url: user?.avatar_url || null
               }
-            : conv
-        )
+            },
+            updated_at: newMessage.created_at
+          };
+        })
       );
       
-      return data;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError(err instanceof Error ? err : new Error('Failed to send message'));
-      throw err;
+      return newMessage;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError(error instanceof Error ? error : new Error('Failed to send message'));
+      return null;
     }
-  }, [activeConversation, userId, supabase, useDummyData, user?.user_metadata?.name, user?.user_metadata?.avatar_url]);
+  }, [activeConversation, userId, user?.username, user?.avatar_url]);
 
   // Set up real-time subscription for new messages
   useEffect(() => {
-    if (!activeConversation) return;
+    if (!activeConversation || !userId) {
+      // Clean up any existing subscription if activeConversation is cleared
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+        subscriptionRef.current = null;
+      }
+      return;
+    }
     
-    const channel = supabase
-      .channel(`room:${activeConversation}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `room_id=eq.${activeConversation}`,
-        },
-        (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setMessages((prev) => [...prev, newMessage]);
-          
-          // Update the conversation's last message
-          setConversations((prev) =>
-            prev.map((conv) =>
-              conv.id === activeConversation
-                ? {
-                    ...conv,
-                    last_message: {
-                      content: newMessage.content,
-                      created_at: newMessage.created_at,
-                    },
-                    updated_at: newMessage.created_at,
-                  }
-                : conv
-            )
-          );
+    const handleNewMessage = (newMessage: ChatMessage) => {
+      // Don't show the user's own messages here (they're handled by sendMessage)
+      if (newMessage.user_id === userId) return;
+      
+      // Add the new message to the current conversation's messages
+      if (activeConversation === newMessage.room_id) {
+        setMessages(prev => [newMessage, ...prev]);
+        
+        // Mark as read if the room is currently open
+        if (activeConversation === newMessage.room_id && userId) {
+          chatService.markMessagesAsRead([newMessage.id], userId);
         }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
+      }
+      
+      // Update the last message in the conversations list
+      setConversations(prev =>
+        prev.map(room => {
+          if (room.id === newMessage.room_id) {
+            return {
+              ...room,
+              last_message: {
+                id: newMessage.id,
+                content: newMessage.content,
+                created_at: newMessage.created_at,
+                user_id: newMessage.user_id
+              },
+              updated_at: newMessage.created_at,
+              unread_count: 
+                room.id === activeConversation 
+                  ? 0 // No unread if it's the current room
+                  : (room.unread_count || 0) + 1
+            };
+          }
+          return room;
+        })
+      );
     };
-  }, [activeConversation, supabase]);
+    
+    // Set up the subscription
+    const unsubscribe = chatService.subscribeToNewMessages(activeConversation, handleNewMessage);
+    
+    // Store the unsubscribe function in the ref
+    subscriptionRef.current = unsubscribe;
+    
+    // Clean up on unmount or when conversation changes
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+        subscriptionRef.current = null;
+      }
+    };
+  }, [activeConversation, userId]);
 
   // Load conversations on mount and when userId changes
   useEffect(() => {
-    let isMounted = true;
-    
     const loadData = async () => {
+      if (!userId) return;
+      
       try {
-        console.log('Initial conversations load...');
-        await fetchConversations();
-        if (isMounted) {
-          console.log('Conversations loaded successfully');
-        }
+        const conversations = await chatService.getConversations(userId);
+        setConversations(conversations);
       } catch (error) {
         console.error('Failed to load conversations:', error);
+        setError(error instanceof Error ? error : new Error('Failed to load conversations'));
       }
     };
     
-    // Only load if we don't have conversations yet
-    if (conversations.length === 0) {
-      loadData();
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchConversations, conversations.length]);
+    loadData();
+  }, [userId]);
 
   // Load messages when active conversation changes
   useEffect(() => {
     let isMounted = true;
     
-    const loadMessages = async () => {
-      if (!activeConversation) {
+    const loadMessages = async (conversationId: string) => {
+      if (!conversationId) {
         console.log('No active conversation, clearing messages');
         if (isMounted) {
           setMessages([]);
@@ -396,37 +244,91 @@ export function useChat() {
         return;
       }
       
-      console.log('Active conversation changed, loading messages for:', activeConversation);
+      console.log('Loading messages for conversation:', conversationId);
       
       try {
-        await fetchMessages(activeConversation);
+        await fetchMessages(conversationId);
         if (isMounted) {
-          console.log('Messages loaded for conversation:', activeConversation);
+          console.log('Messages loaded for conversation:', conversationId);
         }
       } catch (error) {
         console.error('Failed to load messages:', error);
       }
     };
     
-    // Use a small timeout to prevent rapid state updates
-    const timer = setTimeout(loadMessages, 50);
+    // Only load messages if the conversation has actually changed
+    if (activeConversation && activeConversation !== currentConversation?.id) {
+      loadMessages(activeConversation);
+    } else if (!activeConversation) {
+      setMessages([]);
+    }
     
     return () => {
       isMounted = false;
-      clearTimeout(timer);
     };
-  }, [activeConversation, fetchMessages]);
+  }, [activeConversation, currentConversation?.id, fetchMessages]);
+
+  // Search for users
+  const searchUsers = useCallback(async (query: string) => {
+    if (!userId) return [];
+    setIsSearching(true);
+    try {
+      const results = await chatService.searchUsers(query, userId);
+      const users: ChatUser[] = results.map(user => ({
+        id: user.id,
+        username: user.username || user.email.split('@')[0],
+        avatar_url: user.avatar_url,
+        email: user.email
+      }));
+      setSearchResults(users);
+      setIsSearching(false);
+      return users;
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setError(error as Error);
+      setIsSearching(false);
+      return [];
+    }
+  }, [userId]);
+
+  // Start a new direct message conversation
+  const startDirectMessage = useCallback(async (otherUserId: string) => {
+    if (!userId) return null;
+    try {
+      const conversation = await chatService.createDirectMessage(userId, otherUserId);
+      // Add to conversations if not already there
+      setConversations(prev => {
+        const exists = prev.some(c => c.id === conversation.id);
+        return exists ? prev : [conversation, ...prev];
+      });
+      setActiveConversation(conversation.id);
+      return conversation;
+    } catch (error) {
+      console.error('Error starting direct message:', error);
+      setError(error as Error);
+      return null;
+    }
+  }, [userId]);
 
   return {
     conversations,
     messages,
     currentConversation,
+    activeConversation,
     isLoading,
     isLoadingMessages,
+    isSearching,
+    searchResults,
     error,
     fetchConversations,
     fetchMessages,
-    sendMessage,
+    sendMessage: handleSendMessage,
+    createRoom: chatService.createRoom,
+    markMessagesAsRead: async (messageIds: string[], userId: string) => {
+      await chatService.markMessagesAsRead(messageIds, userId);
+    },
     setActiveConversation,
+    searchUsers,
+    startDirectMessage,
   };
 }

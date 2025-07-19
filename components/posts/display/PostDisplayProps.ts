@@ -2,6 +2,7 @@ export interface PostDisplayProps {
   id: string;
   user: {
     name: string;
+    username: string;
     avatarUrl?: string;
   };
   timestamp: string | Date;

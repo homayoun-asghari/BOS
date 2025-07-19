@@ -418,78 +418,75 @@ export default function NoteForm({
   }, [currentNoteId, user?.id, addPendingAttachment]);
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto">
-          <TipTapEditor
-            ref={editorRef}
-            value={content}
-            onChange={handleEditorChange}
-            onFileUpload={handleFileUpload}
-            onInternalLinkClick={(noteId) => {
-              // Handle internal link click - navigate to the note
-              if (noteId && noteId !== currentNoteId) {
-                window.open(`/notes/${noteId}`, '_blank');
+    <div className="flex flex-col h-full w-full bg-background">
+      <div className="flex-1 w-full">
+        <TipTapEditor
+          ref={editorRef}
+          value={content}
+          onChange={handleEditorChange}
+          onFileUpload={handleFileUpload}
+          onInternalLinkClick={(noteId) => {
+            // Handle internal link click - navigate to the note
+            if (noteId && noteId !== currentNoteId) {
+              window.open(`/notes/${noteId}`, '_blank');
+            }
+          }}
+          notes={notes}
+          isLoading={isLoadingNotes}
+          currentNoteId={currentNoteId}
+          type={values.type}
+          status={values.status}
+          tags={loadedTags}
+          onTypeChange={handleTypeChange}
+          onStatusChange={handleStatusChange}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
+          createdAt={(() => {
+            try {
+              const date = values.created_at as string | Date | null | undefined;
+              if (!date) return undefined;
+              
+              // If it's already a valid ISO string, return it
+              if (typeof date === 'string' && date.length > 0) {
+                const parsed = new Date(date);
+                return !isNaN(parsed.getTime()) ? date : undefined;
               }
-            }}
-            notes={notes}
-            isLoading={isLoadingNotes}
-            currentNoteId={currentNoteId}
-            type={values.type}
-            status={values.status}
-            tags={loadedTags}
-            onTypeChange={handleTypeChange}
-            onStatusChange={handleStatusChange}
-            onAddTag={handleAddTag}
-            onRemoveTag={handleRemoveTag}
-            createdAt={(() => {
-              try {
-                const date = values.created_at as string | Date | null | undefined;
-                if (!date) return undefined;
-                
-                // If it's already a valid ISO string, return it
-                if (typeof date === 'string' && date.length > 0) {
-                  const parsed = new Date(date);
-                  return !isNaN(parsed.getTime()) ? date : undefined;
-                }
-                
-                // If it's a Date object, convert to ISO string
-                if (date instanceof Date && !isNaN(date.getTime())) {
-                  return date.toISOString();
-                }
-                
-                return undefined;
-              } catch (e) {
-                console.error('Error formatting created_at date:', e);
-                return undefined;
+              
+              // If it's a Date object, convert to ISO string
+              if (date instanceof Date && !isNaN(date.getTime())) {
+                return date.toISOString();
               }
-            })()}
-            updatedAt={(() => {
-              try {
-                const date = values.updated_at as string | Date | null | undefined;
-                if (!date) return undefined;
-                
-                // If it's already a valid ISO string, return it
-                if (typeof date === 'string' && date.length > 0) {
-                  const parsed = new Date(date);
-                  return !isNaN(parsed.getTime()) ? date : undefined;
-                }
-                
-                // If it's a Date object, convert to ISO string
-                if (date instanceof Date && !isNaN(date.getTime())) {
-                  return date.toISOString();
-                }
-                
-                return undefined;
-              } catch (e) {
-                console.error('Error formatting updated_at date:', e);
-                return undefined;
+              
+              return undefined;
+            } catch (e) {
+              console.error('Error formatting created_at date:', e);
+              return undefined;
+            }
+          })()}
+          updatedAt={(() => {
+            try {
+              const date = values.updated_at as string | Date | null | undefined;
+              if (!date) return undefined;
+              
+              // If it's already a valid ISO string, return it
+              if (typeof date === 'string' && date.length > 0) {
+                const parsed = new Date(date);
+                return !isNaN(parsed.getTime()) ? date : undefined;
               }
-            })()}
-          />
-        </div>
+              
+              // If it's a Date object, convert to ISO string
+              if (date instanceof Date && !isNaN(date.getTime())) {
+                return date.toISOString();
+              }
+              
+              return undefined;
+            } catch (e) {
+              console.error('Error formatting updated_at date:', e);
+              return undefined;
+            }
+          })()}
+        />
       </div>
-      {/* Status and error messages removed as per request */}
     </div>
   );
 }

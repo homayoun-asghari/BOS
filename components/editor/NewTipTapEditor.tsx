@@ -104,26 +104,24 @@ export const NewTipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   }, [currentNoteId, processPendingLinks]);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto">
-        <div className="flex flex-col h-full">
-        <MinimalEditorWrapper
-          value={value}
-          onChange={onChange}
-          onInternalLinkClick={onInternalLinkClick}
-          onFileUpload={onFileUpload}
-          currentNoteId={currentNoteId}
-          type={type}
-          status={status}
-          tags={tags || []}
-          onTypeChange={handleTypeChange}
-          onStatusChange={handleStatusChange}
-          onAddTag={handleAddTag}
-          onRemoveTag={handleRemoveTag}
-          className="flex-1"
-        />
-      </div>
-      </div>
+    <div className="h-full w-full">
+      <MinimalEditorWrapper
+        value={value}
+        onChange={onChange}
+        onInternalLinkClick={onInternalLinkClick}
+        onFileUpload={onFileUpload}
+        currentNoteId={currentNoteId}
+        type={type}
+        status={status}
+        tags={tags || []}
+        onTypeChange={handleTypeChange}
+        onStatusChange={handleStatusChange}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        className="h-full"
+        createdAt={createdAt}
+        updatedAt={updatedAt}
+      />
     </div>
   );
 });

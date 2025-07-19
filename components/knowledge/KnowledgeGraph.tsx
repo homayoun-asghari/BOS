@@ -300,6 +300,9 @@ export default function KnowledgeGraph({
       graphViewRef.current = null;
     }
 
+    // Create and initialize the graph model
+    if (!containerRef.current) return;
+
     // Create graph model with the notes
     const graphModel = new NoteGraphModel(graphNotes);
     
@@ -373,10 +376,12 @@ export default function KnowledgeGraph({
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className={`w-full h-full ${className}`}
-      style={{ height: typeof height === 'number' ? `${height}px` : height }}
-    />
+    <div className={`relative w-full h-full ${className}`}>
+      <div 
+        ref={containerRef} 
+        className="absolute inset-0"
+        style={{ height: typeof height === 'number' ? `${height}px` : height }}
+      />
+    </div>
   );
 }

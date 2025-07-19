@@ -1,5 +1,6 @@
-import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@/types/supabase';
+import { supabase } from './client';
+
+const getSupabaseClient = () => supabase;
 
 type SignedUrlOptions = {
   expiresIn?: number;
@@ -7,30 +8,7 @@ type SignedUrlOptions = {
   downloadFilename?: string;
 };
 
-// Create a single instance of the Supabase client
-let supabaseClient: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
-const getSupabaseClient = () => {
-  if (!supabaseClient && typeof window !== 'undefined') {
-    supabaseClient = createBrowserClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            // Handle cookie retrieval manually to avoid JSON parsing errors
-            const value = document.cookie
-              .split('; ')
-              .find((row) => row.startsWith(`${name}=`))
-              ?.split('=')[1];
-            return value ? decodeURIComponent(value) : null;
-          },
-        },
-      }
-    );
-  }
-  return supabaseClient;
-};
 
 export const getSignedUrl = async (
   filePath: string,
@@ -88,3 +66,287 @@ export const getSignedUrl = async (
 };
 
 // All file access is done through signed URLs for private bucket access
+
+export interface UploadPostMediaResult {
+  url: string;
+  path: string;
+  type: 'image' | 'video';
+}
+
+export const uploadPostMedia = async (file: File, type: 'image' | 'video'): Promise<UploadPostMediaResult> => {
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  // Get the current user for user-specific paths
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    throw new Error(userError?.message || 'User not authenticated');
+  }
+  
+  const BUCKET_NAME = 'post-media';
+  
+  // Generate a unique filename with user ID and timestamp
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || (type === 'image' ? 'jpg' : 'mp4');
+  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+  const contentType = file.type || (type === 'image' ? 'image/jpeg' : 'video/mp4');
+  
+  try {
+    // Direct upload to public bucket
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, file, {
+        cacheControl: '31536000', // 1 year cache
+        contentType,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Upload failed:', {
+        error: uploadError,
+        fileName,
+        bucket: BUCKET_NAME,
+        userId: user.id
+      });
+      throw new Error(uploadError.message);
+    }
+    
+    // Get the public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+    
+    if (!publicUrl) {
+      throw new Error('Could not generate public URL for uploaded file');
+    }
+    
+    return {
+      url: publicUrl,
+      path: fileName,
+      type
+    };
+    
+  } catch (error) {
+    console.error('Error in uploadPostMedia:', {
+      error,
+      fileName,
+      bucket: BUCKET_NAME,
+      userId: user.id,
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+    
+    // Provide user-friendly error message
+    const errorMessage = error instanceof Error ? 
+      error.message : 
+      'Failed to upload file. Please try again.';
+    
+    throw new Error(errorMessage);
+  }
+};
+
+export const deletePostMedia = async (path: string): Promise<void> => {
+  if (!path) return;
+  
+  const BUCKET_NAME = 'post-media';
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove([path]);
+    
+  if (error) {
+    console.error('Error deleting media file:', error);
+    throw new Error(`Failed to delete file: ${error.message}`);
+  }
+};
+
+export const uploadRoadmapCover = async (file: File): Promise<{ url: string; path: string }> => {
+  if (!file) {
+    throw new Error('No file provided');
+  }
+
+  const BUCKET_NAME = 'roadmap-covers';
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  
+  // Validate file type
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(file.type)) {
+    throw new Error('Only JPEG, PNG, and WebP images are allowed');
+  }
+  
+  // Validate file size
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Image must be less than 5MB');
+  }
+  
+  // Get the current user for user-specific paths
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    throw new Error(userError?.message || 'User not authenticated');
+  }
+  
+  // Generate a unique filename with user ID and timestamp
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+  
+  try {
+    // Upload the file to the storage bucket
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, file, {
+        cacheControl: '31536000', // 1 year cache
+        contentType: file.type,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Upload failed:', {
+        error: uploadError,
+        fileName,
+        bucket: BUCKET_NAME,
+        userId: user.id
+      });
+      throw new Error(uploadError.message);
+    }
+    
+    // Get the public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(fileName);
+    
+    if (!publicUrl) {
+      throw new Error('Could not generate public URL for uploaded file');
+    }
+    
+    return {
+      url: publicUrl,
+      path: fileName
+    };
+    
+  } catch (error) {
+    console.error('Error in uploadRoadmapCover:', {
+      error,
+      fileName,
+      bucket: BUCKET_NAME,
+      userId: user.id,
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+    
+    // Provide user-friendly error message
+    const errorMessage = error instanceof Error ? 
+      error.message : 
+      'Failed to upload cover image. Please try again.';
+    
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Extracts the file path from a Supabase storage URL
+ * @param urlOrPath The full URL or path of the file in Supabase storage
+ * @returns The file path relative to the bucket, or the original input if it's already a path
+ */
+const extractFilePath = (urlOrPath: string): string => {
+  // If it's already a path (doesn't start with http), return as is
+  if (!urlOrPath.startsWith('http')) {
+    return urlOrPath;
+  }
+  
+  console.log('Extracting path from URL:', urlOrPath);
+  
+  try {
+    const url = new URL(urlOrPath);
+    const pathParts = url.pathname.split('/');
+    
+    // Handle both formats:
+    // 1. /storage/v1/object/public/roadmap-covers/...
+    // 2. /storage/v1/object/sign/roadmap-covers/...
+    const objectIndex = pathParts.indexOf('object');
+    if (objectIndex > -1 && pathParts.length > objectIndex + 2) {
+      // The path should be everything after 'object/public/...' or 'object/sign/...'
+      const pathAfterObject = pathParts.slice(objectIndex + 1).join('/');
+      // Remove any query parameters
+      const cleanPath = pathAfterObject.split('?')[0];
+      console.log('Extracted path:', cleanPath);
+      return cleanPath;
+    }
+    
+    // If we have a path that looks like /roadmap-covers/...
+    const bucketIndex = pathParts.findIndex(part => part.includes('roadmap-covers'));
+    if (bucketIndex > -1) {
+      const cleanPath = pathParts.slice(bucketIndex).join('/');
+      console.log('Extracted path (direct bucket):', cleanPath);
+      return cleanPath;
+    }
+  } catch (e) {
+    console.error('Error parsing URL:', e);
+  }
+  
+  console.warn('Could not extract path from URL, returning as-is:', urlOrPath);
+  return urlOrPath;
+};
+
+/**
+ * Extracts the file path from a Supabase storage URL
+ * @param url - The full public URL of the file in Supabase storage
+ * @returns The file path relative to the bucket
+ */
+const extractFilePathFromUrl = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    
+    // Find the index of 'storage' in the path
+    const storageIndex = pathParts.findIndex(part => part === 'storage');
+    if (storageIndex === -1) return null;
+    
+    // The path should be after 'object/public/'
+    const publicIndex = pathParts.indexOf('public', storageIndex);
+    if (publicIndex === -1) return null;
+    
+    // Get the path after 'public/'
+    const filePath = pathParts.slice(publicIndex + 1).join('/');
+    console.log('Extracted file path:', filePath);
+    return filePath || null;
+  } catch (e) {
+    console.error('Error parsing URL:', e);
+    return null;
+  }
+};
+
+/**
+ * Deletes a roadmap cover image from the public storage bucket
+ * @param url - The public URL of the file to delete
+ * @returns Promise<boolean> - True if deletion was successful or file doesn't exist, false otherwise
+ */
+export const deleteRoadmapCover = async (url: string): Promise<boolean> => {
+  if (!url) return false;
+  
+  const BUCKET_NAME = 'roadmap-covers';
+  
+  try {
+    // Extract the file path from the public URL
+    const pathParts = url.split(`${BUCKET_NAME}/`);
+    const filePath = pathParts[1];
+    
+    if (!filePath) {
+      console.error('Could not extract file path from URL');
+      return false;
+    }
+    
+    const { error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .remove([filePath]);
+    
+    if (error) {
+      console.error('Error deleting file:', error);
+      return false;
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Error in deleteRoadmapCover:', error);
+    return false;
+  }
+};

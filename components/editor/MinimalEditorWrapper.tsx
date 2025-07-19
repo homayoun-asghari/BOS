@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import type { Content } from '@tiptap/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { MinimalTiptap } from './minimal-tiptap';
@@ -101,19 +100,22 @@ export function MinimalEditorWrapper({
   useEffect(() => {
     if (currentNoteId && !isInitialized.current) {
       isInitialized.current = true;
-      processPendingLinks(currentNoteId);
+      processPendingLinks(currentNoteId).catch(error => {
+        console.error('Error processing pending links:', error);
+      });
     }
   }, [currentNoteId, processPendingLinks]);
 
   // Handle editor content changes
-  const handleChange = useCallback((content: Content) => {
+  const handleChange = useCallback((content: string | { type?: string; content?: unknown[]; [key: string]: unknown }) => {
     if (content === null || content === undefined) {
       onChange('');
     } else if (typeof content === 'string') {
       onChange(content);
-    } else if (typeof content === 'object' && 'type' in content) {
+    } else {
       // Handle JSON content
-      onChange(JSON.stringify(content));
+      const jsonString = JSON.stringify(content);
+      onChange(jsonString);
     }
   }, [onChange]);
 
@@ -142,15 +144,21 @@ export function MinimalEditorWrapper({
   };
 
   return (
-    <div className={cn("flex flex-col w-full", className)} style={{ height: '100%', maxWidth: '100%' }}>
+    <div className={cn("flex flex-col h-full w-full", className)}>
       <style jsx global>{`
         .ProseMirror {
           padding: 0 !important;
+          min-height: 1em;
+          overflow-y: visible;
+        }
+        .ProseMirror > *:first-child {
+          margin-top: 0;
         }
       `}</style>
       <TooltipProvider>
-        <div ref={editorRef} className="flex flex-col h-full relative">
-          <div className="relative h-full w-full max-w-full overflow-x-hidden">
+        <div ref={editorRef} className="flex flex-col h-full min-h-0">
+          {/* Editor content area - takes remaining space */}
+          <div className="flex-1 min-h-0">
             <MinimalTiptap
               value={value}
               onChange={handleChange}
@@ -168,8 +176,8 @@ export function MinimalEditorWrapper({
               showTagInput={showTagInput}
               placeholder={placeholder}
               className={cn(
-                'h-full w-full max-w-full',
-                'prose dark:prose-invert prose-sm sm:prose-base !max-w-none !px-0 !mx-0 [&>*]:!px-0 !pl-0 !pr-0',
+                'h-full w-full',
+                'prose dark:prose-invert prose-sm sm:prose-base !max-w-none !px-0 !mx-0 [&>*]:!px-0',
                 'prose-headings:font-medium prose-p:my-2 prose-ul:my-2 prose-ol:my-2',
                 'prose-blockquote:not-italic',
                 'prose-pre:bg-muted/50 prose-pre:rounded-lg prose-pre:px-0 prose-pre:py-4',
@@ -193,23 +201,31 @@ export function MinimalEditorWrapper({
                 'prose-hr:my-4 prose-hr:border-border/50',
                 'prose-img:rounded-lg prose-img:border prose-img:border-border',
                 'focus:outline-none',
-                '[&_.ProseMirror]:!p-0 [&_.ProseMirror]:w-full [&_.ProseMirror]:max-w-full',
+                '[&_.ProseMirror]:!p-0 [&_.ProseMirror]:w-full [&_.ProseMirror]:h-full',
                 '[&_.ProseMirror>*]:!p-0 [&_.ProseMirror>*]:w-full [&_.ProseMirror>*]:max-w-full',
                 '[&_.ProseMirror_p]:!px-0 [&_.ProseMirror_ul]:!px-0 [&_.ProseMirror_ol]:!px-0',
                 className
               )}
+              editorContentClassName="h-full"
             />
           </div>
         </div>
       </TooltipProvider>
+      
+      {/* Timestamp footer - fixed at bottom */}
       {(createdAt || updatedAt) && (
-        <div className="border-t p-2 text-right text-xs text-muted-foreground">
-          {createdAt && (
-            <span>Created: {formatTimestamp(createdAt)}</span>
-          )}
-          {updatedAt && updatedAt !== createdAt && (
-            <span className="ml-2">• Updated: {formatTimestamp(updatedAt)}</span>
-          )}
+        <div className="border-t p-2 text-center text-xs text-muted-foreground bg-background/50 backdrop-blur-sm">
+          <div className="inline-flex items-center">
+            {createdAt && (
+              <span>Created: {formatTimestamp(createdAt)}</span>
+            )}
+            {updatedAt && updatedAt !== createdAt && (
+              <span className="mx-2">•</span>
+            )}
+            {updatedAt && updatedAt !== createdAt && (
+              <span>Modified: {formatTimestamp(updatedAt)}</span>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -20,9 +20,8 @@ export function VideoPost({
   onStartRecording, 
   onStopRecording, 
   onFileChange,
-  videoRef,
-  category 
-}: VideoPostProps) {
+  videoRef
+}: Omit<VideoPostProps, 'category'>) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -39,18 +38,26 @@ export function VideoPost({
 
   return (
     <div className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto bg-black/50 rounded-2xl overflow-hidden backdrop-blur-md">
-      <video 
-        ref={videoRef}
-        className="w-full h-full object-cover bg-black"
-        playsInline
-        muted
-      />
+      {/* Video element that shows the camera feed during recording */}
+      <div className="w-full h-full bg-black">
+        <video 
+          ref={videoRef}
+          className={`w-full h-full ${isRecording ? 'object-cover' : 'object-contain'}`}
+          playsInline
+          autoPlay
+          muted
+          style={{
+            display: (!isRecording && !preview) ? 'none' : 'block',
+            backgroundColor: 'black'
+          }}
+        />
+      </div>
       
-      {!preview && !isRecording && (
+      {!preview && !isRecording ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
           <Video className="h-12 w-12 text-white/80 mb-4" />
           <p className="text-white/80 mb-6">
-            Record a 15-second video or choose from gallery
+            Record a video or choose from gallery
           </p>
           <div className="flex gap-4">
             <Button
@@ -79,14 +86,19 @@ export function VideoPost({
             />
           </div>
         </div>
-      )}
+      ) : null}
       
+      {/* Preview overlay */}
       {preview && !isRecording && (
-        <video 
-          src={preview} 
-          controls 
-          className="w-full h-full object-contain bg-black"
-        />
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+          <video 
+            src={preview} 
+            controls 
+            className="w-full h-full object-contain"
+            autoPlay
+            loop
+          />
+        </div>
       )}
       
       {isRecording && (

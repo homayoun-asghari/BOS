@@ -415,13 +415,9 @@ export default function JournalPage() {
 
 
 
-  // Set up non-scrollable page and fetch entry when selected date changes
+  // Set up and fetch entry when selected date changes
   useEffect(() => {
     console.log('useEffect triggered with selectedDate:', selectedDate);
-    
-    // Prevent page scrolling
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
     
     // Reset editor ready state when date changes
     console.log('Resetting editor ready state');
@@ -430,12 +426,6 @@ export default function JournalPage() {
     // Fetch the journal entry for the selected date
     console.log('Calling fetchJournalEntry with date:', selectedDate);
     fetchJournalEntry(selectedDate);
-    
-    // Cleanup function to re-enable scrolling when component unmounts
-    return () => {
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-    };
   }, [selectedDate, fetchJournalEntry]);
 
   // Handle date change
@@ -461,9 +451,10 @@ export default function JournalPage() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-screen w-full">
-        <div className="px-6 pt-6 w-full flex-shrink-0">
-          <div className="flex justify-end w-full">
+      <div className="flex flex-col h-full w-full">
+        {/* Fixed header */}
+        <div className="px-6 pt-6 w-full">
+          <div className="flex justify-center w-full">
             <JournalDatePicker 
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
@@ -471,28 +462,22 @@ export default function JournalPage() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col w-full overflow-hidden p-0 sm:p-4">
-          <div className="w-full h-full">
-            <div className="w-full h-full">
-              <div className="h-full w-full relative">
-                {journal && (
-                  <MinimalEditorWrapper
-                    key={`${journal.id}-${selectedDate.toISOString().split('T')[0]}`}
-                    value={JSON.stringify(journal.content)}
-                    onChange={handleEditorChange}
-                    className="h-full w-full"
-                    showTagInput={false}
-                    placeholder="I am future YOU, talk to me ..."
-                  />
-                )}
-                {!isEditorReady && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-                    <div className="animate-pulse">Loading editor...</div>
-                  </div>
-                )}
-              </div>
+        {/* Scrollable content */}
+        <div className="flex-1 min-h-0 p-0 sm:p-4">
+          {journal ? (
+            <MinimalEditorWrapper
+              key={`${journal.id}-${selectedDate.toISOString().split('T')[0]}`}
+              value={JSON.stringify(journal.content)}
+              onChange={handleEditorChange}
+              className="h-full w-full"
+              showTagInput={false}
+              placeholder="I am future YOU, talk to me ..."
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center bg-background/50">
+              <div className="animate-pulse">Loading editor...</div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </TooltipProvider>

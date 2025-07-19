@@ -132,127 +132,129 @@ export default function KnowledgePage() {
   };
 
   return (
-    <div className="w-full p-4 relative flex flex-col" style={{ height: 'calc(100vh - 2rem)' }}>
-      <div className="flex flex-col flex-1 space-y-4">
-        {/* Search and View Toggle */}
-        <div className="flex items-center justify-between w-full gap-2">
-          <div className="relative">
-            <div className={`transition-all duration-300 ease-in-out ${isSearchActive || searchQuery || inputValue || tags.length > 0 ? 'w-full max-w-md' : 'w-10'}`}>
-            {!isSearchActive && !searchQuery && !inputValue && tags.length === 0 ? (
-              <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full w-full">
+      <div className="flex-1 min-h-0 p-4 w-full overflow-hidden">
+        <div className="flex flex-col h-full space-y-4">
+          {/* Search and View Toggle */}
+          <div className="flex items-center justify-between w-full gap-2">
+            <div className="flex items-center gap-2">
+              <Link href="/notes/new" className="flex items-center">
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 transition-all duration-300"
-                  onClick={() => {
-                    setIsSearchActive(true);
-                    // Use setTimeout to ensure the input is rendered before focusing
-                    setTimeout(() => inputRef.current?.focus(), 0);
-                  }}
+                  className="h-10 w-10 transition-all duration-300 shrink-0"
                 >
-                  <Search className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                 </Button>
-                <Link href="/notes/new" className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 transition-all duration-300"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <div className="relative flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-                  {tags.map(tag => (
-                    <Badge
-                      key={tag}
+              </Link>
+              <div className="relative">
+                <div className={`transition-all duration-300 ease-in-out ${isSearchActive || searchQuery || inputValue || tags.length > 0 ? 'w-full max-w-md' : 'w-10'}`}>
+                  {!isSearchActive && !searchQuery && !inputValue && tags.length === 0 ? (
+                    <Button
                       variant="outline"
-                      className="flex items-center gap-1"
+                      size="icon"
+                      className="h-10 w-10 transition-all duration-300"
+                      onClick={() => {
+                        setIsSearchActive(true);
+                        // Use setTimeout to ensure the input is rendered before focusing
+                        setTimeout(() => inputRef.current?.focus(), 0);
+                      }}
                     >
-                      <span>#{tag}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-3.5 w-3.5 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveTag(tag);
-                        }}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  <Input
-                    ref={inputRef}
-                    placeholder="Filter by tags and search notes..."
-                    value={inputValue}
-                    onChange={(e) => {
-                      setInputValue(e.target.value);
-                      // Update search query immediately if not typing a tag
-                      if (!e.target.value.startsWith('#')) {
-                        setSearchQuery(e.target.value);
-                        const params = new URLSearchParams(window.location.search);
-                        params.set('search', e.target.value);
-                        router.push(`?${params.toString()}`);
-                      }
-                    }}
-                    onKeyDown={handleKeyDown}
-                    onBlur={(e) => {
-                      // Only collapse if clicking outside and there's no content
-                      if (!e.currentTarget.contains(e.relatedTarget as Node) && 
-                          !inputValue && !searchQuery && tags.length === 0) {
-                        setIsSearchActive(false);
-                      }
-                    }}
-                    className="flex-1 border-0 bg-transparent px-0 py-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-[10px] placeholder:leading-none placeholder:tracking-tight h-6"
+                      <Search className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <div className="relative w-full">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <div className="relative flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                        {tags.map(tag => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="flex items-center gap-1"
+                          >
+                            <span>#{tag}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-3.5 w-3.5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveTag(tag);
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                        <Input
+                          ref={inputRef}
+                          placeholder="Filter by tags and search notes..."
+                          value={inputValue}
+                          onChange={(e) => {
+                            setInputValue(e.target.value);
+                            // Update search query immediately if not typing a tag
+                            if (!e.target.value.startsWith('#')) {
+                              setSearchQuery(e.target.value);
+                              const params = new URLSearchParams(window.location.search);
+                              params.set('search', e.target.value);
+                              router.push(`?${params.toString()}`);
+                            }
+                          }}
+                          onKeyDown={handleKeyDown}
+                          onBlur={(e) => {
+                            // Only collapse if clicking outside and there's no content
+                            if (!e.currentTarget.contains(e.relatedTarget as Node) && 
+                                !inputValue && !searchQuery && tags.length === 0) {
+                              setIsSearchActive(false);
+                            }
+                          }}
+                          className="flex-1 border-0 bg-transparent px-0 py-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-[10px] placeholder:leading-none placeholder:tracking-tight h-6"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <Tabs 
+              value={view} 
+              onValueChange={(v) => setView(v as 'list' | 'graph')} 
+              className="flex-shrink-0 ml-auto"
+            >
+              <TabsList className="h-9">
+                <TabsTrigger value="graph" className="h-7 px-2">
+                  <Network className="h-3.5 w-3.5" />
+                </TabsTrigger>
+                <TabsTrigger value="list" className="h-7 px-2">
+                  <List className="h-3.5 w-3.5" />
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'graph')} className="w-full flex-1 flex flex-col">
+            <TabsContent value="graph" className="mt-0 p-0 flex-1">
+              <div className="h-full w-full relative" style={{ minHeight: '500px' }}>
+                <div className="absolute inset-0">
+                  <KnowledgeGraph 
+                    search={searchQuery}
+                    tags={tags}
+                    height="100%"
+                    className="h-full w-full"
                   />
                 </div>
               </div>
-            )}
-            </div>
-          </div>
-          
-          <Tabs 
-            value={view} 
-            onValueChange={(v) => setView(v as 'list' | 'graph')} 
-            className="flex-shrink-0 ml-auto"
-          >
-            <TabsList className="h-9">
-              <TabsTrigger value="graph" className="h-7 px-2">
-                <Network className="h-3.5 w-3.5" />
-              </TabsTrigger>
-              <TabsTrigger value="list" className="h-7 px-2">
-                <List className="h-3.5 w-3.5" />
-              </TabsTrigger>
-            </TabsList>
+            </TabsContent>
+            
+            <TabsContent value="list" className="mt-0">
+              <div className="space-y-4">
+                <NoteList searchParams={searchFilter} />
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
-
-        <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'graph')} className="w-full flex-1 flex flex-col">
-          <TabsContent value="graph" className="mt-0 p-0 flex-1">
-            <div className="bg-background h-full">
-              <KnowledgeGraph 
-                search={searchQuery}
-                tags={tags}
-                height="100%"
-                className="h-full w-full"
-              />
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="list" className="mt-0">
-            <div className="space-y-4">
-              <NoteList searchParams={searchFilter} />
-            </div>
-          </TabsContent>
-        </Tabs>
       </div>
-      
-
     </div>
   );
 }

@@ -10,6 +10,7 @@ export interface NoteFormValues {
   created_at?: Date | null;
   updated_at?: Date | null;
   user_id?: string;
+  is_public?: boolean;
 }
 
 export const DEFAULT_NOTE_VALUES: Omit<NoteFormValues, 'id'> = {
@@ -19,5 +20,6 @@ export const DEFAULT_NOTE_VALUES: Omit<NoteFormValues, 'id'> = {
   status: null,
   tags: [],
   created_at: null,
-  updated_at: null
+  updated_at: null,
+  is_public: false
 };

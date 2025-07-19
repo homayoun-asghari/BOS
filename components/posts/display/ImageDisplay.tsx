@@ -12,6 +12,7 @@ interface ImageDisplayProps {
   user: {
     name: string;
     avatarUrl?: string;
+    username: string;
   };
   imageUrl: string;
   timestamp: string | Date;

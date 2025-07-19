@@ -1,7 +1,7 @@
 import * as React from "react"
 import "./styles/index.css"
 
-import type { Content, Editor } from "@tiptap/react"
+import type { Editor } from "@tiptap/react"
 import type { UseMinimalTiptapEditorProps } from "./hooks/use-minimal-tiptap"
 import { EditorContent } from "@tiptap/react"
 import { Separator } from "@/components/ui/separator"
@@ -13,13 +13,12 @@ import { SectionFour } from "./components/section/four"
 import { SectionFive } from "./components/section/five"
 import { LinkBubbleMenu } from "./components/bubble-menu/link-bubble-menu"
 import { useMinimalTiptapEditor } from "./hooks/use-minimal-tiptap"
-import { MeasuredContainer } from "./components/measured-container"
 import { InlineTagInput } from "@/components/editor/InlineTagInput"
 
 interface TiptapContent {
   type?: string;
-  content?: any[];
-  [key: string]: any;
+  content?: unknown[];
+  [key: string]: unknown;
 }
 
 export interface MinimalTiptapProps
@@ -136,14 +135,14 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   onInternalLinkClick, 
   onFileUpload,
   noteId,
-  type,
-  status,
+  type = null,
+  status = null,
   tags = [],
   onTypeChange = () => {},
   onStatusChange = () => {},
   onAddTag = () => {},
   onRemoveTag = () => {},
-  showTagInput = true,
+  showTagInput,
   ...props 
 }, ref) => {
   const [isHovering, setIsHovering] = React.useState(false);
@@ -158,7 +157,7 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
     value,
     onUpdate: (content) => {
       try {
-        onChange?.(content);
+        handleChange(content);
       } catch (error) {
         console.error('Error in onChange handler:', error);
       }
@@ -198,6 +197,29 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
     }
   }, [editor]);
 
+  // Handle editor content changes
+  const handleChange = React.useCallback((content: TiptapContent) => {
+    if (!onChange) return;
+    
+    if (content === null || content === undefined) {
+      onChange({ type: 'doc', content: [] });
+    } else if (typeof content === 'string') {
+      // If content is a string, wrap it in a proper TiptapContent object
+      onChange({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: content ? [{ type: 'text', text: content }] : []
+          }
+        ]
+      });
+    } else {
+      // Handle JSON content
+      onChange(content);
+    }
+  }, [onChange]);
+
   // Handle editor and tag input focus
   const tagInputRef = React.useRef<HTMLInputElement>(null);
   const hasTags = tags && tags.length > 0;
@@ -234,13 +256,13 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
     <div 
       ref={internalRef}
       className={cn(
-        "relative h-full min-h-72 w-full shadow-sm focus-within:ring-1 focus-within:ring-primary/50 flex flex-col",
+        "relative w-full flex flex-col h-full",
         className
       )}
       onClick={handleEditorClick}
     >
-      {/* Sticky Toolbar Toggle */}
-      <div className="sticky-toolbar-container top-0 left-0 right-0 z-50 w-full bg-background/80 backdrop-blur-sm">
+      {/* Sticky Toolbar Toggle - Positioned at the top of the editor */}
+      <div className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-sm">
         <div className="w-full flex justify-center py-2 relative">
           <div 
             className="h-2 w-16 rounded-full bg-foreground/20 hover:bg-foreground/30 hover:w-20 transition-all duration-200 cursor-pointer touch-manipulation"
@@ -261,22 +283,21 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
             }}
           />
           
-          {/* Toolbar */}
+          {/* Toolbar - Now using absolute positioning within the sticky container */}
           <div 
             ref={toolbarRef}
             className={cn(
-              "fixed left-1/2 -translate-x-1/2 z-40 bg-background/95 border border-border rounded-lg shadow-lg transition-all duration-200 w-[85vw] max-w-[500px] overflow-hidden",
+              "absolute left-1/2 -translate-x-1/2 z-40 bg-background/95 border border-border rounded-lg shadow-lg transition-all duration-200 w-[85vw] max-w-[500px] overflow-hidden",
               "sm:w-[90vw] sm:max-w-[550px]",
-              isHovering ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
+              isHovering ? "opacity-100 translate-y-2" : "opacity-0 -translate-y-2 pointer-events-none"
             )}
             style={{
-              top: 'calc(100% + 0.5rem)',
-              WebkitTransform: 'translate3d(-50%, 0, 0)',
-              transform: 'translate3d(-50%, 0, 0)',
-              WebkitOverflowScrolling: 'touch',
+              top: '100%',
+              maxHeight: 'min(70vh, 400px)',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
-              maxHeight: '70vh',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -287,57 +308,53 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
         </div>
       </div>
       {/* Editor Content */}
-      <div className="relative flex-1 overflow-y-auto pt-2">
-        <div className="min-h-full">
-          {/* Inline Tag Input - Conditionally rendered based on showTagInput prop */}
-          {showTagInput !== false && (
-            <div className="py-2 bg-background" onClick={(e) => e.stopPropagation()}>
-              <InlineTagInput
-                ref={tagInputRef}
-                noteId={noteId}
-                type={type}
-                status={status}
-                tags={tags}
-                onTypeChange={onTypeChange}
-                onStatusChange={onStatusChange}
-                onAddTag={onAddTag}
-                onRemoveTag={onRemoveTag}
-                onEnterPress={() => {
-                  if (editor) {
-                    // Focus the editor at the start of the first line
-                    editor.commands.focus('start');
-                    // Move cursor to the beginning of the document
-                    editor.commands.setTextSelection(0);
-                  }
-                }}
-              />
-            </div>
-          )}
-          
-          <div className={cn(
-            "minimal-tiptap-editor min-h-full w-full p-0 m-0",
-            editorContentClassName
-          )}>
-            <EditorContent
-              editor={editor}
-              className="h-full w-full"
-              style={{
-                background: 'transparent',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%',
-                padding: 0,
-                margin: 0
+      <div className="flex-1 flex flex-col min-h-0 editor-content">
+        {/* Inline Tag Input - Conditionally rendered based on showTagInput prop */}
+        {showTagInput !== false && (
+          <div className="py-2 bg-background flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <InlineTagInput
+              ref={tagInputRef}
+              noteId={noteId}
+              type={type}
+              status={status}
+              tags={tags}
+              onTypeChange={onTypeChange}
+              onStatusChange={onStatusChange}
+              onAddTag={onAddTag}
+              onRemoveTag={onRemoveTag}
+              onEnterPress={() => {
+                if (editor) {
+                  editor.commands.focus('start');
+                  editor.commands.setTextSelection(0);
+                }
               }}
             />
           </div>
-          <LinkBubbleMenu editor={editor} />
+        )}
+        
+        <div className="flex-1 min-h-0">
+          <EditorContent
+            editor={editor}
+            className={cn(
+              "h-full w-full",
+              "prose prose-sm dark:prose-invert focus:outline-none",
+              "prose-headings:font-medium prose-p:my-2 prose-ul:my-2 prose-ol:my-2",
+              "prose-pre:bg-muted/50 prose-pre:rounded-lg prose-pre:px-4 prose-pre:py-3",
+              "prose-code:bg-muted/50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
+              "prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg",
+              "prose-h1:font-semibold prose-h2:font-semibold prose-h3:font-semibold",
+              "prose-blockquote:not-italic prose-blockquote:border-l-4 prose-blockquote:border-primary/50",
+              editorContentClassName
+            )}
+          />
         </div>
+        
+        <LinkBubbleMenu editor={editor} />
       </div>
     </div>
-  )
-})
+  );
+});
 
-MinimalTiptapEditor.displayName = "MinimalTiptapEditor"
+MinimalTiptapEditor.displayName = "MinimalTiptapEditor";
 
-export default MinimalTiptapEditor
+export default MinimalTiptapEditor;

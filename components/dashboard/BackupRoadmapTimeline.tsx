@@ -1,33 +1,36 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, Circle, Clock, Diamond, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { CheckCircle, Clock, Diamond, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface TaskType {
-  id: string;
-  title: string;
-  status: 'todo' | 'in_progress' | 'done';
-  milestone_id: string;
-  order_index: number;
-  due_date?: string | null;
-  priority?: 'low' | 'medium' | 'high';
-}
-
-interface MilestoneType {
+export interface TaskType {
   id: string;
   title: string;
   description: string;
+  status: 'todo' | 'in_progress' | 'done';
+  milestone_id: string;
+  order_index: number;
+  due_date: string | null;
+  priority: 'low' | 'medium' | 'high';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MilestoneType {
+  id: string;
+  title: string;
+  description: string | null;
   start_date: string | null;
   end_date: string | null;
   order_index: number;
-  roadmap_id: string;
   tasks: TaskType[];
+  isCompleted?: boolean;
 }
 
 interface BackupRoadmapTimelineProps {
   milestones: MilestoneType[];
-  onTaskStatusChange: (taskId: string, status: 'todo' | 'in_progress' | 'done', priority?: 'low' | 'medium' | 'high') => Promise<boolean>;
+  onTaskStatusChange?: (taskId: string, status: 'todo' | 'in_progress' | 'done' | 'completed', priority?: 'low' | 'medium' | 'high') => Promise<boolean>;
 }
 
 export function BackupRoadmapTimeline({ 
@@ -37,6 +40,24 @@ export function BackupRoadmapTimeline({
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
   const [pulsingTaskId, setPulsingTaskId] = useState<string | null>(null);
   const [isPulsing, setIsPulsing] = useState(true);
+
+  // Debug log to check the incoming milestones and tasks
+  useEffect(() => {
+    console.log('BackupRoadmapTimeline - Milestones:', milestones);
+    milestones.forEach((milestone, idx) => {
+      console.log(`Milestone ${idx} (${milestone.title}):`, {
+        id: milestone.id,
+        taskCount: milestone.tasks?.length || 0,
+        tasks: milestone.tasks?.map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          due_date: t.due_date
+        }))
+      });
+    });
+  }, [milestones]);
 
   // Find the task that should pulse (today's task or next upcoming)
   useEffect(() => {
@@ -122,39 +143,50 @@ export function BackupRoadmapTimeline({
     }));
   };
 
-  const handleTaskStatusChange = useCallback(async (taskId: string, currentStatus: 'todo' | 'in_progress' | 'done') => {
+  const handleTaskStatusChange = useCallback(async (taskId: string, currentStatus: 'todo' | 'in_progress' | 'done', priority?: 'low' | 'medium' | 'high') => {
+    if (!onTaskStatusChange) return false;
+    
     try {
       const newStatus = currentStatus === 'done' ? 'todo' : 'done';
-      const success = await onTaskStatusChange(taskId, newStatus);
+      const success = await onTaskStatusChange(taskId, newStatus, priority);
       return success;
     } catch (error) {
       console.error('Error updating task status:', error);
       return false;
+    } finally {
+      // Stop the pulsing animation after a short delay
+      setTimeout(() => setPulsingTaskId(null), 500);
     }
   }, [onTaskStatusChange]);
 
-
-  const getStatusIcon = useCallback((status: 'todo' | 'in_progress' | 'done', priority?: 'low' | 'medium' | 'high') => {
+  const getStatusIcon = useCallback((status: 'todo' | 'in_progress' | 'done', priority: 'low' | 'medium' | 'high' = 'medium') => {
+    // Define colors based on priority
     const priorityColor = priority === 'high' ? 'text-red-500' : 
                          priority === 'medium' ? 'text-amber-500' : 
-                         priority === 'low' ? 'text-green-500' : 'text-gray-500';
+                         'text-green-500'; // Default to green for low priority
     
     const borderColor = priority === 'high' ? 'border-red-500' : 
                        priority === 'medium' ? 'border-amber-500' : 
-                       priority === 'low' ? 'border-green-500' : 'border-gray-300';
+                       'border-green-500';
     
-    switch (status) {
-      case 'done':
-        return <CheckCircle className={`w-4 h-4 ${priorityColor}`} />;
-      case 'in_progress':
-        return <Clock className={`w-4 h-4 ${priorityColor}`} />;
-      default:
-        return (
-          <div className={`relative w-4 h-4 rounded-full border-2 ${borderColor} flex items-center justify-center`}>
-            <Circle className={`w-3 h-3 ${status === 'todo' ? 'text-transparent' : priorityColor}`} />
-          </div>
-        );
+    // bgColor is not currently used, removed to fix lint warning
+    
+    // For completed tasks, show a filled checkmark with priority color
+    if (status === 'done') {
+      return <CheckCircle className={`w-4 h-4 ${priorityColor}`} />;
     }
+    
+    // For in-progress tasks, show a clock icon with priority color
+    if (status === 'in_progress') {
+      return <Clock className={`w-4 h-4 ${priorityColor}`} />;
+    }
+    
+    // For todo tasks, show a circle with priority color border
+    return (
+      <div className={`relative w-4 h-4 rounded-full border-2 ${borderColor} flex items-center justify-center`}>
+        <div className={`w-3 h-3 rounded-full bg-transparent`} />
+      </div>
+    );
   }, []);
 
   if (!milestones || milestones.length === 0) {
@@ -166,7 +198,7 @@ export function BackupRoadmapTimeline({
   }
 
   return (
-    <div className="p-4">
+    <div className="w-full">
       <ol className="relative border-l-2 border-gray-200 dark:border-gray-600 space-y-8 ml-2">
         {milestones
           .sort((a, b) => a.order_index - b.order_index)
@@ -214,9 +246,9 @@ export function BackupRoadmapTimeline({
                     {milestone.tasks && milestone.tasks.length > 0 && (
                       <div className={`flex items-center text-sm ${
                         milestone.tasks.every(t => t.status === 'done') 
-                          ? 'text-green-500 dark:text-green-400' 
-                          : 'text-gray-500 dark:text-gray-400'
-                      } bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md space-x-1`}>
+                          ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30' 
+                          : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/80'
+                      } px-2 py-1 rounded-md space-x-1`}>
                         {milestone.tasks.every(t => t.status === 'done') ? (
                           <>
                             <Check className="w-4 h-4" />
@@ -251,11 +283,13 @@ export function BackupRoadmapTimeline({
                         <div className="absolute -left-[2.36rem] top-1/2 w-3 h-3 bg-gray-300 rounded-full -translate-y-1/2 border-2 border-white dark:border-gray-800"></div>
                         <div className="flex items-center">
                           <button
-                            onClick={() => handleTaskStatusChange(task.id, task.status)}
+                            onClick={onTaskStatusChange ? () => handleTaskStatusChange(task.id, task.status, task.priority) : undefined}
                             aria-label={task.status === 'done' ? 'Mark as todo' : 'Mark as done'}
-                            className="mr-2"
+                            className={`mr-2 flex-shrink-0 ${!onTaskStatusChange ? 'cursor-default' : ''}`}
+                            title={`Priority: ${task.priority}`}
+                            disabled={!onTaskStatusChange}
                           >
-                            {getStatusIcon(task.status, task.priority)}
+                            {getStatusIcon(task.status, task.priority || 'medium')}
                           </button>
                           <div className="flex flex-col">
                             <span className={`${task.status === 'done' ? 'line-through text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>

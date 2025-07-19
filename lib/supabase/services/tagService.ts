@@ -56,40 +56,56 @@ class TagService {
       .eq('user_id', userId);
 
     if (fetchError) {
+      console.error('Error fetching existing tags:', fetchError);
       throw fetchError;
     }
 
-    const existingTagNames = new Set(existingTags?.map(t => t.name) || []);
-    const newTags = tagNames.filter(name => !existingTagNames.has(name));
+    const existingTagMap = new Map(existingTags?.map(tag => [tag.name.toLowerCase(), tag.id]) || []);
+    const newTags = tagNames.filter(name => !existingTagMap.has(name.toLowerCase()));
 
-    // Insert new tags one by one to handle potential race conditions
-    const insertedTagIds: string[] = [];
-    
-    for (const name of newTags) {
-      const { data: insertedTag, error } = await this.supabase
+    // Insert new tags using upsert to handle race conditions
+    if (newTags.length > 0) {
+      const { data: insertedTags, error: insertError } = await this.supabase
         .from('tags')
-        .insert({
-          name,
-          user_id: userId,
-          created_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
+        .upsert(
+          newTags.map(name => ({
+            name,
+            user_id: userId,
+            created_at: new Date().toISOString()
+          })),
+          { onConflict: 'user_id,name', ignoreDuplicates: true }
+        )
+        .select('id, name');
 
-      if (error) {
-        continue; // Skip this tag but continue with others
+      if (insertError) {
+        console.error('Error inserting new tags:', insertError);
+        throw insertError;
       }
 
-      if (insertedTag) {
-        insertedTagIds.push(insertedTag.id);
-      }
+      // Add the newly inserted tags to our map
+      insertedTags?.forEach(tag => {
+        existingTagMap.set(tag.name.toLowerCase(), tag.id);
+      });
     }
 
-    // Combine existing and new tags
-    return [
-      ...(existingTags?.map(t => t.id) || []),
-      ...insertedTagIds
-    ];
+    // If we still don't have all tag IDs, try to fetch them one more time
+    const missingTags = tagNames.filter(name => !existingTagMap.has(name.toLowerCase()));
+    if (missingTags.length > 0) {
+      const { data: missingTagData } = await this.supabase
+        .from('tags')
+        .select('id, name')
+        .in('name', missingTags)
+        .eq('user_id', userId);
+
+      missingTagData?.forEach(tag => {
+        existingTagMap.set(tag.name.toLowerCase(), tag.id);
+      });
+    }
+
+    // Return all tag IDs we could find
+    return tagNames
+      .map(name => existingTagMap.get(name.toLowerCase()))
+      .filter((id): id is string => id !== undefined);
   }
 
   /**
