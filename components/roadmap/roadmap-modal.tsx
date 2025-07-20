@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 
@@ -53,6 +53,82 @@ interface RoadmapModalProps {
       }>;
     }>;
   } | null;
+}
+
+// Helper function to format date for database
+function formatDateForDB(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper function to process tasks for a milestone
+async function processMilestoneTasks(milestone: Milestone) {
+  if (!milestone.id) return;
+  
+  // Get existing tasks for this milestone
+  const { data: existingTasks } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('milestone_id', milestone.id);
+    
+  const existingTaskIds = new Set(existingTasks?.map(t => t.id) || []);
+  const processedTaskIds = new Set();
+  
+  // Process all subtasks
+  const tasksToInsert = [];
+  
+  for (const [index, subtask] of milestone.subtasks.entries()) {
+    const taskData = {
+      title: subtask.title || 'Untitled Task',
+      status: subtask.completed ? 'done' : 'todo',
+      priority: subtask.priority || 'medium',
+      due_date: subtask.dueDate ? formatDateForDB(subtask.dueDate) : null,
+      order_index: index,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (subtask.id && existingTaskIds.has(subtask.id)) {
+      // Update existing task
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update(taskData)
+        .eq('id', subtask.id);
+        
+      if (updateError) throw updateError;
+      processedTaskIds.add(subtask.id);
+    } else {
+      // Prepare new task for batch insert
+      tasksToInsert.push({
+        ...taskData,
+        milestone_id: milestone.id,
+        created_at: new Date().toISOString()
+      });
+    }
+  }
+  
+  // Batch insert new tasks
+  if (tasksToInsert.length > 0) {
+    const { data: newTasks, error: insertError } = await supabase
+      .from('tasks')
+      .insert(tasksToInsert)
+      .select('id');
+      
+    if (insertError) throw insertError;
+    newTasks?.forEach(task => processedTaskIds.add(task.id));
+  }
+  
+  // Delete tasks that were removed
+  const tasksToDelete = Array.from(existingTaskIds).filter(id => !processedTaskIds.has(id));
+  if (tasksToDelete.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', tasksToDelete);
+      
+    if (deleteError) throw deleteError;
+  }
 }
 
 export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapModalProps) {
@@ -221,19 +297,52 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     }
   }, []);
 
+  // Check if form is valid
+  const isFormValid = useMemo(() => {
+    if (!goal.trim()) return false;
+    if (!goalStartDate || !goalEndDate) return false;
+    if (milestones.length === 0) return false;
+    
+    // Check all milestones have required fields
+    for (const milestone of milestones) {
+      if (!milestone.title.trim()) return false;
+      
+      // Check all tasks have required fields
+      for (const task of milestone.subtasks) {
+        if (!task.title.trim()) return false;
+      }
+    }
+    
+    return true;
+  }, [goal, goalStartDate, goalEndDate, milestones]);
+  
+  // Get validation error message
+  const getValidationError = useCallback(() => {
+    if (!goal.trim()) return 'Please enter a goal';
+    if (!goalStartDate) return 'Please select a start date';
+    if (!goalEndDate) return 'Please select an end date';
+    if (milestones.length === 0) return 'Please add at least one milestone';
+    
+    for (const [index, milestone] of milestones.entries()) {
+      if (!milestone.title.trim()) return `Milestone ${index + 1} is missing a title`;
+      
+      for (const [taskIndex, task] of milestone.subtasks.entries()) {
+        if (!task.title.trim()) return `Milestone ${index + 1}, Task ${taskIndex + 1} is missing a title`;
+      }
+    }
+    
+    return null;
+  }, [goal, goalStartDate, goalEndDate, milestones]);
+
   const handleSave = useCallback(async () => {
     if (!user?.id) {
       toast.error('You must be logged in to save a roadmap');
       return;
     }
-
-    if (!goal.trim()) {
-      toast.error('Please enter a goal');
-      return;
-    }
-
-    if (!goalStartDate || !goalEndDate) {
-      console.error('Both start and end dates are required');
+    
+    const error = getValidationError();
+    if (error) {
+      toast.error(error);
       return;
     }
 
@@ -269,12 +378,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         // Clear the cover image since we're removing it
         setCoverImage(null);
       }
-      const formatDateForDB = (date: Date): string => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
+      // Using shared formatDateForDB function
 
       let finalRoadmapId = roadmap?.id;
 
@@ -300,21 +404,74 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         // Add is_public to the update data
         updateData.is_public = isPublic;
         
-        // Update existing roadmap
+        // Update the roadmap
         const { error: roadmapError } = await supabase
           .from('roadmaps')
           .update(updateData)
           .eq('id', roadmap.id);
 
         if (roadmapError) throw roadmapError;
-
-        // Delete existing milestones and tasks to replace them
-        const { error: deleteError } = await supabase
+        
+        // Get existing milestones for this roadmap
+        const { data: existingMilestones } = await supabase
           .from('milestones')
-          .delete()
+          .select('id, tasks(id)')
           .eq('roadmap_id', roadmap.id);
-
-        if (deleteError) throw deleteError;
+          
+        const existingMilestoneIds = new Set(existingMilestones?.map(m => m.id) || []);
+        const processedMilestoneIds = new Set();
+        
+        // Process all milestones
+        for (const milestone of milestones) {
+          if (milestone.id && existingMilestoneIds.has(milestone.id)) {
+            // Update existing milestone
+            const { error: updateError } = await supabase
+              .from('milestones')
+              .update({
+                title: milestone.title || 'Untitled Milestone',
+                start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
+                end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
+                order_index: milestones.indexOf(milestone),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', milestone.id);
+              
+            if (updateError) throw updateError;
+            processedMilestoneIds.add(milestone.id);
+          } else {
+            // Create new milestone
+            const { data: newMilestone, error: createError } = await supabase
+              .from('milestones')
+              .insert({
+                roadmap_id: roadmap.id,
+                title: milestone.title || 'Untitled Milestone',
+                start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
+                end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
+                status: 'pending',
+                order_index: milestones.indexOf(milestone)
+              })
+              .select('id')
+              .single();
+              
+            if (createError) throw createError;
+            milestone.id = newMilestone.id;
+            processedMilestoneIds.add(newMilestone.id);
+          }
+          
+          // Process tasks for this milestone
+          await processMilestoneTasks(milestone);
+        }
+        
+        // Delete milestones that were removed
+        const milestonesToDelete = Array.from(existingMilestoneIds).filter(id => !processedMilestoneIds.has(id));
+        if (milestonesToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('milestones')
+            .delete()
+            .in('id', milestonesToDelete);
+            
+          if (deleteError) throw deleteError;
+        }
       } else {
         // Create new roadmap
         const { data: roadmapData, error: roadmapError } = await supabase
@@ -334,53 +491,51 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
 
         if (roadmapError) throw roadmapError;
         finalRoadmapId = roadmapData.id;
-      }
+        
+        // Create milestones and tasks for the new roadmap
+        for (const milestone of milestones) {
+          // Create new milestone
+          const { data: newMilestone, error: createError } = await supabase
+            .from('milestones')
+            .insert({
+              roadmap_id: finalRoadmapId,
+              title: milestone.title || 'Untitled Milestone',
+              start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
+              end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
+              status: 'pending',
+              order_index: milestones.indexOf(milestone)
+            })
+            .select('id')
+            .single();
+            
+          if (createError) throw createError;
+          
+          // Store the new milestone ID for task creation
+          const milestoneId = newMilestone.id;
+          
+          // Process tasks for this milestone
+          const tasks = milestone.subtasks || [];
+          for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            const { error: taskError } = await supabase
+              .from('tasks')
+              .insert({
+                milestone_id: milestoneId,
+                title: task.title || 'Untitled Task',
+                description: task.description || '',
+                due_date: task.due_date ? formatDateForDB(new Date(task.due_date)) : null,
+                status: task.status || 'todo',
+                priority: task.priority || 'medium',
+                order_index: i
+              });
+              
+            if (taskError) throw taskError;
+          }
+        }
+      } // Close the else block
 
       if (!finalRoadmapId) {
         throw new Error('Failed to create or update roadmap');
-      }
-
-      // Process all milestones
-      for (const milestone of milestones) {
-        const { data: savedMilestone, error: milestoneError } = await supabase
-          .from('milestones')
-          .insert({
-            roadmap_id: finalRoadmapId,
-            title: milestone.title || 'Untitled Milestone',
-            start_date: milestone.startDate ? formatDateForDB(milestone.startDate) : null,
-            end_date: milestone.endDate ? formatDateForDB(milestone.endDate) : null,
-            status: 'pending',
-            order_index: milestones.indexOf(milestone)
-          })
-          .select('id')
-          .single();
-
-        if (milestoneError) throw milestoneError;
-
-        const tasksToInsert = milestone.subtasks.map((subtask, index) => ({
-          milestone_id: savedMilestone.id,
-          title: subtask.title || 'Untitled Task',
-          status: subtask.completed ? 'done' : 'todo',
-          priority: subtask.priority || 'medium', // Ensure priority is included
-          due_date: subtask.dueDate ? formatDateForDB(subtask.dueDate) : null,
-          order_index: index,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
-        
-        console.log('Inserting tasks with priorities:', tasksToInsert.map(t => ({
-          title: t.title,
-          priority: t.priority,
-          status: t.status
-        })));
-
-        if (tasksToInsert.length > 0) {
-          const { error: tasksError } = await supabase
-            .from('tasks')
-            .insert(tasksToInsert);
-
-          if (tasksError) throw tasksError;
-        }
       }
 
       // Clean up the old cover image if it was changed or removed
@@ -431,14 +586,11 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{roadmap ? 'Edit Roadmap' : 'Create New Roadmap'}</DialogTitle>
+          <DialogTitle className="pb-2">What Do YOU Want?</DialogTitle>
         </DialogHeader>
         
         {/* Cover Image Upload */}
-        <div className="space-y-2 mb-6">
-          <label className="block text-sm font-medium text-foreground">
-            Cover Image (Optional)
-          </label>
+        <div className="mb-6">
           <CoverImageUpload
             coverImage={coverImage}
             onCoverImageChange={handleCoverImageChange}
@@ -457,16 +609,21 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             onEndDateChange={setGoalEndDate}
           />
           
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isPublic"
-              checked={isPublic}
-              onCheckedChange={(checked: boolean) => setIsPublic(checked)}
-              className="border-foreground/30 dark:border-foreground/50 data-[state=checked]:bg-foreground/10 data-[state=checked]:border-foreground/50 dark:data-[state=checked]:bg-foreground/20"
-            />
-            <label htmlFor="isPublic" className="text-sm font-medium text-foreground">
-              Make this roadmap public
-            </label>
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isPublic"
+                checked={isPublic}
+                onCheckedChange={(checked: boolean) => setIsPublic(checked)}
+                className="border-foreground/30 dark:border-foreground/50 data-[state=checked]:bg-foreground/10 data-[state=checked]:border-foreground/50 dark:data-[state=checked]:bg-foreground/20"
+              />
+              <label htmlFor="isPublic" className="text-sm font-medium text-foreground">
+                Make this roadmap public
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground pl-6">
+              Changing this will affect the visibility of your posts in this roadmap.
+            </p>
           </div>
 
           <div className="space-y-4 sm:space-y-6">
@@ -510,9 +667,20 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             <Button variant="outline" onClick={() => onOpenChange(false)} className="mt-2 sm:mt-0">
               Cancel
             </Button>
-            <Button onClick={handleSave} className="w-full sm:w-auto">
-              Save Roadmap
-            </Button>
+            <div className="relative group">
+              <Button 
+                onClick={handleSave} 
+                disabled={!isFormValid}
+                className={`w-full sm:w-auto ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Save Roadmap
+              </Button>
+              {!isFormValid && (
+                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  {getValidationError()}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

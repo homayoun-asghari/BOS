@@ -70,29 +70,50 @@ export const getSignedUrl = async (
 export interface UploadPostMediaResult {
   url: string;
   path: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'voice';
 }
 
-export const uploadPostMedia = async (file: File, type: 'image' | 'video'): Promise<UploadPostMediaResult> => {
+export const uploadPostMedia = async (file: File | null | undefined, type: 'image' | 'video' | 'voice'): Promise<UploadPostMediaResult> => {
+  console.log('uploadPostMedia called with:', { file, type });
+  
   if (!file) {
-    throw new Error('No file provided');
+    const errorMsg = 'No file provided for upload';
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   // Get the current user for user-specific paths
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   
   if (userError || !user) {
-    throw new Error(userError?.message || 'User not authenticated');
+    const errorMsg = userError?.message || 'User not authenticated';
+    console.error('Authentication error:', errorMsg);
+    throw new Error(errorMsg);
   }
   
   const BUCKET_NAME = 'post-media';
   
-  // Generate a unique filename with user ID and timestamp
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || (type === 'image' ? 'jpg' : 'mp4');
-  const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-  const contentType = file.type || (type === 'image' ? 'image/jpeg' : 'video/mp4');
-  
   try {
+    // Generate a unique filename with user ID and timestamp
+    const fileNameParts = file.name ? file.name.split('.') : [];
+    const fileExt = (fileNameParts.length > 1 ? fileNameParts.pop()?.toLowerCase() : null) || 
+                   (type === 'image' ? 'jpg' : type === 'video' ? 'mp4' : 'mp3');
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+    
+    console.log('Uploading file with details:', {
+      originalName: file.name,
+      size: file.size,
+      type: file.type,
+      generatedFileName: fileName,
+      fileExt,
+      userId: user.id
+    });
+    const contentType = file.type || (
+      type === 'image' ? 'image/jpeg' : 
+      type === 'video' ? 'video/mp4' :
+      'audio/mpeg'
+    );
+    
     // Direct upload to public bucket
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)

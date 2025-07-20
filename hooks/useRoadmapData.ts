@@ -246,6 +246,15 @@ export const useRoadmapData = () => {
     }
 
     try {
+      // First, delete all posts related to this roadmap
+      const { error: postsError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('roadmap_id', roadmapId);
+
+      if (postsError) throw postsError;
+
+      // Then delete the roadmap
       const { error } = await supabase
         .from('roadmaps')
         .delete()
@@ -254,7 +263,7 @@ export const useRoadmapData = () => {
       if (error) throw error;
       
       safeSetRoadmap(null);
-      toast.success('Roadmap deleted successfully');
+      toast.success('Roadmap and all related posts deleted successfully');
       return true;
     } catch (error) {
       console.error('Error deleting roadmap:', error);

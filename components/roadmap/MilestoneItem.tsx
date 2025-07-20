@@ -74,7 +74,7 @@ export function MilestoneItem({
       </div>
 
       <Input
-        placeholder="Describe this milestone"
+        placeholder="Describe this milestone *"
         value={title}
         onChange={(e) => onTitleChange(id, e.target.value)}
         className="h-9 text-sm sm:text-base"

@@ -37,6 +37,9 @@ export function usePosts(userId?: string) {
   
   // Use the userId from auth if not provided
   const targetUserId = userId || user?.id;
+  
+  // Determine if this is a public profile view (userId is provided and different from current user)
+  const isPublicProfile = !!userId && userId !== user?.id;
 
   // Fetch user's posts
   const fetchUserPosts = useCallback(async () => {
@@ -45,7 +48,7 @@ export function usePosts(userId?: string) {
     setIsLoading(true);
     setError(null);
     try {
-      const posts = await getPostsByUserId(targetUserId);
+      const posts = await getPostsByUserId(targetUserId, isPublicProfile);
       setUserPosts(posts);
       return posts;
     } catch (err) {

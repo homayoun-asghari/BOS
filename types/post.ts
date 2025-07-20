@@ -11,10 +11,25 @@ export interface Post {
   comment_count: number;
   created_at: string;
   updated_at: string;
+  roadmap_id?: string | null;
+  milestone_id?: string | null;
+  task_id?: string | null;
   user?: {
     username: string | null;
     avatar_url: string | null;
   };
+  roadmap?: {
+    id: string;
+    title: string;
+  } | null;
+  milestone?: {
+    id: string;
+    title: string;
+  } | null;
+  task?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
 export interface Note {

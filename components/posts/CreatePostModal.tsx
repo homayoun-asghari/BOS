@@ -2,15 +2,16 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { X, Type, Image as ImageIcon, Video, ChevronDown, Loader2 } from 'lucide-react';
+import { Type, Image as ImageIcon, Video, Mic, ChevronDown, Loader2, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TextPost } from './TextPost';
 import { ImagePost } from './ImagePost';
 import { VideoPost } from './VideoPost';
+import { VoicePost } from './VoicePost';
 import { usePosts } from '@/hooks/usePosts';
 import { toast } from 'sonner';
-import { useRoadmapData } from '@/hooks/useRoadmapData';
 import { uploadPostMedia } from '@/lib/supabase/storage-utils';
+import { supabase } from '@/lib/supabase/client';
 
 interface BaseUserItem {
   id: string;
@@ -35,7 +36,7 @@ interface TaskItem extends BaseUserItem {
 
 type UserItem = RoadmapItem | MilestoneItem | TaskItem;
 
-type PostType = 'text' | 'image' | 'video' | null;
+type PostType = 'text' | 'image' | 'video' | 'voice' | null;
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -44,8 +45,8 @@ interface CreatePostModalProps {
 }
 
 export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 'onSubmit'>) {
-
-  const { roadmap } = useRoadmapData();
+  const [publicRoadmap, setPublicRoadmap] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { createPost, isCreating } = usePosts();
   const { user: currentUser } = useAuth();
   
@@ -69,26 +70,27 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     roadmap: RoadmapItem | null;
     milestone: MilestoneItem | null;
     task: TaskItem | null;
-  }>(() => ({
-    roadmap: roadmap ? {
-      id: roadmap.id,
-      title: roadmap.final_goal || 'My Roadmap',
-      type: 'roadmap' as const
-    } : null,
+  }>({
+    roadmap: null,
     milestone: null,
     task: null
-  }));
+  });
 
   const resetForm = useCallback(() => {
     setText('');
     setPreview(null);
     setSelectedItems({
-      roadmap: roadmap ? {
-        id: roadmap.id,
-        title: roadmap.final_goal || 'My Roadmap',
+      roadmap: publicRoadmap ? {
+        id: publicRoadmap.id,
+        title: publicRoadmap.title || 'My Roadmap',
         type: 'roadmap' as const
       } : null,
-      milestone: null,
+      milestone: publicRoadmap?.milestones?.[0] ? {
+        id: publicRoadmap.milestones[0].id,
+        title: publicRoadmap.milestones[0].title,
+        type: 'milestone' as const,
+        parentId: publicRoadmap.id
+      } : null,
       task: null
     });
     // Stop any ongoing media recording
@@ -101,39 +103,113 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       mediaStream.getTracks().forEach(track => track.stop());
       setMediaStream(null);
     }
-  }, [roadmap, isRecording, mediaStream]);
+  }, [publicRoadmap, isRecording, mediaStream]);
   
+  // Fetch public roadmap data when component mounts
+  useEffect(() => {
+    const fetchPublicRoadmap = async () => {
+      if (!currentUser?.id) {
+        console.log('No current user ID, skipping roadmap fetch');
+        return;
+      }
+      
+      try {
+        console.log('Fetching public roadmap for user:', currentUser.id);
+        setIsLoading(true);
+        const { data, error } = await supabase.rpc('get_current_roadmap', {
+          user_id: currentUser.id,
+          is_public_only: true
+        });
+        
+        if (error) {
+          console.error('Error fetching public roadmap:', error);
+          throw error;
+        }
+        
+        console.log('Received roadmap data:', data);
+        if (data) {
+          console.log('Fetched public roadmap data:', {
+            id: data.id,
+            title: data.title,
+            final_goal: data.final_goal,
+            milestones: data.milestones?.length || 0
+          });
+          setPublicRoadmap(data);
+          
+          // Auto-select the roadmap and first milestone if available
+          if (data.milestones?.length > 0) {
+            console.log('Setting selected items with roadmap and milestone:', {
+              roadmap: {
+                id: data.id,
+                title: data.final_goal || 'My Roadmap'
+              },
+              milestone: {
+                id: data.milestones[0].id,
+                title: data.milestones[0].title
+              }
+            });
+            setSelectedItems(prev => ({
+              ...prev,
+              roadmap: {
+                id: data.id,
+                title: data.final_goal || 'My Roadmap',
+                type: 'roadmap' as const
+              },
+              milestone: {
+                id: data.milestones[0].id,
+                title: data.milestones[0].title,
+                type: 'milestone' as const,
+                parentId: data.id
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching public roadmap:', error);
+        toast.error('Failed to load roadmap data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (isOpen) {
+      fetchPublicRoadmap();
+    }
+  }, [currentUser?.id, isOpen]);
+
   // Transform roadmap data into UserItem format
   const userItems = useMemo(() => {
     const items: UserItem[] = [];
     
-    if (roadmap) {
+    console.log('Transforming roadmap data into user items:', publicRoadmap);
+    
+    if (publicRoadmap) {
       // Add roadmap
       const roadmapItem: RoadmapItem = {
-        id: roadmap.id,
-        title: roadmap.final_goal || 'My Roadmap',
+        id: publicRoadmap.id,
+        title: publicRoadmap.final_goal || 'My Roadmap',
         type: 'roadmap' as const
       };
       items.push(roadmapItem);
       
       // Add milestones and tasks
-      roadmap.milestones?.forEach((milestone: { id: string; title: string; tasks?: Array<{ id: string; title: string }> }) => {
+      publicRoadmap.milestones?.forEach((milestone: any) => {
         const milestoneItem: MilestoneItem = {
           id: milestone.id,
           title: milestone.title,
           type: 'milestone' as const,
-          parentId: roadmap.id
+          parentId: publicRoadmap.id
         };
         
         items.push(milestoneItem);
         
         // Add tasks for this milestone
-        milestone.tasks?.forEach((task: { id: string; title: string }) => {
+        milestone.tasks?.forEach((task: any) => {
           const taskItem: TaskItem = {
             id: task.id,
             title: task.title,
             type: 'task' as const,
-            parentId: milestone.id // Required for TaskItem
+            parentId: milestone.id
           };
           items.push(taskItem);
         });
@@ -141,21 +217,31 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     }
     
     return items;
-  }, [roadmap]);
+  }, [publicRoadmap]);
   
-  // Update selected roadmap when roadmap data changes
+  // Update selected roadmap when public roadmap data changes
   useEffect(() => {
-    if (roadmap && !selectedItems.roadmap) {
+    console.log('Public roadmap changed:', publicRoadmap);
+    console.log('Current selected items:', selectedItems);
+    
+    if (publicRoadmap && !selectedItems.roadmap) {
+      console.log('Setting initial selected items with public roadmap');
       setSelectedItems(prev => ({
         ...prev,
         roadmap: {
-          id: roadmap.id,
-          title: roadmap.final_goal || 'My Roadmap',
+          id: publicRoadmap.id,
+          title: publicRoadmap.final_goal || 'My Roadmap',
           type: 'roadmap' as const
-        }
+        },
+        milestone: publicRoadmap.milestones?.[0] ? {
+          id: publicRoadmap.milestones[0].id,
+          title: publicRoadmap.milestones[0].title,
+          type: 'milestone' as const,
+          parentId: publicRoadmap.id
+        } : null
       }));
     }
-  }, [roadmap, selectedItems.roadmap]);
+  }, [publicRoadmap]);
   
   // Cleanup media stream on unmount
   useEffect((): (() => void) => {
@@ -306,6 +392,16 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
           const blob = new Blob(chunksRef.current, { type: 'video/webm' });
           const videoUrl = URL.createObjectURL(blob);
           setPreview(videoUrl);
+          
+          // Create a File object from the blob
+          const fileName = `video-${Date.now()}.webm`;
+          const videoFile = new File([blob], fileName, { 
+            type: 'video/webm',
+            lastModified: Date.now()
+          });
+          
+          // Update the mediaFile state with the recorded video
+          setMediaFile(videoFile);
         }
         
         // Clean up the video element
@@ -373,10 +469,12 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       setIsUploading(true);
       
       // Upload media file if present
-      let mediaUrl: { url: string; path: string; type: 'image' | 'video' } | null = null;
+      let mediaUrl: { url: string; path: string; type: 'image' | 'video' | 'voice' } | null = null;
       if (type !== 'text' && mediaFile) {
         try {
-          mediaUrl = await uploadPostMedia(mediaFile, type);
+          // For voice posts, we need to explicitly set the type to 'voice'
+          const uploadType = type === 'voice' ? 'voice' : type;
+          mediaUrl = await uploadPostMedia(mediaFile, uploadType);
         } catch (error) {
           console.error('Error uploading media:', error);
           toast.error('Failed to upload media. Please try again.');
@@ -424,6 +522,48 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     }
   }, [type, text, mediaFile, selectedItems, createPost, onClose, mediaStream]);
 
+  const handleTypeSelect = (selectedType: PostType) => {
+    // Stop any ongoing recording when switching types
+    if (selectedType !== 'voice' && mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+    
+    setType(selectedType);
+    setText('');
+    setPreview(null);
+    setMediaFile(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === 'image') {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      setMediaFile(file);
+      setPreview(URL.createObjectURL(file));
+    } else if (type === 'video') {
+      if (!file.type.startsWith('video/')) {
+        toast.error('Please select a video file');
+        return;
+      }
+      setMediaFile(file);
+      const videoUrl = URL.createObjectURL(file);
+      setPreview(videoUrl);
+    } else if (type === 'voice') {
+      if (!file.type.startsWith('audio/')) {
+        toast.error('Please select an audio file');
+        return;
+      }
+      setMediaFile(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  };
+
   const renderPostForm = () => {
     if (!type || !currentUser) return null;
     
@@ -464,18 +604,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
         return (
           <ImagePost 
             preview={preview}
-            onFileChange={async (file: File) => {
-              setMediaFile(file);
-              // Create a preview URL for the captured image
-              const previewUrl = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  resolve(reader.result as string);
-                };
-                reader.readAsDataURL(file);
-              });
-              setPreview(previewUrl);
-            }}
+            onFileChange={handleFileChange}
             category={getCategory()}
           />
         );
@@ -486,13 +615,20 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
             isRecording={isRecording}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
-            onFileChange={(file: File) => {
-              setMediaFile(file);
-              const videoUrl = URL.createObjectURL(file);
-              setPreview(videoUrl);
-            }}
+            onFileChange={handleFileChange}
             videoRef={videoRef}
             category={getCategory()}
+          />
+        );
+      case 'voice':
+        return (
+          <VoicePost
+            onRecordingComplete={(file) => {
+              setMediaFile(file);
+              setPreview(URL.createObjectURL(file));
+            }}
+            onCancel={() => setType(null)}
+            maxDuration={30}
           />
         );
       default:
@@ -501,11 +637,22 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   };
 
   if (!isOpen) return null;
+  
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 p-8 bg-background rounded-lg shadow-lg">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-foreground">Loading roadmap data...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show loading state when creating post
   if (isCreating) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
         <div className="bg-background p-8 rounded-lg max-w-md w-full">
           <p className="text-center">Creating your post...</p>
         </div>
@@ -514,39 +661,36 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/100">
       <div className="relative w-full h-full max-w-md">
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute right-6 top-6 z-[100] text-foreground/80 hover:text-foreground dark:text-foreground/80 dark:hover:text-foreground transition-colors"
+          className="absolute right-3 top-5 z-[100] p-2.5 rounded-full hover:bg-muted/80 text-foreground/80 hover:text-foreground transition-colors"
           aria-label="Close modal"
         >
-          <X className="h-6 w-6" />
+          <X className="h-5 w-5" strokeWidth={2.5} />
         </button>
         
         <div className="h-full flex flex-col p-4">
-          {type === null ? (
-            <div>
+          <div className="relative w-full">
+            {type === null ? (
               <h2 className="text-2xl font-bold mb-8 text-foreground text-center dark:text-foreground">
                 Create New Post
               </h2>
-            </div>
-          ) : (
-            <button 
-              onClick={() => {
-                resetForm();
-                setType(null);
-              }}
-              className="absolute left-6 top-6 z-[1000] text-foreground/80 hover:text-foreground dark:text-foreground/80 dark:hover:text-foreground transition-colors"
-              aria-label="Go back"
-            >  
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-                <path d="m12 19-7-7 7-7"/>
-                <path d="M19 12H5"/>
-              </svg>
-            </button>
-          )}
+            ) : (
+              <button 
+                onClick={() => {
+                  resetForm();
+                  setType(null);
+                }}
+                className="absolute left-2 top-2 z-[1000] p-2.5 rounded-full hover:bg-muted/80 text-foreground/80 hover:text-foreground transition-colors"
+                aria-label="Go back"
+              >  
+                <ArrowLeft className="h-5 w-5" strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
           
           {type === null ? (
             <div className="space-y-6">
@@ -554,7 +698,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                 <div className="flex justify-center gap-4 w-full">
                   <Button
                     variant={type === 'text' ? 'default' : 'outline'}
-                    onClick={() => setType('text')}
+                    onClick={() => handleTypeSelect('text')}
                     className="gap-2 flex-1"
                     disabled={!hasRequiredSelections()}
                     title={!selectedItems.roadmap ? 'Please select a roadmap' : !selectedItems.milestone ? 'Please select a milestone' : ''}
@@ -564,7 +708,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                   </Button>
                   <Button
                     variant={type === 'image' ? 'default' : 'outline'}
-                    onClick={() => setType('image')}
+                    onClick={() => handleTypeSelect('image')}
                     className="gap-2 flex-1"
                     disabled={!hasRequiredSelections()}
                     title={!selectedItems.roadmap ? 'Please select a roadmap' : !selectedItems.milestone ? 'Please select a milestone' : ''}
@@ -574,13 +718,23 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                   </Button>
                   <Button
                     variant={type === 'video' ? 'default' : 'outline'}
-                    onClick={() => setType('video')}
+                    onClick={() => handleTypeSelect('video')}
                     className="gap-2 flex-1"
                     disabled={!hasRequiredSelections()}
                     title={!selectedItems.roadmap ? 'Please select a roadmap' : !selectedItems.milestone ? 'Please select a milestone' : ''}
                   >
                     <Video className="h-4 w-4" />
                     Video
+                  </Button>
+                  <Button
+                    variant={type === 'voice' ? 'default' : 'outline'}
+                    onClick={() => handleTypeSelect('voice')}
+                    className="gap-2 flex-1"
+                    disabled={!hasRequiredSelections()}
+                    title={!selectedItems.roadmap ? 'Please select a roadmap' : !selectedItems.milestone ? 'Please select a milestone' : ''}
+                  >
+                    <Mic className="h-4 w-4" />
+                    Voice
                   </Button>
                 </div>
               </div>
@@ -636,44 +790,50 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                 {isDropdownOpen && (
                   <div className="absolute z-10 w-full mt-1 bg-background border border-border rounded-md shadow-lg dark:shadow-gray-800/20">
                     <div className="max-h-60 overflow-y-auto py-1">
-                      {['roadmap', 'milestone', 'task'].map((itemType) => {
-                        const items = userItems.filter(item => item.type === itemType);
-                        if (items.length === 0) return null;
-                        
-                        return (
-                          <div key={itemType}>
-                            <div className="sticky top-0 z-10 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider bg-muted/50 dark:bg-muted/30">
-                              {itemType}s
+                      {userItems.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-muted-foreground">
+                          You don't have any public roadmap yet
+                        </div>
+                      ) : (
+                        ['roadmap', 'milestone', 'task'].map((itemType) => {
+                          const items = userItems.filter(item => item.type === itemType);
+                          if (items.length === 0) return null;
+                          
+                          return (
+                            <div key={itemType}>
+                              <div className="sticky top-0 z-10 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider bg-muted/50 dark:bg-muted/30">
+                                {itemType}s
+                              </div>
+                              {items.map((item) => {
+                                const isSelected = selectedItems[itemType as keyof typeof selectedItems]?.id === item.id;
+                                return (
+                                  <label
+                                    key={item.id}
+                                    className={`flex items-center px-4 py-2 text-sm cursor-pointer ${
+                                      isSelected 
+                                        ? 'bg-primary/10 text-foreground' 
+                                        : 'text-foreground hover:bg-muted/50 dark:hover:bg-muted/70'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 text-primary border-muted-foreground/30 rounded focus:ring-primary"
+                                      checked={isSelected}
+                                      onChange={() => handleItemSelect(item)}
+                                    />
+                                    <span className="ml-3">
+                                      {item.type === 'roadmap' && '\u{1F5FA} '}
+                                      {item.type === 'milestone' && '\u{1F3AF} '}
+                                      {item.type === 'task' && '\u2705 '}
+                                      {item.title}
+                                    </span>
+                                  </label>
+                                );
+                              })}
                             </div>
-                            {items.map((item) => {
-                              const isSelected = selectedItems[itemType as keyof typeof selectedItems]?.id === item.id;
-                              return (
-                                <label
-                                  key={item.id}
-                                  className={`flex items-center px-4 py-2 text-sm cursor-pointer ${
-                                    isSelected 
-                                      ? 'bg-primary/10 text-foreground' 
-                                      : 'text-foreground hover:bg-muted/50 dark:hover:bg-muted/70'
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 text-primary border-muted-foreground/30 rounded focus:ring-primary"
-                                    checked={isSelected}
-                                    onChange={() => handleItemSelect(item)}
-                                  />
-                                  <span className="ml-3">
-                                    {item.type === 'roadmap' && '\u{1F5FA} '}
-                                    {item.type === 'milestone' && '\u{1F3AF} '}
-                                    {item.type === 'task' && '\u2705 '}
-                                    {item.title}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 )}

@@ -82,7 +82,7 @@ export function toMilestone(milestone: StoredProcedureMilestone): TimelineMilest
     end_date: milestone.end_date ?? null,
     status: 'in_progress', // Default status since not in stored proc
     order_index: 0, // Default order index since not in stored proc
-    tasks: milestone.tasks.map(toTask)
+    tasks: Array.isArray(milestone.tasks) ? milestone.tasks.map(toTask) : []
   };
 }
 

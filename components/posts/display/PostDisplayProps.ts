@@ -9,16 +9,18 @@ export interface PostDisplayProps {
   currentRoadmap: {
     id: string;
     title: string;
-  };
+  } | null;
   currentMilestone: {
     id: string;
     title: string;
-  };
+  } | null;
   currentTask: {
     id: string;
     title: string;
-  };
+  } | null;
   likes: number;
-  onLike?: (postId: string) => void;
+  isLiked?: boolean;
+  onLike?: () => Promise<void>;
+  onUnlike?: () => Promise<void>;
   className?: string;
 }

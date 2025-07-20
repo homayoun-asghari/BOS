@@ -18,6 +18,7 @@ import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
 import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Home } from "./components/home";
+import { Posts } from "./components/posts";
 
 
 // Map dummy posts to match our Post type
@@ -210,68 +211,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
       case 'chat':
         return <ChatView />;
       case 'posts':
-        return (
-          <div className="h-full overflow-y-auto p-4 space-y-4">
-            {posts.map((post) => {
-              const timestamp = post.timestamp instanceof Date ? post.timestamp : new Date(post.timestamp);
-              switch (post.type) {
-                case 'text':
-                  return (
-                    <div key={post.id} className="rounded-2xl">
-                      <TextDisplay
-                        id={post.id}
-                        content={post.content}
-                        timestamp={timestamp}
-                        user={post.user}
-                        currentRoadmap={post.currentRoadmap}
-                        currentMilestone={post.currentMilestone}
-                        currentTask={post.currentTask}
-                        likes={post.likes}
-                        onLike={post.onLike}
-                        className="p-4"
-                      />
-                    </div>
-                  );
-                case 'image':
-                  return (
-                    <div key={post.id} className="rounded-2xl">
-                      <ImageDisplay
-                        id={post.id}
-                        user={post.user}
-                        imageUrl={post.imageUrl}
-                        timestamp={timestamp}
-                        currentRoadmap={post.currentRoadmap}
-                        currentMilestone={post.currentMilestone}
-                        currentTask={post.currentTask}
-                        likes={post.likes}
-                        onLike={post.onLike}
-                        className="p-4"
-                      />
-                    </div>
-                  );
-                case 'video':
-                  return (
-                    <div key={post.id} className="rounded-2xl">
-                      <VideoDisplay
-                        id={post.id}
-                        user={post.user}
-                        videoUrl={post.videoUrl}
-                        timestamp={timestamp}
-                        currentRoadmap={post.currentRoadmap}
-                        currentMilestone={post.currentMilestone}
-                        currentTask={post.currentTask}
-                        likes={post.likes}
-                        onLike={post.onLike}
-                        className="p-4"
-                      />
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            })}
-          </div>
-        );
+        return <Posts />;
       case 'stats':
         return <Home />;
       default:

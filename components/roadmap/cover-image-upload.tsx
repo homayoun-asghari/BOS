@@ -105,7 +105,10 @@ export function CoverImageUpload({
           <div className="flex flex-col items-center justify-center space-y-2">
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Add a cover image (optional)
+              Add a cover image
+            </p>
+            <p className="text-xs text-muted-foreground">
+              16:9 aspect ratio recommended
             </p>
             <Button
               type="button"

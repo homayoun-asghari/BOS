@@ -39,7 +39,7 @@ export function TaskItem({
         <Input
           value={title}
           onChange={(e) => onTitleChange(id, e.target.value)}
-          placeholder="Task description"
+          placeholder="Task description *"
           className="h-9 w-full"
         />
       </div>

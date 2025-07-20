@@ -64,22 +64,68 @@ export const createPost = async (post: CreatePostParams) => {
   return data;
 };
 
-export const getPostsByUserId = async (userId: string) => {
-  const { data, error } = await supabase
+export const getPostsByUserId = async (userId: string, isPublicProfile: boolean = false) => {
+  // Get the current user ID for like status
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id;
+
+  // Start building the query
+  let query = supabase
     .from('posts')
     .select(`
       *,
-      profiles:user_id (username, avatar_url)
+      profiles:user_id (username, avatar_url),
+      roadmap:roadmap_id (id, title, is_public, final_goal),
+      milestone:milestone_id (id, title, start_date, end_date),
+      task:task_id (id, title),
+      post_likes!left(user_id)
     `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
+
+  // If this is a public profile view, only include posts from public roadmaps
+  if (isPublicProfile) {
+    // Filter posts that are either not linked to any roadmap or linked to a public roadmap
+    query = query.or(`roadmap_id.is.null,roadmap.is_public.eq.true`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching posts:', error);
     throw error;
   }
 
-  return data;
+  // Log the raw data for debugging
+  console.log(`Fetched posts for user ${userId} (public: ${isPublicProfile}):`, data?.length || 0, 'posts');
+
+  // Transform the data to match the expected structure
+  return (data || []).map(post => {
+    // Check if the current user has liked this post
+    const isLiked = currentUserId ? 
+      Array.isArray(post.post_likes) ? 
+        post.post_likes.some(like => like.user_id === currentUserId) : 
+        post.post_likes?.user_id === currentUserId : 
+      false;
+
+    // Get the like count
+    const likeCount = Array.isArray(post.post_likes) ? 
+      post.post_likes.length : 
+      post.post_likes ? 1 : 0;
+
+    return {
+      ...post,
+      roadmap: post.roadmap ? {
+        ...post.roadmap,
+        // Use final_goal as the title if available
+        title: post.roadmap.final_goal || post.roadmap.title
+      } : null,
+      milestone: post.milestone || null,
+      task: post.task || null,
+      is_liked: isLiked,
+      likes_count: likeCount
+    };
+  });
 };
 
 export const getFeedPosts = async () => {
@@ -97,12 +143,16 @@ export const getFeedPosts = async () => {
 
     console.log('Fetching feed posts for user:', user.id);
     
-    // Get posts with author profile info and like count
+    // Get posts with all necessary data including roadmap privacy status and like information
     const { data, error, status, statusText } = await supabase
       .from('posts')
       .select(`
         *,
-        profiles:user_id (username, avatar_url)
+        profiles:user_id (username, avatar_url),
+        roadmap:roadmap_id (id, title, is_public, final_goal),
+        milestone:milestone_id (id, title, start_date, end_date),
+        task:task_id (id, title),
+        post_likes!left(user_id)
       `)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -119,8 +169,34 @@ export const getFeedPosts = async () => {
       return [];
     }
 
-    console.log('Fetched feed posts:', data?.length || 0);
-    return data || [];
+    // Transform the data to include like status and count for the current user
+    const postsWithLikes = (data || []).map(post => {
+      // Check if the current user has liked this post
+      const isLiked = Array.isArray(post.post_likes) ? 
+        post.post_likes.some(like => like.user_id === user.id) : 
+        post.post_likes?.user_id === user.id;
+
+      // Get the like count
+      const likeCount = Array.isArray(post.post_likes) ? 
+        post.post_likes.length : 
+        post.post_likes ? 1 : 0;
+
+      return {
+        ...post,
+        roadmap: post.roadmap ? {
+          ...post.roadmap,
+          // Use final_goal as the title if available
+          title: post.roadmap.final_goal || post.roadmap.title
+        } : null,
+        milestone: post.milestone || null,
+        task: post.task || null,
+        is_liked: isLiked,
+        likes_count: likeCount
+      };
+    });
+
+    console.log('Fetched feed posts:', postsWithLikes.length, 'total posts');
+    return postsWithLikes;
   } catch (error) {
     console.error('Error in getFeedPosts:', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -140,4 +216,84 @@ export const deletePost = async (postId: string) => {
     console.error('Error deleting post:', error);
     throw error;
   }
+};
+
+// Optimized version of toggleLike that uses a stored procedure for atomic operations
+export const toggleLike = async (postId: string) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  try {
+    // Use a single RPC call to handle the like toggle and get the updated count
+    const { data, error } = await supabase.rpc('toggle_post_like', {
+      p_post_id: postId,
+      p_user_id: user.id
+    });
+
+    if (error) {
+      console.error('Error in toggle_post_like RPC:', error);
+      throw error;
+    }
+
+    return {
+      action: data.action,
+      likeCount: data.like_count,
+      success: true
+    };
+  } catch (error) {
+    console.error('Error in toggleLike:', error);
+    throw error;
+  }
+};
+
+// Keep these for backward compatibility, but they'll use toggleLike internally
+export const likePost = async (postId: string) => {
+  const result = await toggleLike(postId);
+  if (result.action === 'liked') return result.data;
+  throw new Error('Post was already liked');
+};
+
+export const unlikePost = async (postId: string) => {
+  const result = await toggleLike(postId);
+  if (result.action === 'unliked') return true;
+  throw new Error('Post was not liked');
+};
+
+export const hasUserLikedPost = async (postId: string) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from('post_likes')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('post_id', postId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 is 'No rows returned'
+    console.error('Error checking like status:', error);
+    return false;
+  }
+
+  return !!data;
+};
+
+export const getPostLikesCount = async (postId: string) => {
+  const { count, error } = await supabase
+    .from('post_likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('post_id', postId);
+
+  if (error) {
+    console.error('Error getting like count:', error);
+    return 0;
+  }
+
+  return count || 0;
 };

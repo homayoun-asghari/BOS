@@ -74,3 +74,4 @@ FROM public.roadmaps r
 WHERE r.user_id = get_current_roadmap.user_id
   AND r.status = 'in_progress'
   AND (NOT get_current_roadmap.is_public_only OR r.is_public = true);
+$$;

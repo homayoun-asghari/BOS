@@ -186,7 +186,15 @@ function DashboardContent() {
         }
       }
       
-      // First, delete all related milestones and tasks
+      // First, delete all posts related to this roadmap
+      const { error: postsError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('roadmap_id', roadmap.id);
+      
+      if (postsError) throw postsError;
+      
+      // Then, delete all related milestones and tasks
       const { data: milestones } = await supabase
         .from('milestones')
         .select('id')

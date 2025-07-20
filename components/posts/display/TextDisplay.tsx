@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useRef } from 'react';
-import { useLikeAnimation } from '@/hooks/useLikeAnimation';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { TimelineOverlay } from "./TimelineOverlay";
 import { PostDisplayProps } from "./PostDisplayProps";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from 'next/link';
+import { LikeButton } from '../LikeButton';
 
 interface TextDisplayProps extends PostDisplayProps {
   content: string;
@@ -21,97 +21,83 @@ export function TextDisplay({
   currentMilestone,
   currentTask,
   likes,
+  isLiked,
   onLike,
+  onUnlike,
   className
 }: TextDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { triggerLikeAnimation } = useLikeAnimation();
+  
+  const handleLike = async () => {
+    try {
+      if (onLike) await onLike();
+      return true;
+    } catch (error) {
+      console.error('Error liking post:', error);
+      return false;
+    }
+  };
 
-  const handleLike = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    triggerLikeAnimation();
-    onLike?.();
+  const handleUnlike = async () => {
+    try {
+      if (onUnlike) await onUnlike();
+      return true;
+    } catch (error) {
+      console.error('Error unliking post:', error);
+      return false;
+    }
   };
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 p-4 rounded-lg bg-card",
+        "relative w-full rounded-2xl overflow-hidden bg-black/5 dark:bg-white/5 group",
         className
       )}
       ref={containerRef}
+      style={{
+        aspectRatio: '9/16',
+        borderRadius: '1rem',
+      }}
     >
-      <div className="flex items-center gap-3">
-        <Avatar>
-          <AvatarImage src={user.avatarUrl} />
-          <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-        </Avatar>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1">
-            <span className="font-medium">{user.name}</span>
-            <span className="text-xs text-muted-foreground">•</span>
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(timestamp, { addSuffix: true })}
-            </span>
+      <TimelineOverlay
+        user={{
+          name: user.name,
+          username: user.username,
+          avatarUrl: user.avatarUrl
+        }}
+        currentRoadmap={currentRoadmap ? {
+          id: currentRoadmap.id,
+          title: currentRoadmap.title
+        } : null}
+        currentMilestone={currentMilestone ? {
+          id: currentMilestone.id,
+          title: currentMilestone.title
+        } : null}
+        currentTask={currentTask ? {
+          id: currentTask.id,
+          title: currentTask.title
+        } : null}
+      />
+      
+      <div className="absolute inset-0 flex flex-col p-4">
+        <div className="flex-1 relative">
+          <div className="h-full pt-28 md:pt-40 lg:pt-48 pb-8 px-6 md:px-8 flex items-start justify-center overflow-y-auto">
+            <div className="text-[4.5vw] xs:text-[4vw] sm:text-[3.5vw] md:text-[2.5vw] lg:text-[1.8vw] xl:text-xl text-center leading-tight sm:leading-snug md:leading-normal break-words w-full">
+              {content}
+            </div>
           </div>
-          <Link
-            href={`/profile/${user.username}`}
-            className="text-sm text-muted-foreground hover:text-primary"
-          >
-            @{user.username}
-          </Link>
+        </div>
+
+        <div className="absolute bottom-4 left-4 right-4">
+          <LikeButton 
+            initialLikes={likes}
+            initialLiked={isLiked ?? false}
+            onLike={handleLike}
+            onUnlike={handleUnlike}
+          />
         </div>
       </div>
-
-      <div className="flex-1">
-        <TimelineOverlay
-          user={{
-            name: user.name,
-            username: user.username,
-            avatarUrl: user.avatarUrl
-          }}
-          currentRoadmap={{
-            id: currentRoadmap.id,
-            title: currentRoadmap.title
-          }}
-          currentMilestone={{
-            id: currentMilestone.id,
-            title: currentMilestone.title
-          }}
-          currentTask={{
-            id: currentTask.id,
-            title: currentTask.title
-          }}
-        />
-        <div
-          className="text-2xl leading-relaxed"
-        >
-          {content}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <button
-          onClick={handleLike}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="h-4 w-4"
-          >
-            <path d="M20 12a8 8 0 01-16 0 8 8 0 0116 0zm-8-5a5 5 0 00-3.586 8.657L16 19l4-5A5 5 0 0012 7z" />
-          </svg>
-          <span className="ml-2 text-sm">{likes}</span>
-        </button>
-      </div>
-
-      {likes > 0 && (
-        <div className="absolute bottom-4 right-4 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-primary">
-          {likes} likes
-        </div>
-      )}
     </div>
   );
 }

@@ -13,95 +13,96 @@ interface TimelineOverlayProps {
   currentRoadmap: {
     id: string;
     title: string;
-  };
+  } | null;
   currentMilestone: {
     id: string;
     title: string;
-  };
+  } | null;
   currentTask: {
     id: string;
     title: string;
-  };
+  } | null;
   className?: string;
 }
 
 export function TimelineOverlay({
   user = { name: 'Unknown User', username: 'unknown', avatarUrl: '' },
-  // timestamp parameter removed as per user request
-  currentRoadmap = { id: '', title: 'No Roadmap' },
-  currentMilestone = { id: '', title: 'No Milestone' },
-  currentTask = { id: '', title: 'No Task' },
+  currentRoadmap = null,
+  currentMilestone = null,
+  currentTask = null,
   className
 }: Partial<TimelineOverlayProps>) {
   // Timestamp related code removed as per user request
 
+  // Only show the timeline if we have at least one of roadmap, milestone, or task
+  const showTimeline = currentRoadmap || currentMilestone || currentTask;
+
   return (
     <div className={cn(
-      "absolute top-0 left-0 right-0 p-4 pb-8",
-      "bg-gradient-to-b from-background/80 via-background/50 to-transparent",
+      "absolute top-0 left-0 right-0 p-3",
+      "bg-gradient-to-b from-background/90 via-background/70 to-transparent",
       "dark:from-foreground/10 dark:via-foreground/5 dark:to-transparent",
-      "backdrop-blur-sm transition-all duration-200 ease-in-out",
+      "backdrop-blur-sm",
       "text-foreground dark:text-foreground/90",
-      "hover:from-background/90 hover:via-background/60 hover:to-background/20",
-      "dark:hover:from-foreground/20 dark:hover:via-foreground/10 dark:hover:to-foreground/5",
+      "rounded-t-[1rem]",
       className
     )}>
-      {/* User Info */}
-      <div className="flex items-center gap-3 mb-6 pl-14">
-        <Link href={`/dashboard?profile=${user?.username || 'unknown'}`} className="flex items-center gap-3 group">
-          <Avatar className="h-12 w-12 border-2 border-white/20 group-hover:border-primary/80 transition-colors duration-200">
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className="bg-foreground text-background font-bold">
-              {user?.name?.charAt(0) || 'U'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="space-y-0.5">
-            <p className="font-bold text-base text-foreground group-hover:text-primary transition-colors duration-200">
-              {user?.name || 'Unknown User'}
-            </p>
-            <p className="text-sm font-medium text-foreground/80 group-hover:text-primary/80 transition-colors duration-200">
-              @{user?.username || 'unknown'}
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {/* Progress Timeline */}
-      <div className="flex items-center justify-between w-full relative px-2">
-        {/* Full width connecting line */}
-        <div className="absolute left-0 right-0 top-3.5 h-0.5 bg-foreground/20 dark:bg-white/20 -z-10">
-          <div className="h-full w-full group-hover:bg-primary/80 transition-colors duration-200"></div>
-        </div>
-        
-        {/* Roadmap */}
-        <div className="flex flex-col items-center gap-1.5 relative z-10 group">
-          <div className="absolute inset-x-0 top-3.5 h-0.5 bg-foreground/20 dark:bg-white/20 -z-10 group-hover:bg-primary/80 transition-colors duration-200"></div>
-          <div className="flex items-center justify-center w-7 h-7 bg-foreground/90 group-hover:bg-primary rounded-full shadow-md transition-colors duration-200">
-            <div className="w-3 h-3 bg-primary-foreground rounded-full group-hover:bg-background transition-colors duration-200" />
-          </div>
-          <p className="text-sm font-semibold text-foreground/90 group-hover:text-foreground truncate w-28 text-center">{currentRoadmap.title}</p>
-          <p className="text-xs font-medium text-foreground/70 group-hover:text-primary/80 transition-colors duration-200">Roadmap</p>
+      <div className="flex flex-col gap-2">
+        {/* User Info */}
+        <div className="flex items-center gap-3">
+          <Link href={`/dashboard?profile=${user?.username || 'unknown'}`} className="flex items-center gap-2">
+            <Avatar className="h-8 w-8 border border-foreground/20">
+              <AvatarImage src={user?.avatarUrl} />
+              <AvatarFallback className="bg-foreground text-background text-xs font-bold">
+                {user?.name?.charAt(0) || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-0">
+              <p className="text-sm font-semibold text-foreground leading-tight">
+                {user?.name || 'Unknown User'}
+              </p>
+              <p className="text-xs text-foreground/70 leading-tight">
+                @{user?.username || 'unknown'}
+              </p>
+            </div>
+          </Link>
         </div>
 
-        {/* Milestone */}
-        <div className="flex flex-col items-center gap-1.5 relative z-10 group">
-          <div className="absolute inset-x-0 top-3.5 h-0.5 bg-foreground/20 dark:bg-white/20 -z-10 group-hover:bg-primary/80 transition-colors duration-200"></div>
-          <div className="flex items-center justify-center w-7 h-7 bg-foreground/90 group-hover:bg-primary rounded-full shadow-md transition-colors duration-200">
-            <div className="w-3 h-3 bg-primary-foreground rounded-full group-hover:bg-background transition-colors duration-200" />
+        {/* Compact Timeline - Only show if we have at least one item */}
+        {showTimeline && (
+          <div className="mt-2">
+            {/* Timeline Container */}
+            <div className="w-full px-4 relative">
+              {/* Connecting line */}
+              <div className="absolute left-0 right-0 h-px bg-foreground/20 top-1 -translate-y-1/2 -z-10" />
+              
+              <div className="flex items-start w-full">
+                {/* Calculate the number of visible nodes */}
+                {[currentRoadmap, currentMilestone, currentTask]
+                  .filter(Boolean)
+                  .map((node, index, nodes) => {
+                    if (!node) return null;
+                    
+                    // Calculate width based on number of nodes (100% / node count)
+                    const nodeWidth = 100 / nodes.length;
+                    
+                    return (
+                      <div 
+                        key={`${node.id}-${index}`}
+                        className="flex flex-col items-center"
+                        style={{ width: `${nodeWidth}%` }}
+                      >
+                        <div className="w-1.5 h-1.5 bg-foreground/90 rounded-full mb-1" />
+                        <p className="text-xs font-medium text-foreground/80 truncate max-w-[90%] text-center">
+                          {node.title}
+                        </p>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           </div>
-          <p className="text-sm font-semibold text-foreground/90 group-hover:text-foreground truncate w-28 text-center">{currentMilestone.title}</p>
-          <p className="text-xs font-medium text-foreground/70 group-hover:text-primary/80 transition-colors duration-200">Milestone</p>
-        </div>
-
-        {/* Task */}
-        <div className="flex flex-col items-center gap-1.5 relative z-10 group">
-          <div className="absolute inset-x-0 top-3.5 h-0.5 bg-foreground/20 dark:bg-white/20 -z-10 group-hover:bg-primary/80 transition-colors duration-200"></div>
-          <div className="flex items-center justify-center w-7 h-7 bg-foreground/90 group-hover:bg-primary rounded-full shadow-md transition-colors duration-200">
-            <div className="w-3 h-3 bg-primary-foreground rounded-full group-hover:bg-background transition-colors duration-200" />
-          </div>
-          <p className="text-sm font-semibold text-foreground/90 group-hover:text-foreground truncate w-28 text-center">{currentTask.title}</p>
-          <p className="text-xs font-medium text-foreground/70 group-hover:text-primary/80 transition-colors duration-200">Task</p>
-        </div>
+        )}
       </div>
     </div>
   );

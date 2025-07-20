@@ -1,11 +1,9 @@
 "use client";
 
-import { Button } from '@/components/ui/button';
-import { useLikeAnimation } from '@/hooks/useLikeAnimation';
-import { ThumbsUp } from 'lucide-react';
 import { formatDistanceToNow } from "date-fns";
 import { TimelineOverlay } from "./TimelineOverlay";
 import { cn } from "@/lib/utils";
+import { LikeButton } from '../LikeButton';
 
 interface ImageDisplayProps {
   id: string;
@@ -29,7 +27,9 @@ interface ImageDisplayProps {
     title: string;
   };
   likes: number;
-  onLike?: (postId: string) => void;
+  isLiked?: boolean;
+  onLike?: () => Promise<void>;
+  onUnlike?: () => Promise<void>;
   className?: string;
 }
 
@@ -43,69 +43,84 @@ export function ImageDisplay({
   currentTask,
   likes,
   onLike,
+  onUnlike,
+  isLiked,
   className,
 }: ImageDisplayProps) {
   const formattedTime = formatDistanceToNow(new Date(timestamp), {
     addSuffix: true,
   });
-  const { isAnimating, triggerLikeAnimation } = useLikeAnimation();
+  const handleLike = async () => {
+    try {
+      if (onLike) await onLike();
+      return true;
+    } catch (error) {
+      console.error('Error liking post:', error);
+      return false;
+    }
+  };
+
+  const handleUnlike = async () => {
+    try {
+      if (onUnlike) await onUnlike();
+      return true;
+    } catch (error) {
+      console.error('Error unliking post:', error);
+      return false;
+    }
+  };
 
   return (
     <div
       className={cn(
-        "relative w-full rounded-2xl",
+        "relative w-full rounded-2xl overflow-hidden bg-black",
         className
       )}
       style={{
         aspectRatio: '9/16',
-        position: 'relative'
       }}
     >
-      {/* Image */}
-      <img src={imageUrl} alt="Post" className="w-full h-full object-cover" />
-
-      {/* Timeline Overlay */}
-      <TimelineOverlay
-        user={user}
-        timestamp={timestamp}
-        currentRoadmap={currentRoadmap}
-        currentMilestone={currentMilestone}
-        currentTask={currentTask}
-      />
-
-      {/* Like Button */}
-      <div className="absolute bottom-4 left-4">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={(e) => {
-            onLike?.(id);
-            triggerLikeAnimation();
-          }}
-          className="relative bg-black/30 backdrop-blur-sm rounded-full p-2"
-        >
-          <ThumbsUp 
-            className="h-4 w-4 transition-all duration-300 text-white"
-            style={{
-              transform: isAnimating 
-                ? 'scale(1.5) rotate(360deg)'
-                : 'scale(1) rotate(0deg)',
-              opacity: isAnimating ? 0.8 : 1,
-              filter: isAnimating 
-                ? 'drop-shadow(0 0 5px rgba(255, 255, 255, 0.8))'
-                : 'drop-shadow(0 0 0)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}
+      <div className="absolute inset-0 flex flex-col">
+        {/* Image */}
+        <div className="relative flex-1">
+          <img 
+            src={imageUrl} 
+            alt="Post" 
+            className="w-full h-full object-cover"
           />
-        </Button>
-      </div>
 
-      {/* Likes Count */}
-      {likes > 0 && (
-        <div className="absolute bottom-4 right-4 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-white">
-          {likes} like{likes > 1 ? 's' : ''}
+          {/* Timeline Overlay */}
+          <TimelineOverlay
+            user={{
+              name: user.name,
+              username: user.username,
+              avatarUrl: user.avatarUrl
+            }}
+            currentRoadmap={currentRoadmap ? {
+              id: currentRoadmap.id,
+              title: currentRoadmap.title
+            } : null}
+            currentMilestone={currentMilestone ? {
+              id: currentMilestone.id,
+              title: currentMilestone.title
+            } : null}
+            currentTask={currentTask ? {
+              id: currentTask.id,
+              title: currentTask.title
+            } : null}
+          />
+
+          {/* Like Button */}
+          <div className="absolute bottom-4 left-4 right-4">
+            <LikeButton 
+              initialLikes={likes}
+              initialLiked={!!isLiked}
+              onLike={handleLike}
+              onUnlike={handleUnlike}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,18 +1,17 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { TimelineOverlay } from '@/components/posts/display/TimelineOverlay';
 
 interface TextPostProps {
   text: string;
   onChange: (text: string) => void;
   isMaxLength: boolean;
   category: 'roadmap' | 'milestone' | 'task';
-  user: { name: string; avatarUrl?: string };
+  user: { name: string; avatarUrl?: string; username: string };
   timestamp: string | Date;
-  currentRoadmap: { id: string; title: string };
-  currentMilestone: { id: string; title: string };
-  currentTask: { id: string; title: string };
+  currentRoadmap?: { id: string; title: string } | null;
+  currentMilestone?: { id: string; title: string } | null;
+  currentTask?: { id: string; title: string } | null;
 }
 
 export function TextPost({
@@ -21,9 +20,9 @@ export function TextPost({
   isMaxLength,
   user,
   timestamp,
-  currentRoadmap,
-  currentMilestone,
-  currentTask
+  currentRoadmap = null,
+  currentMilestone = null,
+  currentTask = null
 }: Omit<TextPostProps, 'category'>) {
   const [fontSize, setFontSize] = useState(48);
   const [isMaxHeight, setIsMaxHeight] = useState(false);
@@ -136,49 +135,26 @@ export function TextPost({
       ref={wrapperRef}
       className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto rounded-2xl bg-background overflow-hidden"
     >
-      {/* Top Overlay (fixed at top, never scrolls) */}
-      <div className="absolute top-0 left-0 right-0 z-10">
-        <TimelineOverlay
-          user={user}
-          timestamp={timestamp}
-          currentRoadmap={currentRoadmap}
-          currentMilestone={currentMilestone}
-          currentTask={currentTask}
-        />
-      </div>
-
-      {/* Text typing zone */}
-      <div
-        className="relative w-full h-full flex justify-center items-start overflow-hidden px-4"
-        style={{ paddingTop: `${TEXT_ZONE_PADDING_TOP}px`, paddingBottom: '20px' }}
-      >
-        <div className="w-full max-w-full relative">
-          {(isMaxLength || isMaxHeight) && (
-            <div className="absolute top-0 right-0 bg-foreground/90 text-background text-xs px-2 py-1 rounded z-10">
-              Max length reached
-            </div>
-          )}
+      <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="relative w-full h-full">
           <textarea
             ref={textareaRef}
             value={text}
             onChange={handleChange}
-            placeholder="Start typing..."
-            className="w-full bg-transparent border-none outline-none resize-none text-center placeholder-foreground/70 font-bold"
+            className="w-full h-full bg-transparent border-none outline-none resize-none text-center font-medium text-foreground/90"
             style={{
               fontSize: `${fontSize}px`,
               lineHeight: '1.2',
-              color: 'hsl(var(--foreground))',
-              textShadow: '1px 1px 2px rgba(0,0,0,0.1)',
-              padding: 0,
-              margin: 0,
+              padding: '0 2rem',
               overflow: 'hidden',
-              minHeight: '1.2em',
-              wordBreak: 'break-word',
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'break-word'
             }}
-            autoFocus
+            placeholder="Type something..."
           />
+          {isMaxLength && (
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-foreground/50">
+              Character limit reached
+            </div>
+          )}
         </div>
       </div>
     </div>

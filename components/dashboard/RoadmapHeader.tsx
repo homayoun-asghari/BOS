@@ -364,9 +364,11 @@ export function RoadmapHeader({
             <DialogHeader>
               <DialogTitle>Delete Roadmap</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete this roadmap? This action cannot be undone.
-            </p>
+            <div className="py-2">
+              <p className="text-sm text-destructive font-medium">
+                <span className="font-bold">Warning:</span> All posts related to this roadmap will also be permanently deleted. Are you sure you want to delete this roadmap?
+              </p>
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={onDeleteCancel} disabled={isDeleting}>
                 Cancel

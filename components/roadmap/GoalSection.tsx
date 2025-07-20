@@ -33,7 +33,7 @@ export function GoalSection({
     <div className="space-y-3 sm:space-y-4">
       <div className="relative">
         <Textarea
-          placeholder="Add Your Final Goal"
+          placeholder="Add Your Final Goal *"
           value={goal}
           onChange={(e) => {
             if (e.target.value.length <= MAX_GOAL_LENGTH) {
@@ -51,14 +51,14 @@ export function GoalSection({
         <DatePicker
           date={startDate}
           onSelect={onStartDateChange}
-          label="Start Date"
-          placeholder="Pick start date"
+          label="Start Date *"
+          placeholder="Pick start date *"
         />
         <DatePicker
           date={endDate}
           onSelect={onEndDateChange}
-          label="End Date"
-          placeholder="Pick end date"
+          label="End Date *"
+          placeholder="Pick end date *"
           fromDate={startDate}
           disabled={(date) => startDate ? date < startDate : false}
         />
