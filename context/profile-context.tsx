@@ -54,7 +54,9 @@ interface ProfileContextType {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  // router is intentionally unused - kept for potential future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -139,7 +141,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             setSearchResults(data.map(user => ({
               id: user.id,
               username: user.username || '',
-              display_name: user.display_name,
+              // display_name is intentionally not used - kept for future use
               avatar_url: user.avatar_url
             })) || []);
           }
@@ -218,14 +220,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Fetch current roadmap for the selected user
-        const roadmapData = await profileService.getCurrentRoadmap(userId);
+        // For public profiles, only fetch public roadmaps
+        const isPublicProfileView = true; // Always true since we're in the profile context
+        const roadmapData = await profileService.getCurrentRoadmap(userId, isPublicProfileView);
         console.log('Profile context - Raw roadmap data:', roadmapData);
         if (isMounted) {
           setCurrentRoadmap(roadmapData);
         }
 
         // Fetch completed roadmaps for the selected user
-        const completedRoadmapsData = await profileService.getCompletedRoadmaps(userId);
+        // For public profiles, only fetch public roadmaps
+        const completedRoadmapsData = await profileService.getCompletedRoadmaps(userId, isPublicProfileView);
         if (isMounted) {
           setCompletedRoadmaps(completedRoadmapsData || []);
         }

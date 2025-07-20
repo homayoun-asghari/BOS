@@ -23,8 +23,10 @@ export interface MilestoneType {
   description: string | null;
   start_date: string | null;
   end_date: string | null;
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
   order_index: number;
   tasks: TaskType[];
+  // Keep isCompleted for backward compatibility but mark as deprecated
   isCompleted?: boolean;
 }
 
@@ -230,24 +232,31 @@ export function BackupRoadmapTimeline({
                 </div>
                 <div className="flex flex-col w-full">
                   <div className="flex justify-between items-center w-full">
-                    <div 
-                      className="flex items-center cursor-pointer group flex-1"
-                      onClick={() => toggleMilestone(milestone.id)}
-                    >
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
-                        {milestone.title}
-                      </h3>
-                      {expandedMilestones[milestone.id] ? (
-                        <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+                    <div className="flex-1">
+                      <div 
+                        className="flex items-center cursor-pointer group"
+                        onClick={() => toggleMilestone(milestone.id)}
+                      >
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
+                          {milestone.title}
+                        </h3>
+                        {expandedMilestones[milestone.id] ? (
+                          <ChevronDown className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 ml-2 text-gray-500 dark:text-gray-400" />
+                        )}
+                      </div>
+                      {milestone.start_date && milestone.end_date && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {new Date(milestone.start_date).toLocaleDateString()} - {new Date(milestone.end_date).toLocaleDateString()}
+                        </div>
                       )}
                     </div>
                     {milestone.tasks && milestone.tasks.length > 0 && (
                       <div className={`flex items-center text-sm ${
                         milestone.tasks.every(t => t.status === 'done') 
-                          ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30' 
-                          : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/80'
+                          ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40' 
+                          : 'text-gray-600 dark:text-gray-200 bg-gray-100 dark:bg-gray-600/80'
                       } px-2 py-1 rounded-md space-x-1`}>
                         {milestone.tasks.every(t => t.status === 'done') ? (
                           <>

@@ -7,6 +7,7 @@ import { Toaster } from 'sonner';
 import { MobileRightPanelProvider } from '@/context/mobile-right-panel-context';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { ProfileProvider } from '@/context/profile-context';
+import { RefreshProvider } from '@/contexts/RefreshContext';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,11 +39,13 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <ProfileProvider>
-              <MobileRightPanelProvider>
-                <LayoutWrapper>
-                  {children}
-                </LayoutWrapper>
-              </MobileRightPanelProvider>
+              <RefreshProvider>
+                <MobileRightPanelProvider>
+                  <LayoutWrapper>
+                    {children}
+                  </LayoutWrapper>
+                </MobileRightPanelProvider>
+              </RefreshProvider>
             </ProfileProvider>
             <Toaster position="top-right" richColors />
           </AuthProvider>

@@ -97,7 +97,7 @@ export function useUserProfile(username: string) {
             completedRoadmapsData,
             publicNotesData
           ] = await Promise.all([
-            profileService.getUserStats(profileData.id).catch(err => {
+            profileService.getUserStats(profileData.id, true).catch(err => {
               console.error('Error fetching user stats:', err);
               return defaultStats;
             }),
@@ -105,7 +105,8 @@ export function useUserProfile(username: string) {
               console.error('Error fetching user posts:', err);
               return [];
             }),
-            profileService.getCurrentRoadmap(profileData.id).catch(err => {
+            profileService.getCurrentRoadmap(profileData.id, true).catch(err => {
+              // Only show public roadmaps for user profiles
               console.error('Error fetching current roadmap:', err);
               return null;
             }),

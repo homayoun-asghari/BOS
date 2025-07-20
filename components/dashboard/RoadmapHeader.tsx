@@ -1,4 +1,5 @@
-import { MoreVertical, Pencil, Trash2, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { MoreVertical, Pencil, Trash2, Clock, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -10,8 +11,12 @@ interface RoadmapHeaderProps {
     final_goal: string;
     start_date?: string;
     end_date?: string;
+    status?: 'draft' | 'in_progress' | 'completed' | 'archived';
+    updated_at?: string;
     cover_image_url?: string | null;
+    is_public?: boolean;
     milestones?: Array<{
+      status?: string;
       tasks?: Array<{
         status: string;
       }>;
@@ -22,11 +27,15 @@ interface RoadmapHeaderProps {
   completedTasks: number;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
+  isCompleting?: boolean;
   isEditable?: boolean;
+  showCompletionPrompt?: boolean;
   onEditClick: () => void;
   onDeleteClick: () => void;
   onDeleteConfirm: () => Promise<void>;
   onDeleteCancel: () => void;
+  onCompleteConfirm: () => Promise<boolean>;
+  onCompletionDismiss: () => void;
   showActions?: boolean;
 }
 
@@ -43,6 +52,9 @@ export function RoadmapHeader({
   onDeleteCancel,
   showActions = true,
   isEditable = true,
+  onCompleteConfirm,
+  showCompletionPrompt = false,
+  onCompletionDismiss,
 }: RoadmapHeaderProps) {
   console.log('RoadmapHeader - roadmap:', roadmap);
   console.log('RoadmapHeader - cover_image_url:', roadmap.cover_image_url);
@@ -71,26 +83,94 @@ export function RoadmapHeader({
   
   const fullImageUrl = getFullImageUrl(roadmap.cover_image_url);
   const hasCoverImage = !!fullImageUrl;
+  const isCompleted = roadmap.status === 'completed';
+  const [isCompleting, setIsCompleting] = useState(false);
   
-  console.log('RoadmapHeader - Image Info:', {
-    originalUrl: roadmap.cover_image_url,
-    fullImageUrl,
-    hasCoverImage,
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL
-  });
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+  
+  // Calculate days remaining or completed
+  const getDateBadge = () => {
+    const isCompleted = roadmap.status === 'completed';
+    
+    if (isCompleted && roadmap.updated_at) {
+      return {
+        text: `Completed on ${formatDate(roadmap.updated_at)}`,
+        icon: <Check className="h-4 w-4 mr-1" />,
+        variant: 'default' as const
+      };
+    }
+    
+    // Show completion prompt in badge when all milestones are done but not confirmed
+    if (showCompletionPrompt) {
+      return {
+        text: 'All milestones are unlocked, is this roadmap completed?',
+        icon: <Check className="h-4 w-4 mr-1" />,
+        variant: 'destructive' as const,
+        action: {
+          text: 'Confirm',
+          onClick: async () => {
+            setIsCompleting(true);
+            try {
+              await onCompleteConfirm();
+            } finally {
+              setIsCompleting(false);
+            }
+          }
+        }
+      };
+    }
+    
+    if (roadmap.end_date) {
+      const endDate = new Date(roadmap.end_date);
+      const today = new Date();
+      const diffTime = endDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return {
+          text: `${Math.abs(diffDays)} days overdue`,
+          icon: <Clock className="h-4 w-4 mr-1" />,
+          variant: 'destructive' as const
+        };
+      } else if (diffDays === 0) {
+        return {
+          text: 'Due today',
+          icon: <Clock className="h-4 w-4 mr-1" />,
+          variant: 'destructive' as const
+        };
+      } else if (diffDays <= 7) {
+        return {
+          text: `${diffDays} ${diffDays === 1 ? 'day' : 'days'} left`,
+          icon: <Clock className="h-4 w-4 mr-1" />,
+          variant: 'warning' as const
+        };
+      } else {
+        return {
+          text: `Due ${formatDate(roadmap.end_date)}`,
+          icon: <Clock className="h-4 w-4 mr-1" />,
+          variant: 'default' as const
+        };
+      }
+    }
+    
+    return null;
+  };
+  
+  const dateBadge = getDateBadge();
   
   return (
-    <div className="sticky top-0 z-10 flex flex-col rounded-lg overflow-hidden h-[200px] bg-background/80 p-4">
-      {/* Debug info - will be removed after fixing */}
-      <div className="hidden">
-        Cover Image Debug: {JSON.stringify({
-          hasCoverImage,
-          coverImageUrl: roadmap.cover_image_url,
-          type: typeof roadmap.cover_image_url
-        })}
-      </div>
-      
-      {/* Cover Image */}
+    <div className="sticky top-0 z-10 flex flex-col rounded-lg overflow-hidden h-[200px] bg-background/80">
+      <div className="relative h-full p-4">
+        
+        {/* Cover Image */}
       {hasCoverImage && fullImageUrl && (
         <div className="absolute inset-0 w-full h-full overflow-hidden">
           <img 
@@ -111,12 +191,21 @@ export function RoadmapHeader({
         {/* Top Section: Final Goal and Dates */}
         <div className="flex flex-col">
           <div className="flex items-center justify-between mb-2">
-            <h2 className={cn(
-              "text-2xl font-bold tracking-tight",
-              hasCoverImage ? "text-white" : "text-foreground"
-            )}>
-              {roadmap.final_goal}
-            </h2>
+            <div className="flex items-center space-x-2">
+              <h2 className={cn(
+                "text-2xl font-bold tracking-tight",
+                hasCoverImage ? "text-white" : "text-foreground"
+              )}>
+                {roadmap.final_goal}
+              </h2>
+              {typeof roadmap.is_public !== 'undefined' && (
+                <span className={cn(
+                  "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                )}>
+                  {roadmap.is_public ? 'Public' : 'Private'}
+                </span>
+              )}
+            </div>
             {(showActions && isEditable) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -151,8 +240,7 @@ export function RoadmapHeader({
               </DropdownMenu>
             )}
           </div>
-          
-          {roadmap.start_date && roadmap.end_date && (
+                    {roadmap.start_date && roadmap.end_date && (
             <div className="flex items-center gap-2 mb-4">
               <p className={cn(
                 "text-sm",
@@ -162,6 +250,41 @@ export function RoadmapHeader({
                 {new Date(roadmap.end_date).toLocaleDateString()}
               </p>
               {(() => {
+                // Check if roadmap is marked as completed
+                if (roadmap.status === 'completed' && roadmap.updated_at) {
+                  return (
+                    <span className={cn(
+                      "text-xs px-2 py-1 rounded-md flex items-center gap-1",
+                      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                    )}>
+                      Completed on {new Date(roadmap.updated_at).toLocaleDateString()}
+                    </span>
+                  );
+                }
+
+                // Check if all milestones are completed (fallback)
+                const allMilestonesCompleted = roadmap.milestones?.every(
+                  milestone => milestone.status === 'completed' || milestone.tasks?.every(task => task.status === 'done')
+                );
+
+                // Only show the Done button when showCompletionPrompt is true
+                if (allMilestonesCompleted && showCompletionPrompt) {
+                  return (
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-full bg-red-500 blur-[3px] animate-pulse opacity-90 scale-105 -z-10" style={{
+                        animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                      }}></div>
+                      <button
+                        onClick={onCompleteConfirm}
+                        className="relative text-xs px-2 py-0.5 rounded-full bg-foreground text-background hover:bg-primary hover:scale-105 transition-all duration-200 transform-gpu border-2 border-red-500/60"
+                      >
+                        <span className="relative z-10">Done!</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                // Otherwise, show countdown
                 const endDate = new Date(roadmap.end_date);
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -259,6 +382,7 @@ export function RoadmapHeader({
           </DialogContent>
         </Dialog>
       )}
+      </div>
     </div>
   );
 }

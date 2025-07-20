@@ -268,12 +268,40 @@ export const useRoadmapData = () => {
     if (!user?.id) return false;
 
     try {
-      const { error } = await supabase
+      // First, get the task to check its milestone and current status
+      const { data: taskData, error: taskError } = await supabase
+        .from('tasks')
+        .select('*, milestone:milestones(*)')
+        .eq('id', taskId)
+        .single();
+
+      if (taskError) throw taskError;
+      if (!taskData) throw new Error('Task not found');
+
+      // Update the task status
+      const { error: updateError } = await supabase
         .from('tasks')
         .update({ status })
         .eq('id', taskId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // Check if we need to update the milestone status
+      const milestoneId = taskData.milestone_id;
+      const milestoneStatus = taskData.milestone?.status;
+      
+      // If the milestone is completed and task is being unchecked, update milestone to in_progress
+      if (milestoneStatus === 'completed' && status === 'todo') {
+        const { error: milestoneError } = await supabase
+          .from('milestones')
+          .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+          .eq('id', milestoneId);
+
+        if (milestoneError) {
+          console.error('Error updating milestone status:', milestoneError);
+          // Continue even if milestone update fails
+        }
+      }
 
       // Invalidate cache
       const cacheKey = `roadmap-${user.id}`;

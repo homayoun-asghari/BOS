@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -250,6 +251,12 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
     { icon: <CheckCircle className="w-4 h-4" />, label: 'Completed', value: stats?.completedRoadmaps || 0 },
   ];
 
+  // Import HistorySection component
+  const HistorySection = dynamic<{ userId?: string }>(
+    () => import('@/components/right-panel/components/home/HistorySection').then(mod => mod.HistorySection),
+    { ssr: false }
+  );
+
   // Tabs content
   const tabs = [
     {
@@ -287,11 +294,11 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
                 key={profile?.id}
               />
             ) : (
-              <p className="text-center text-muted-foreground py-8">No active roadmap</p>
+              <p className="text-center text-muted-foreground py-8">No public roadmap</p>
             )}
           </div>
         ) : (
-          <p className="text-center text-muted-foreground py-8">No active roadmap</p>
+          <p className="text-center text-muted-foreground py-8">No public roadmap</p>
         ),
     },
     {
@@ -368,31 +375,8 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       value: 'history',
       label: 'History',
       content: (
-        <div className="space-y-4 p-4">
-          {completedRoadmaps.length > 0 ? (
-            completedRoadmaps.map((roadmap) => (
-              <div key={roadmap.id} className="p-4 border rounded-lg">
-                <h3 className="font-medium">{roadmap.title}</h3>
-                <p className="text-sm text-muted-foreground">
-                  Completed on {format(new Date(roadmap.completed_at), 'MMM d, yyyy')}
-                </p>
-                <div className="mt-2">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Progress</span>
-                    <span>
-                      {roadmap.completed_milestones} / {roadmap.total_milestones} milestones
-                    </span>
-                  </div>
-                  <Progress 
-                    completed={roadmap.completed_milestones} 
-                    total={roadmap.total_milestones} 
-                  />
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-muted-foreground py-8">No completed roadmaps yet</p>
-          )}
+        <div className="h-full">
+          <HistorySection userId={profile.id} />
         </div>
       ),
     },

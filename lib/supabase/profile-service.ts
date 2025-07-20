@@ -1,6 +1,6 @@
 import { supabase } from './client';
 import { Post } from '@/types/post';
-import { StoredProcedureRoadmap, StoredProcedureMilestone, StoredProcedureTask, toRoadmap } from '@/types/roadmap';
+import { StoredProcedureRoadmap, toRoadmap } from '@/types/roadmap';
 
 interface UserProfile {
   id: string;
@@ -145,7 +145,7 @@ export const profileService = {
     }
   },
 
-   async getUserStats(userId: string): Promise<UserStats | null> {
+   async getUserStats(userId: string, isPublicProfile: boolean = false): Promise<UserStats | null> {
     try {
       // Validate UUID format
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(userId)) {
@@ -153,44 +153,78 @@ export const profileService = {
         return null;
       }
 
-      const { data: userPosts, error: postsError } = await supabase
-        .from('posts')
-        .select('like_count')
-        .eq('user_id', userId);
-
-      if (postsError) {
-        console.error('Error fetching user posts:', postsError);
-        return null;
-      }
-
-      const totalLikes = userPosts?.reduce((sum, post) => sum + (post.like_count || 0), 0) || 0;
-
-      const { count: totalPosts } = await supabase
-        .from('posts')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
-
-      const { count: totalPublicNotes } = await supabase
-        .from('notes')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('is_public', true); // Only count public notes
-
+      // Get all stats in a single call
       const { data: statsData, error: statsError } = await supabase
-        .rpc('get_user_completed_stats', { user_id: userId });
+        .rpc('get_user_completed_stats', { target_user_id: userId });
 
       if (statsError) {
         console.error('Error fetching user stats:', statsError);
         return null;
       }
 
+      // Handle both array and object response formats
+      const stats = Array.isArray(statsData) ? statsData[0] : statsData;
+
+      // If this is a public profile view, we need to manually filter for public roadmaps
+      if (isPublicProfile) {
+        // Get count of only public completed roadmaps
+        const { count: publicCompletedRoadmaps } = await supabase
+          .from('roadmaps')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+          .eq('is_public', true);
+
+        // First, get the IDs of public roadmaps
+        const { data: publicRoadmaps } = await supabase
+          .from('roadmaps')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('is_public', true);
+        
+        const publicRoadmapIds = publicRoadmaps?.map(r => r.id) || [];
+
+        // Get count of completed milestones in public roadmaps
+        const { count: publicCompletedMilestones } = await supabase
+          .from('milestones')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+          .in('roadmap_id', publicRoadmapIds);
+
+        // Get count of completed tasks in public roadmaps
+        const { data: publicMilestones } = await supabase
+          .from('milestones')
+          .select('id')
+          .in('roadmap_id', publicRoadmapIds);
+          
+        const publicMilestoneIds = publicMilestones?.map(m => m.id) || [];
+        
+        const { count: publicCompletedTasks } = await supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'completed')
+          .in('milestone_id', publicMilestoneIds);
+
+        return {
+          totalLikes: stats?.total_likes || 0,
+          totalPosts: stats?.total_posts || 0,
+          totalPublicNotes: stats?.public_notes || 0,
+          completedRoadmaps: publicCompletedRoadmaps || 0,
+          completedMilestones: publicCompletedMilestones || 0,
+          completedTasks: publicCompletedTasks || 0,
+        };
+      }
+
+      // For non-public profiles (like the authenticated user's own dashboard),
+      // return all stats including private content
       return {
-        totalLikes,
-        totalPosts: totalPosts || 0,
-        totalPublicNotes: totalPublicNotes || 0,
-        completedRoadmaps: statsData?.completed_roadmaps || 0,
-        completedMilestones: statsData?.completed_milestones || 0,
-        completedTasks: statsData?.completed_tasks || 0,
+        totalLikes: stats?.total_likes || 0,
+        totalPosts: stats?.total_posts || 0,
+        totalPublicNotes: stats?.public_notes || 0,
+        completedRoadmaps: stats?.completed_roadmaps || 0,
+        completedMilestones: stats?.completed_milestones || 0,
+        completedTasks: stats?.completed_tasks || 0,
       };
     } catch (error) {
       console.error('Error fetching user stats:', error);
@@ -244,14 +278,14 @@ export const profileService = {
       const processedPosts = posts?.map(post => {
         if (post.media_urls) {
           const processedMediaUrls = Array.isArray(post.media_urls)
-            ? post.media_urls.map(url => {
+            ? post.media_urls.map((url: string | { path: string }) => {
                 if (typeof url === 'string' && !url.startsWith('http')) {
                   // Extract filename from path
                   const pathParts = url.split('/');
                   const fileName = pathParts[pathParts.length - 1];
                   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`;
                 }
-                if (typeof url === 'object' && url.path) {
+                if (typeof url === 'object' && 'path' in url) {
                   // Extract filename from path
                   const pathParts = url.path.split('/');
                   const fileName = pathParts[pathParts.length - 1];
@@ -272,16 +306,17 @@ export const profileService = {
     }
   },
 
-  async getCurrentRoadmap(userId: string) {
+  async getCurrentRoadmap(userId: string, isPublicOnly: boolean = false) {
     try {
-      
       // Validate UUID format
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
         console.error('Invalid UUID format:', userId);
         return null;
       }
 
-      console.log('Fetching current roadmap for user ID:', userId);
+      console.log(`Fetching ${isPublicOnly ? 'public ' : ''}current roadmap for user ID:`, userId);
+      
+      // First get the raw roadmap data
       const { data, error } = await supabase
         .rpc('get_current_roadmap', { user_id: userId });
 
@@ -306,6 +341,12 @@ export const profileService = {
         return null;
       }
 
+      // Filter out non-public roadmaps if isPublicOnly is true
+      if (isPublicOnly && !transformed.is_public) {
+        console.log('Filtering out private roadmap as requested');
+        return null;
+      }
+
       return transformed;
     } catch (error) {
       console.error('Error fetching current roadmap:', error);
@@ -313,7 +354,7 @@ export const profileService = {
     }
   },
 
-  async getCompletedRoadmaps(identifier: string) {
+  async getCompletedRoadmaps(identifier: string, isPublicOnly: boolean = false) {
     try {
       // First get the user's ID if we have a username
       let userId = identifier;
@@ -344,7 +385,10 @@ export const profileService = {
       }
 
       const { data, error } = await supabase
-        .rpc('get_completed_roadmaps', { user_id: userId });
+        .rpc('get_completed_roadmaps', { 
+          user_id: userId,
+          is_public_only: isPublicOnly 
+        });
 
       if (error) {
         console.error('Error fetching completed roadmaps:', error);

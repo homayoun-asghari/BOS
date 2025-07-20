@@ -19,6 +19,7 @@ export interface StoredProcedureMilestone {
   id: string;
   title: string;
   description: string | null;
+  start_date: string | null;
   end_date: string | null;
   progress: number;
   tasks: StoredProcedureTask[];
@@ -32,6 +33,8 @@ export interface StoredProcedureRoadmap {
   start_date: string | null;
   end_date: string | null;
   cover_image_url?: string | null;
+  status?: 'draft' | 'in_progress' | 'completed' | 'archived';
+  is_public: boolean;
   progress: number;
   milestones: StoredProcedureMilestone[];
 }
@@ -74,9 +77,10 @@ export function toMilestone(milestone: StoredProcedureMilestone): TimelineMilest
   return {
     id: milestone.id,
     title: milestone.title,
-    description: milestone.description ?? '',
-    start_date: null, // Using null as start_date since not in stored proc
+    description: milestone.description,
+    start_date: milestone.start_date ?? null,
     end_date: milestone.end_date ?? null,
+    status: 'in_progress', // Default status since not in stored proc
     order_index: 0, // Default order index since not in stored proc
     tasks: milestone.tasks.map(toTask)
   };
@@ -97,6 +101,8 @@ export function toRoadmap(roadmap: StoredProcedureRoadmap | null | undefined) {
       start_date: roadmap.start_date || null,
       end_date: roadmap.end_date || null,
       cover_image_url: roadmap.cover_image_url || null,
+      status: roadmap.status || 'draft', // Default to 'draft' if status is not provided
+      is_public: roadmap.is_public || false, // Default to false if not provided
       progress: typeof roadmap.progress === 'number' ? roadmap.progress : 0,
       milestones: Array.isArray(roadmap.milestones) 
         ? roadmap.milestones.map(milestone => toMilestone(milestone)).filter(Boolean) 

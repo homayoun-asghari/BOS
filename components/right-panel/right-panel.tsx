@@ -17,6 +17,7 @@ import { TextDisplay } from "@/components/posts/display/TextDisplay";
 import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
 import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Home } from "./components/home";
 
 
 // Map dummy posts to match our Post type
@@ -272,7 +273,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
           </div>
         );
       case 'stats':
-        return <div>Stats View</div>;
+        return <Home />;
       default:
         return (
           <div className="h-full overflow-y-auto">

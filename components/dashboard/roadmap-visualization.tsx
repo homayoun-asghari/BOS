@@ -21,16 +21,21 @@ interface RoadmapVisualizationProps {
     end_date?: string;
     cover_image_url?: string | null;
     milestones?: TimelineMilestoneType[];
+    status?: 'draft' | 'in_progress' | 'completed' | 'archived';
+    is_public?: boolean;
   };
   progress: number;
   totalTasks: number;
   completedTasks: number;
   isDeleteDialogOpen: boolean;
   isDeleting: boolean;
+  showCompletionPrompt?: boolean;
   onEditClick: () => void;
   onDeleteClick: () => void;
   onDeleteConfirm: () => Promise<void>;
   onDeleteCancel: () => void;
+  onCompleteConfirm: () => Promise<boolean>;
+  onCompletionDismiss: () => void;
   showActions?: boolean;
   isEditable?: boolean;
   onTaskStatusChange?: (taskId: string, status: 'todo' | 'in_progress' | 'done' | 'completed', priority?: 'low' | 'medium' | 'high') => Promise<boolean>;
@@ -43,6 +48,9 @@ export function RoadmapVisualization({
   onDeleteClick,
   onDeleteConfirm,
   onDeleteCancel,
+  onCompleteConfirm,
+  onCompletionDismiss,
+  showCompletionPrompt = false,
   showActions = true,
   isEditable = true,
   onTaskStatusChange,
@@ -50,6 +58,7 @@ export function RoadmapVisualization({
   // State management
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   // Early return if no roadmap data
   if (!roadmap) {
@@ -74,6 +83,23 @@ export function RoadmapVisualization({
       toast.error('Failed to delete roadmap');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Handle roadmap completion confirmation
+  const handleCompleteConfirm = async () => {
+    if (!onCompleteConfirm) return false;
+    
+    setIsCompleting(true);
+    try {
+      const success = await onCompleteConfirm();
+      return success;
+    } catch (error) {
+      console.error('Error confirming completion:', error);
+      toast.error('Failed to mark roadmap as completed');
+      return false;
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -122,17 +148,24 @@ export function RoadmapVisualization({
       {isEditable && (
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <RoadmapHeader
-            roadmap={roadmap}
+            roadmap={{
+              ...roadmap,
+              is_public: roadmap.is_public || false
+            }}
             progress={currentProgress}
             totalTasks={totalMilestones}
             completedTasks={completedMilestones}
             isDeleteDialogOpen={isDeleteDialogOpen}
             isEditable={isEditable}
             isDeleting={isDeleting}
+            isCompleting={isCompleting}
+            showCompletionPrompt={showCompletionPrompt}
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
             onDeleteConfirm={handleDeleteRoadmap}
             onDeleteCancel={onDeleteCancel}
+            onCompleteConfirm={onCompleteConfirm}
+            onCompletionDismiss={onCompletionDismiss}
             showActions={showActions}
           />
         </div>
@@ -161,7 +194,10 @@ export function RoadmapVisualization({
             {!isEditable && (
               <div className="mb-6">
                 <RoadmapHeader
-                  roadmap={roadmap}
+                  roadmap={{
+                    ...roadmap,
+                    is_public: roadmap.is_public || false
+                  }}
                   progress={currentProgress}
                   totalTasks={totalMilestones}
                   completedTasks={completedMilestones}

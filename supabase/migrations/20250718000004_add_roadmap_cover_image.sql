@@ -40,6 +40,7 @@ SELECT jsonb_build_object(
   'start_date', r.start_date,
   'end_date', r.end_date,
   'cover_image_url', r.cover_image_url,
+  'is_public', r.is_public,
   'progress', (
     SELECT 
       ROUND(
@@ -57,7 +58,8 @@ SELECT jsonb_build_object(
         'id', m.id,
         'title', m.title,
         'description', m.description,
-        'due_date', m.end_date,
+        'start_date', m.start_date,
+        'end_date', m.end_date,
         'progress', (
           SELECT ROUND(
             100.0 * COUNT(t_done.*) / NULLIF(COUNT(t_all.*), 0),

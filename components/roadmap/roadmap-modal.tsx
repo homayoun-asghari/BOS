@@ -3,12 +3,13 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { cn } from '@/lib/utils';
+
 import { Button } from '@/components/ui/button';
 import { deleteRoadmapCover } from '@/lib/utils/roadmap-cover-utils';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 import { GoalSection } from './GoalSection';
 import { MilestoneItem } from './MilestoneItem';
@@ -32,6 +33,7 @@ interface RoadmapModalProps {
     final_goal: string;
     start_date: string;
     end_date: string;
+    is_public: boolean;
     cover_image_url?: string | null;
     milestones: Array<{
       id: string;
@@ -68,6 +70,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       : null
   );
   const [pendingCoverRemoval, setPendingCoverRemoval] = useState(false);
+  const [isPublic, setIsPublic] = useState(roadmap?.is_public || false);
   
   const [milestones, setMilestones] = useState<Milestone[]>(() => {
     if (roadmap?.milestones?.length) {
@@ -80,7 +83,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
           id: task.id,
           title: task.title,
           description: task.description,
-          completed: task.status === 'completed' || task.status === 'done',
+          completed: task.status === 'done',
           priority: task.priority,
           dueDate: task.due_date ? new Date(task.due_date) : undefined
         })) || []
@@ -277,11 +280,13 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
 
       if (roadmap?.id) {
         // Prepare the update data
-        const updateData: any = {
+        const updateData = {
           final_goal: goal,
           start_date: formatDateForDB(goalStartDate),
           end_date: formatDateForDB(goalEndDate),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          cover_image_url: roadmap.cover_image_url || null,
+          is_public: isPublic
         };
         
         // If we have a pending removal or no cover image, set cover_image_url to null
@@ -291,6 +296,9 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         } else if (coverImage?.url) {
           updateData.cover_image_url = coverImage.url;
         }
+        
+        // Add is_public to the update data
+        updateData.is_public = isPublic;
         
         // Update existing roadmap
         const { error: roadmapError } = await supabase
@@ -309,7 +317,7 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         if (deleteError) throw deleteError;
       } else {
         // Create new roadmap
-        const { data: newRoadmap, error: roadmapError } = await supabase
+        const { data: roadmapData, error: roadmapError } = await supabase
           .from('roadmaps')
           .insert({
             user_id: user.id,
@@ -318,13 +326,14 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             start_date: formatDateForDB(goalStartDate),
             end_date: formatDateForDB(goalEndDate),
             cover_image_url: coverImage?.url || null,
-            status: 'in_progress'
+            status: 'in_progress',
+            is_public: isPublic
           })
           .select('id')
           .single();
 
         if (roadmapError) throw roadmapError;
-        finalRoadmapId = newRoadmap.id;
+        finalRoadmapId = roadmapData.id;
       }
 
       if (!finalRoadmapId) {
@@ -414,7 +423,8 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     onSave, 
     coverImage,
     pendingCoverRemoval,
-    roadmap?.cover_image_url
+    roadmap?.cover_image_url,
+    isPublic
   ]);
 
   return (
@@ -438,14 +448,26 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         </div>
 
         <div className="space-y-6">
-          <GoalSection
-            goal={goal}
-            onGoalChange={setGoal}
-            startDate={goalStartDate}
+          <GoalSection 
+            goal={goal} 
+            onGoalChange={setGoal} 
+            startDate={goalStartDate} 
             onStartDateChange={setGoalStartDate}
             endDate={goalEndDate}
             onEndDateChange={setGoalEndDate}
           />
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isPublic"
+              checked={isPublic}
+              onCheckedChange={(checked: boolean) => setIsPublic(checked)}
+              className="border-foreground/30 dark:border-foreground/50 data-[state=checked]:bg-foreground/10 data-[state=checked]:border-foreground/50 dark:data-[state=checked]:bg-foreground/20"
+            />
+            <label htmlFor="isPublic" className="text-sm font-medium text-foreground">
+              Make this roadmap public
+            </label>
+          </div>
 
           <div className="space-y-4 sm:space-y-6">
             <h3 className="text-base sm:text-lg font-medium">Milestones</h3>

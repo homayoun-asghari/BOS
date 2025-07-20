@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { RoadmapVisualization } from "@/components/dashboard/roadmap-visualization";
 import { RightPanelProvider, RightPanel } from "@/components/right-panel";
+import { useRefresh } from "@/contexts/RefreshContext";
 import { ChatView } from "@/components/chat/chat-view";
 import { PostsView } from "@/components/right-panel/components/posts-view";
 import { StatsView } from "@/components/right-panel/components/stats-view";
@@ -23,6 +24,8 @@ interface Roadmap {
   start_date: string | null;
   end_date: string | null;
   cover_image_url: string | null;
+  status: 'draft' | 'in_progress' | 'completed' | 'archived';
+  is_public: boolean;
   progress: number;
   milestones: MilestoneType[];
   created_at?: string;
@@ -36,6 +39,8 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
+  const [hasCompletedRoadmaps, setHasCompletedRoadmaps] = useState(false);
   
   const calculateProgress = (roadmap: Roadmap | undefined) => {
     if (!roadmap?.milestones?.length) return 0;
@@ -53,6 +58,119 @@ function DashboardContent() {
     ).length;
   };
   
+  // Fetch the latest roadmap data
+  const fetchRoadmap = async () => {
+    try {
+      console.log('=== DEBUG: Starting fetchRoadmap ===');
+      
+      const session = await supabase.auth.getSession();
+      if (!session.data.session) {
+        console.log('=== DEBUG: No session, returning early ===');
+        return;
+      }
+
+      const userId = session.data.session.user.id;
+      console.log('=== DEBUG: User ID:', userId, '===');
+      
+      // First check for completed roadmaps
+      console.log('=== DEBUG: Checking for completed roadmaps ===');
+      const hasCompleted = await checkCompletedRoadmaps(userId);
+      console.log('=== DEBUG: Has completed roadmaps:', hasCompleted, '===');
+      
+      // If we have completed roadmaps but no current one, we're done
+      if (hasCompleted) {
+        console.log('=== DEBUG: Has completed roadmaps, setting roadmap to undefined ===');
+        setRoadmap(undefined);
+        return;
+      }
+
+      const { data: roadmapData, error: roadmapError } = await supabase
+        .rpc('get_current_roadmap', { user_id: userId });
+
+      if (roadmapError) {
+        console.error('Error fetching roadmap:', roadmapError);
+        return;
+      }
+
+      // Transform the JSONB response using the toRoadmap converter
+      if (roadmapData) {
+        const storedProcRoadmap = roadmapData as StoredProcedureRoadmap;
+        const transformedRoadmap = toRoadmap(storedProcRoadmap);
+        
+        if (transformedRoadmap) {
+          setRoadmap({
+            id: roadmapData.id,
+            title: roadmapData.title,
+            description: roadmapData.description,
+            final_goal: roadmapData.final_goal,
+            start_date: roadmapData.start_date,
+            end_date: roadmapData.end_date,
+            cover_image_url: roadmapData.cover_image_url,
+            status: roadmapData.status || 'draft',
+            is_public: roadmapData.is_public || false,
+            progress: calculateProgress(transformedRoadmap),
+            milestones: transformedRoadmap.milestones || []
+          });
+        } else {
+          console.error('Failed to transform roadmap data');
+          setRoadmap(undefined);
+        }
+      } else {
+        setRoadmap(undefined);
+      }
+    } catch (err) {
+      console.error('Failed to fetch roadmap:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refresh = useRefresh();
+  const triggerRefresh = refresh.triggerRefresh;
+
+  // Handle completion confirmation
+  const handleCompleteRoadmap = async () => {
+    if (!roadmap) return false;
+    
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('roadmaps')
+        .update({ 
+          status: 'completed',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', roadmap.id);
+        
+      if (error) throw error;
+      
+      // Update the hasCompletedRoadmaps state to true since we just completed a roadmap
+      setHasCompletedRoadmaps(true);
+      
+      // Clear the current roadmap to trigger the empty state
+      setRoadmap(undefined);
+      
+      // Trigger stats refresh
+      triggerRefresh();
+      
+      setShowCompletionPrompt(false);
+      toast.success('Roadmap marked as completed!');
+      return true;
+    } catch (error) {
+      console.error('Error completing roadmap:', error);
+      toast.error('Failed to mark roadmap as completed');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Dismiss completion prompt
+  const handleDismissCompletion = () => {
+    setShowCompletionPrompt(false);
+  };
+
   // Handle roadmap deletion
   const handleDeleteRoadmap = async () => {
     if (!roadmap?.id) return;
@@ -123,27 +241,102 @@ function DashboardContent() {
     setIsEditModalOpen(true);
   };
   
+  // Function to check if user has any completed roadmaps
+  const checkCompletedRoadmaps = async (userId: string) => {
+    try {
+      console.log('Checking completed roadmaps for user:', userId);
+      
+      // First check if there are any roadmaps at all
+      const { data: allRoadmaps, error: allError } = await supabase
+        .from('roadmaps')
+        .select('id, status, title')
+        .eq('user_id', userId);
+      
+      if (allError) throw allError;
+      console.log('All roadmaps:', allRoadmaps);
+      
+      // Then specifically check for completed ones
+      const { data: completedRoadmaps, error: completedError } = await supabase
+        .from('roadmaps')
+        .select('id, status, title')
+        .eq('user_id', userId)
+        .eq('status', 'completed');
+      
+      if (completedError) throw completedError;
+      console.log('Completed roadmaps:', completedRoadmaps);
+      
+      const hasCompleted = completedRoadmaps.length > 0;
+      console.log('Has completed roadmaps:', hasCompleted);
+      
+      setHasCompletedRoadmaps(hasCompleted);
+      return hasCompleted;
+      
+    } catch (error) {
+      console.error('Error checking completed roadmaps:', error);
+      return false;
+    }
+  };
+
   // Function to fetch the current roadmap
   const fetchCurrentRoadmap = async () => {
     try {
+      console.log('=== DEBUG: Starting fetchCurrentRoadmap ===');
       const session = await supabase.auth.getSession();
+      console.log('=== DEBUG: Auth session:', session, '===');
+      
       if (!session.data.session?.user?.id) {
-        throw new Error('No user session found');
+        console.log('=== DEBUG: No user session found ===');
+        return null;
       }
       
+      const userId = session.data.session.user.id;
+      console.log('=== DEBUG: User ID:', userId, '===');
+      
+      // Check for completed roadmaps first
+      console.log('=== DEBUG: Checking for completed roadmaps ===');
+      await checkCompletedRoadmaps(userId);
+      
+      // Get current roadmap
+      console.log('=== DEBUG: Fetching current roadmap ===');
       const { data, error } = await supabase
-        .rpc('get_current_roadmap', { user_id: session.data.session.user.id });
+        .rpc('get_current_roadmap', { user_id: userId });
         
-      if (error) throw error;
+      if (error) {
+        console.error('=== DEBUG: Error in get_current_roadmap RPC:', error, '===');
+        throw error;
+      }
+      
+      console.log('=== DEBUG: Current roadmap data from RPC:', data, '===');
+      
+      if (!data) {
+        console.log('=== DEBUG: No current roadmap found, checking for any roadmaps ===');
+        // Check if there are any roadmaps at all for this user
+        const { data: anyRoadmap, error: roadmapsError } = await supabase
+          .from('roadmaps')
+          .select('id, status, title')
+          .eq('user_id', userId)
+          .limit(1);
+          
+        if (roadmapsError) {
+          console.error('=== DEBUG: Error checking for any roadmaps:', roadmapsError, '===');
+        } else {
+          console.log('=== DEBUG: Found roadmaps:', anyRoadmap, '===');
+        }
+      }
       
       if (data) {
         const transformed = toRoadmap(data as StoredProcedureRoadmap);
+        console.log('=== DEBUG: Transformed roadmap data:', transformed, '===');
         if (transformed) {
           setRoadmap(transformed);
+          return transformed;
         }
       }
+      
+      return null;
     } catch (error) {
-      console.error('Error fetching current roadmap:', error);
+      console.error('=== DEBUG: Error in fetchCurrentRoadmap:', error, '===');
+      return null;
     }
   };
   
@@ -164,8 +357,25 @@ function DashboardContent() {
           return;
         }
 
+        const userId = session.data.session.user.id;
+        
+        // First check for completed roadmaps
+        console.log('=== DEBUG: Checking for completed roadmaps ===');
+        const { data: completedRoadmaps, error: completedError } = await supabase
+          .from('roadmaps')
+          .select('id, status, title')
+          .eq('user_id', userId)
+          .eq('status', 'completed');
+          
+        if (completedError) {
+          console.error('Error checking completed roadmaps:', completedError);
+        } else {
+          setHasCompletedRoadmaps(completedRoadmaps.length > 0);
+        }
+
+        // Get current roadmap
         const { data: roadmapData, error: roadmapError } = await supabase
-          .rpc('get_current_roadmap', { user_id: session.data.session.user.id });
+          .rpc('get_current_roadmap', { user_id: userId });
 
         if (roadmapError) {
           console.error('Error fetching roadmap:', roadmapError);
@@ -180,14 +390,27 @@ function DashboardContent() {
           console.log('Transformed roadmap data:', transformedRoadmap);
           
           if (transformedRoadmap) {
+            const allMilestonesCompleted = transformedRoadmap.milestones?.every(milestone => 
+              milestone.status === 'completed' || 
+              milestone.tasks?.every(task => task.status === 'done')
+            );
+            
+            // Only show completion prompt if all milestones are completed but roadmap isn't marked as completed
+            if (allMilestonesCompleted && roadmapData.status !== 'completed') {
+              setShowCompletionPrompt(true);
+            }
+            
             setRoadmap({
-              id: transformedRoadmap.id,
-              title: transformedRoadmap.title,
-              description: transformedRoadmap.description,
-              final_goal: transformedRoadmap.final_goal,
-              start_date: transformedRoadmap.start_date || undefined,
-              end_date: transformedRoadmap.end_date || undefined,
-              cover_image_url: transformedRoadmap.cover_image_url || null,
+              id: roadmapData.id,
+              title: roadmapData.title,
+              description: roadmapData.description,
+              final_goal: roadmapData.final_goal,
+              start_date: roadmapData.start_date,
+              end_date: roadmapData.end_date,
+              cover_image_url: roadmapData.cover_image_url,
+              status: roadmapData.status || 'draft',
+              is_public: roadmapData.is_public || false,
+              progress: calculateProgress(transformedRoadmap),
               milestones: transformedRoadmap.milestones || []
             });
           } else {
@@ -228,27 +451,49 @@ function DashboardContent() {
                   </div>
                 ) : !roadmap ? (
                   <div className="mt-8 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 p-12 text-center">
-                    <h3 className="text-lg font-medium text-muted-foreground">No roadmap created yet</h3>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Get started by creating your first milestone
-                    </p>
-                    <button
-                      onClick={() => {
-                        setIsEditModalOpen(true);
-                      }}
-                      className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                      Create Roadmap
-                    </button>
+                    {hasCompletedRoadmaps ? (
+                      <>
+                        <h3 className="text-lg font-medium text-muted-foreground">Congratulations! You just finished a roadmap 🎉</h3>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Ready to start your next challenge?
+                        </p>
+                        <button
+                          onClick={() => {
+                            setIsEditModalOpen(true);
+                          }}
+                          className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                          Next?
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-medium text-muted-foreground">No roadmap created yet</h3>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Get started by creating your first roadmap
+                        </p>
+                        <button
+                          onClick={() => {
+                            setIsEditModalOpen(true);
+                          }}
+                          className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                          Create Roadmap
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <RoadmapVisualization
                     roadmap={{
                       ...roadmap,
-                      cover_image_url: roadmap.cover_image_url || null,
-                      milestones: roadmap.milestones?.map(m => ({
+                      start_date: roadmap.start_date || undefined,
+                      end_date: roadmap.end_date || undefined,
+                      cover_image_url: roadmap.cover_image_url || undefined,
+                      is_public: roadmap.is_public,
+                      milestones: (roadmap.milestones || []).map(m => ({
                         ...m,
-                        tasks: m.tasks?.map(t => ({
+                        tasks: (m.tasks || []).map(t => ({
                           ...t,
                           status: t.status,
                           milestone_id: m.id,
@@ -257,14 +502,17 @@ function DashboardContent() {
                           description: t.description || '',
                           created_at: t.created_at || new Date().toISOString(),
                           updated_at: t.updated_at || new Date().toISOString()
-                        })) || []
-                      })) || []
+                        }))
+                      }))
                     }}
                     isEditable={true}
                     progress={calculateProgress(roadmap)}
                     totalTasks={roadmap.milestones?.length || 0}
                     completedTasks={calculateCompletedMilestones(roadmap)}
-                    onTaskStatusChange={async (taskId: string, status: string, priority: string) => {
+                    showCompletionPrompt={showCompletionPrompt}
+                    onCompleteConfirm={handleCompleteRoadmap}
+                    onCompletionDismiss={handleDismissCompletion}
+                    onTaskStatusChange={async (taskId: string, status: 'todo' | 'in_progress' | 'done' | 'completed', priority: 'low' | 'medium' | 'high' = 'medium') => {
                       try {
                         const session = await supabase.auth.getSession();
                         if (!session.data.session) {
@@ -272,6 +520,19 @@ function DashboardContent() {
                           return false;
                         }
                         
+                        // Find the milestone for this task
+                        const taskMilestone = roadmap?.milestones?.find(milestone => 
+                          milestone.tasks?.some(task => task.id === taskId)
+                        );
+                        
+                        if (!taskMilestone) {
+                          console.error('Could not find milestone for task:', taskId);
+                          return false;
+                        }
+                        
+                        const milestoneId = taskMilestone.id;
+                        
+                        // Update the task status in the database
                         const { error } = await supabase
                           .from('tasks')
                           .update({ 
@@ -283,25 +544,123 @@ function DashboardContent() {
                         
                         if (error) throw error;
                         
-                        // Update local state
+                        // Check if this task is being unchecked from a completed milestone
+                        const isUncheckingFromCompleted = taskMilestone.status === 'completed' && status === 'todo';
+                        
+                        // Check if all tasks in the milestone are now complete
+                        const allTasksComplete = taskMilestone.tasks?.every(task => 
+                          task.id === taskId ? status === 'done' : task.status === 'done'
+                        );
+                        
+                        // Update milestone status based on task completion
+                        if (isUncheckingFromCompleted) {
+                          // If unchecking from completed milestone, set to in_progress
+                          const { error: milestoneError } = await supabase
+                            .from('milestones')
+                            .update({
+                              status: 'in_progress',
+                              updated_at: new Date().toISOString()
+                            })
+                            .eq('id', milestoneId);
+                            
+                          if (milestoneError) {
+                            console.error('Error updating milestone status to in_progress:', milestoneError);
+                            throw milestoneError;
+                          }
+                          
+                          // Since we're unchecking a task from a completed milestone,
+                          // make sure to hide the completion prompt if it's shown
+                          setShowCompletionPrompt(false);
+                        } else if (allTasksComplete) {
+                          // If all tasks in this milestone are done, update the milestone status
+                          const { error: milestoneError } = await supabase
+                            .from('milestones')
+                            .update({ 
+                              status: 'completed',
+                              updated_at: new Date().toISOString()
+                            })
+                            .eq('id', taskMilestone.id);
+                            
+                          if (milestoneError) {
+                            console.error('Error updating milestone status to completed:', milestoneError);
+                            throw milestoneError;
+                          }
+                          
+                          // Check if all milestones are now completed
+                          const { data: updatedMilestones, error: milestonesError } = await supabase
+                            .from('milestones')
+                            .select('status')
+                            .eq('roadmap_id', roadmap.id);
+                            
+                          if (milestonesError) {
+                            console.error('Error checking milestone statuses:', milestonesError);
+                            return false;
+                          }
+                          
+                          const allMilestonesAreCompleted = updatedMilestones.every(m => m.status === 'completed');
+                          
+                          // If all milestones are completed and roadmap isn't already completed,
+                          // show the completion prompt instead of auto-completing
+                          if (allMilestonesAreCompleted && roadmap.status !== 'completed') {
+                            setShowCompletionPrompt(true);
+                          } else if (showCompletionPrompt) {
+                            // If not all milestones are completed but the prompt is still shown, hide it
+                            setShowCompletionPrompt(false);
+                          }
+                        }
+                        
+                        // After successful update, trigger a stats refresh
+                        // This ensures we always show the correct numbers
+                        window.dispatchEvent(new CustomEvent('refreshStats'));
+                        
+                        // Update local state with proper type safety
                         setRoadmap(prev => {
                           if (!prev) return prev;
+                          
+                          const updatedMilestones = prev.milestones?.map(milestone => {
+                            // If this is the milestone containing our updated task
+                            if (milestone.id === milestoneId) {
+                              const updatedTasks = milestone.tasks?.map(task => 
+                                task.id === taskId 
+                                  ? { 
+                                      ...task, 
+                                      status: status as 'todo' | 'in_progress' | 'done',
+                                      priority: priority as 'low' | 'medium' | 'high'
+                                    } 
+                                  : task
+                              ) || [];
+                              
+                              // Check if all tasks in this milestone are done
+                              const allTasksDone = updatedTasks.every(t => t.status === 'done');
+                              
+                              return {
+                                ...milestone,
+                                tasks: updatedTasks,
+                                status: allTasksDone ? 'completed' : milestone.status
+                              };
+                            }
+                            return milestone;
+                          });
+                          
+                          // Check if all milestones are now completed
+                          const allMilestonesCompleted = updatedMilestones?.every(m => m.status === 'completed');
+                          
+                          // If all milestones are completed and roadmap isn't already completed,
+                          // show the completion prompt
+                          if (allMilestonesCompleted && prev.status !== 'completed') {
+                            setShowCompletionPrompt(true);
+                          }
+                          
                           return {
                             ...prev,
-                            milestones: prev.milestones?.map(milestone => ({
-                              ...milestone,
-                              tasks: milestone.tasks?.map(task => 
-                                task.id === taskId 
-                                  ? { ...task, status, priority: priority || task.priority } 
-                                  : task
-                              )
-                            }))
+                            milestones: updatedMilestones || []
                           };
                         });
                         
                         return true;
-                      } catch (err) {
-                        console.error('Error updating task status:', err);
+                      } catch (error) {
+                        console.error('Error updating task status:', error);
+                        toast.error('Failed to update task status');
                         return false;
                       }
                     }}
@@ -318,16 +677,16 @@ function DashboardContent() {
                 {isEditModalOpen && (
                   <RoadmapModal
                     open={isEditModalOpen}
-                    onOpenChange={(isOpen) => {
+                    onOpenChange={async (isOpen) => {
                       if (!isOpen) {
                         // When modal closes, refresh the roadmap data
-                        fetchCurrentRoadmap();
+                        await fetchCurrentRoadmap();
                       }
                       setIsEditModalOpen(isOpen);
                     }}
-                    onSave={() => {
+                    onSave={async () => {
                       // After save, refresh the roadmap data
-                      fetchCurrentRoadmap();
+                      await fetchCurrentRoadmap();
                     }}
                     roadmap={roadmap ? {
                       ...roadmap,
