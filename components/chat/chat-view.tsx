@@ -105,7 +105,7 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
   // Show chat view if a conversation is selected, otherwise show conversation list
   if (activeConversation) {
     return (
-      <div className={cn('fixed inset-0 z-40 flex flex-col bg-background', className)}>
+      <div className={cn('flex flex-col h-full bg-background', className)}>
         <ChatHeader 
           conversation={currentConversation}
           currentUserId={user?.id || ''}
@@ -141,7 +141,7 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
             />
           </div>
           {/* Safe area for mobile browsers - accounts for bottom navigation */}
-          <div className="h-20 lg:h-4" />
+          <div className="h-4" />
         </div>
       </div>
     );

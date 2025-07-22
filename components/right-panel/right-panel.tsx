@@ -51,18 +51,27 @@ const posts: Post[] = dummyPosts.map(post => ({
   }
 }));
 
-type RightPanelViewType = 'chat' | 'posts' | 'stats' | null;
+type RightPanelViewType = 'messages' | 'posts' | 'stats' | null;
 
 // Default view is now managed by the context
 
 interface RightPanelProps {
   className?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
-export function RightPanel({ className, children }: RightPanelProps) {
+export function RightPanel({ className, children }: RightPanelProps = {}) {
   const { currentView, openPanel, closePanel } = useRightPanel();
   const { showRightPanel, toggleRightPanel } = useMobileRightPanel();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  // Toggle collapse state and close any open modals
+  const toggleCollapse = useCallback(() => {
+    if (!isCollapsed) {
+      setIsPostModalOpen(false);
+    }
+    setIsCollapsed(prev => !prev);
+  }, [isCollapsed]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -74,11 +83,21 @@ export function RightPanel({ className, children }: RightPanelProps) {
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   
   const [isMobile, setIsMobile] = useState(false);
+  const [isChatActive, setIsChatActive] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(500);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
   // Set mobile state after mount to avoid hydration mismatch
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      const isMobileView = window.innerWidth < 1024;
+      setIsMobile(isMobileView);
+      
+      // Reset panel width when switching to mobile
+      if (isMobileView) {
+        setPanelWidth(500);
+      }
     };
     
     // Set initial value
@@ -91,8 +110,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
   
-  // Use mobile state on mobile, desktop state on desktop
-  const isOpen = isMobile ? showRightPanel : true;
+  // Use mobile state on mobile, always open on desktop (handled by isCollapsed)
   
   // Handle user selection from search results and start direct message
   const handleUserSelect = useCallback(async (userId: string, username: string) => {
@@ -208,8 +226,8 @@ export function RightPanel({ className, children }: RightPanelProps) {
 
     // Show different views based on currentView
     switch (currentView) {
-      case 'chat':
-        return <ChatView />;
+      case 'messages':
+        return <ChatView onActiveConversationChange={setIsChatActive} />;
       case 'posts':
         return <Posts />;
       case 'stats':
@@ -223,29 +241,112 @@ export function RightPanel({ className, children }: RightPanelProps) {
     }
   }
 
+  // Handle mouse move for resizing
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    // Calculate new width (subtract from right edge of screen)
+    const newWidth = window.innerWidth - e.clientX;
+    const minWidth = 400; // Minimum width
+    const maxWidth = window.innerWidth * 0.8; // Maximum 80% of viewport width
+    
+    // Clamp the width between min and max
+    const clampedWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+    setPanelWidth(clampedWidth);
+  }, [isResizing]);
+  
+  // Handle mouse up to stop resizing
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.body.style.pointerEvents = '';
+  }, []);
+  
+  // Add/remove event listeners for resizing
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.body.style.pointerEvents = 'none';
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
+  
+  // Expose panel width via CSS variable so pages can respond
+  useEffect(() => {
+    let width = 0;
+    if (isMobile) {
+      width = showRightPanel ? window.innerWidth : 0;
+    } else {
+      width = isCollapsed ? 48 : panelWidth; // 12 tailwind => 3rem => 48px
+    }
+    document.documentElement.style.setProperty('--right-panel-width', `${width}px`);
+  }, [isMobile, showRightPanel, isCollapsed, panelWidth]);
+
+  // Handle window resize to ensure panel doesn't go off screen
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (panelWidth > window.innerWidth * 0.8) {
+        setPanelWidth(window.innerWidth * 0.8);
+      }
+    };
+    
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, [panelWidth]);
+
   return (
-    <div className={cn(
-      "fixed right-0 top-0 z-40 flex h-[100dvh] border-l border-border bg-background transition-all duration-300 ease-in-out",
-      // Full width on mobile, 500px on desktop
-      "w-full max-w-full lg:w-[500px] lg:min-w-[500px] lg:max-w-[500px]",
-      // When showing user profile, take full width but with max width
-      selectedUser && "w-full max-w-full lg:mx-auto lg:max-w-[500px]",
-      // Always show on large screens, controlled by mobile state on smaller screens
-      "lg:fixed lg:right-0 lg:top-0 lg:bottom-0 lg:transform lg:translate-x-0",
-      // Hide on small screens when not shown
-      !isOpen && "max-lg:translate-x-full",
-      // Ensure content is not hidden behind mobile browser UI
-      "pb-[env(safe-area-inset-bottom)]",
-      className
-    )} style={{
-      boxShadow: '-4px 0 10px rgba(0, 0, 0, 0.05)'
-    }}
-    onClick={() => {
-      // Close dropdown when clicking anywhere in the panel
-      setIsDropdownOpen(false);
-    }}>
+    <div 
+      className={cn(
+        "fixed right-0 top-0 z-40 flex h-[100dvh] border-l border-border bg-background transition-all duration-300 ease-in-out",
+        // Full width on mobile, custom width on desktop
+        isMobile 
+          ? (showRightPanel ? 'w-full' : 'w-0') 
+          : (isCollapsed ? 'w-12' : ''),
+        // When showing user profile, take full width but with max width
+        
+        // Hide on small screens when not shown
+        isMobile && !showRightPanel && "translate-x-full",
+        // Ensure content is not hidden behind mobile browser UI
+        "pb-[env(safe-area-inset-bottom)]",
+        className
+      )} 
+      style={{
+        boxShadow: '-4px 0 10px rgba(0, 0, 0, 0.05)',
+        // Apply dynamic width when not on mobile and not collapsed
+        ...(!isMobile && !isCollapsed && { width: `${panelWidth}px` }),
+        // Ensure smooth transitions
+        transition: isResizing ? 'none' : 'width 0.2s ease-out, transform 0.3s ease-out'
+      }}
+    >
+      {/* Resize Handle - Only show on desktop when not collapsed */}
+      {!isMobile && !isCollapsed && (
+        <div 
+          ref={resizeRef}
+          className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-20"
+          onMouseDown={() => setIsResizing(true)}
+        />
+      )}
+      
+      {/* Collapse/Expand Button - Only show on desktop */}
+      {!isMobile && (
+        <button
+          onClick={toggleCollapse}
+          className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-16 bg-background border border-r-0 border-border rounded-l-lg flex items-center justify-center hover:bg-accent transition-colors z-10"
+          aria-label={isCollapsed ? 'Expand panel' : 'Collapse panel'}
+        >
+          {isCollapsed ? '>' : '<'}
+        </button>
+      )}
       {/* Vertical Tabs - Hide when showing user profile */}
-      {!selectedUser && (
+      {!selectedUser && (currentView !== 'messages' || !isChatActive) && (
         <div className="w-10 flex-shrink-0 bg-background pt-4">
           <nav className="flex flex-col items-start space-y-4 pl-2">
             <button
@@ -271,12 +372,12 @@ export function RightPanel({ className, children }: RightPanelProps) {
             </button>
             
             <button
-              onClick={() => openPanel('chat')}
+              onClick={() => openPanel('messages')}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
-                currentView === 'chat' ? 'text-foreground' : ''
+                currentView === 'messages' ? 'text-foreground' : ''
               }`}
             >
-              <span className={`relative ${currentView === 'chat' ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
+              <span className={`relative ${currentView === 'messages' ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
                 Messages
               </span>
             </button>
@@ -286,8 +387,8 @@ export function RightPanel({ className, children }: RightPanelProps) {
       
       {/* Content Area - Allow vertical scrolling with proper spacing */}
       <div className={cn(
-        "flex-1 flex flex-col h-full overflow-y-auto relative",
-        selectedUser && "w-full"
+         `${selectedUser || (currentView === 'messages' && isChatActive) ? '' : 'flex-1'} flex flex-col h-full overflow-y-auto relative`,
+        
       )} style={{
         // Ensure smooth scrolling on iOS
         WebkitOverflowScrolling: 'touch',
@@ -296,7 +397,7 @@ export function RightPanel({ className, children }: RightPanelProps) {
         paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 2rem))'
       }}>
         {/* Search and Action Buttons - Hidden when viewing user profile */}
-        {!selectedUser && (
+        {!selectedUser && (currentView !== 'messages' || !isChatActive) && (
           <div className="absolute right-4 top-4 z-10">
             <div className="flex items-center gap-2">
               <button
@@ -413,16 +514,17 @@ export function RightPanel({ className, children }: RightPanelProps) {
         
         {/* Main Content */}
         <div className="h-full overflow-hidden">
-          {renderView()}
+          {!isCollapsed && renderView()}
         </div>
       </div>
       
       {/* Create Post Modal */}
       <CreatePostModal 
-        isOpen={isPostModalOpen} 
+        isOpen={isPostModalOpen && !isCollapsed} 
         onClose={() => setIsPostModalOpen(false)}
-        onPostCreated={(postData) => {
-          console.log('New post created:', postData);
+        // @ts-expect-error - The component's type definition is incorrect, but it works
+        onSubmit={(post: { type: string; content: string | File | null }) => {
+          console.log('New post created:', post);
           // Handle the post submission (e.g., upload to server, update state, etc.)
         }}
       />

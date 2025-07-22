@@ -216,6 +216,7 @@ export function RoadmapVisualization({
             {/* Timeline Content */}
             <BackupRoadmapTimeline 
               milestones={roadmap?.milestones || []}
+              isEditable={isEditable}
               onTaskStatusChange={isEditable ? handleTaskStatusChange : undefined}
             />
           </div>

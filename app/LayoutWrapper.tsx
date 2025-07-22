@@ -9,12 +9,13 @@ import { SettingsModal } from '@/components/settings/settings-modal';
 import { HelpModal } from '@/components/help/help-modal';
 import Head from 'next/head';
 import { ChatProvider } from '@/context/chat-context';
+import { RightPanel } from "@/components/right-panel";
+
+import React from "react";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isHome = pathname === '/';
-  const isUpgradePage = pathname?.startsWith('/upgrade');
-  const isDashboard = pathname?.startsWith('/dashboard');
   
   // User and modal states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -22,6 +23,16 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const [isCodeAccordionOpen, setIsCodeAccordionOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const { user, isLoading: userLoading } = useAuth();
+
+  // Cleanup any body styles on unmount
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.body.style.pointerEvents = '';
+    };
+  }, []);
 
   // Handle mobile viewport resizing when keyboard appears
   useEffect(() => {
@@ -54,73 +65,76 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  if (isHome || isUpgradePage) {
+  if (isHome) {
     return <>{children}</>;
   }
 
   return (
     <ChatProvider>
-      <div className="flex-1 flex flex-col min-h-0 bg-background">
-      <Head>
-        <title>BOS Platform</title>
-        <meta name="description" content="BOS Platform" />
-      </Head>
-      
-      {/* Main content area - Single scroll container */}
-      <div className="flex-1 flex min-h-0">
-        {/* Desktop Sidebar - Only shown on lg screens and up */}
-        <div className="h-full">
-          <Sidebar className="hidden lg:block" />
-        </div>
-        
-        {/* Main content */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Fixed header */}
-          <Navbar
-            user={user}
-            userLoading={userLoading}
-            isCodeAccordionOpen={isCodeAccordionOpen}
-            onCodeAccordionChange={setIsCodeAccordionOpen}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onOpenHelp={() => setIsHelpOpen(true)}
-            fullWidth={!isDashboard}
-          />
+      <div className="flex flex-col min-h-screen bg-background">
+        <Head>
+          <title>BOS Platform</title>
+          <meta name="description" content="BOS Platform" />
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        </Head>
 
-          {/* Scrollable content area */}
-          <div 
-            ref={mainRef}
-            className="flex-1 min-h-0 overflow-y-auto"
-            style={{
-              paddingBottom: 'calc(env(safe-area-inset-bottom) + 4rem)'
-            }}
-          >
-            <div className="w-full p-4 md:p-6 lg:pl-24 transition-all duration-300 group-has-[.sidebar:hover]:lg:pl-[13rem]">
-              {children}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Desktop Sidebar - Only shown on lg screens and up */}
+          <div className="hidden lg:block">
+            <Sidebar />
+          </div>
+          
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Fixed header */}
+            <Navbar
+              user={user}
+              userLoading={userLoading}
+              isCodeAccordionOpen={isCodeAccordionOpen}
+              onCodeAccordionChange={setIsCodeAccordionOpen}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenHelp={() => setIsHelpOpen(true)}
+            />
+
+            {/* Scrollable content area */}
+            <div 
+              ref={mainRef}
+              className="flex-1 overflow-y-auto"
+              style={{
+                paddingBottom: 'calc(env(safe-area-inset-bottom) + 4rem)',
+                paddingRight: 'var(--right-panel-width)'
+              }}
+            >
+              <div className="w-full p-4 md:p-6 lg:pl-8 transition-all duration-300">
+                {children}
+              </div>
             </div>
           </div>
+          
+          {/* Right Panel - Handles its own resizing */}
+          <RightPanel />
         </div>
-      </div>
       
-      {/* Mobile bottom navigation */}
-      <div className="lg:hidden">
-        <Sidebar />
+        {/* Mobile bottom navigation - Only show when user is logged in */}
+        {user && !isHome && (
+          <div className="lg:hidden">
+            <Sidebar />
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        <SettingsModal 
+          open={isSettingsOpen} 
+          onOpenChange={setIsSettingsOpen} 
+          user={user} 
+        />
+        
+        {/* Help Modal */}
+        <HelpModal 
+          open={isHelpOpen} 
+          onOpenChange={setIsHelpOpen} 
+        />
       </div>
-      
-      {/* Modals */}
-      {user && (
-        <>
-          <SettingsModal
-            user={user}
-            open={isSettingsOpen}
-            onOpenChange={setIsSettingsOpen}
-          />
-          <HelpModal
-            open={isHelpOpen}
-            onOpenChange={setIsHelpOpen}
-          />
-        </>
-      )}
-    </div>
     </ChatProvider>
   );
 }

@@ -4,8 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, BookOpen, Book, Users } from 'lucide-react';
-import { RightPanel } from '@/components/right-panel/right-panel';
-import { RightPanelProvider } from '@/components/right-panel/context/right-panel-context';
 import { useMobileRightPanel } from '@/context/mobile-right-panel-context';
 
 type SidebarItem = {
@@ -129,18 +127,7 @@ export function Sidebar({ className }: SidebarProps) {
         </div>
       </div>
       
-      {/* Right Panel for Mobile */}
-      <div className={`lg:hidden fixed inset-0 z-[100] transition-transform duration-300 transform ${
-        showRightPanel ? 'translate-x-0' : 'translate-x-full'
-      }`}>
-        <RightPanelProvider>
-          <RightPanel>
-            <div className="h-full">
-              {/* Content will be rendered by the RightPanel component */}
-            </div>
-          </RightPanel>
-        </RightPanelProvider>
-      </div>
+      {/* Right Panel for Mobile - Now handled in LayoutWrapper */}
     </>
   );
 }

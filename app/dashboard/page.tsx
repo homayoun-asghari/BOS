@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { RoadmapVisualization } from "@/components/dashboard/roadmap-visualization";
-import { RightPanelProvider, RightPanel } from "@/components/right-panel";
 import { useRefresh } from "@/contexts/RefreshContext";
-import { ChatView } from "@/components/chat/chat-view";
-import { PostsView } from "@/components/right-panel/components/posts-view";
-import { StatsView } from "@/components/right-panel/components/stats-view";
-import { useRightPanel } from "@/components/right-panel/context/right-panel-context";
 import { supabase } from '@/lib/supabase/client';
 // Removed unused import
 import { toast } from 'sonner';
@@ -33,7 +28,6 @@ interface Roadmap {
 }
 
 function DashboardContent() {
-  const { currentView } = useRightPanel();
   // Removed unused initializeNewRoadmap function
   const [roadmap, setRoadmap] = useState<Roadmap | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -447,17 +441,16 @@ function DashboardContent() {
   }
 
   return (
-    <RightPanelProvider>
-      <div className="flex flex-1 flex-col min-h-0 bg-background">
-        <div className="flex flex-1 min-h-0">
-          <div className="relative flex flex-1 min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto lg:pr-[500px]">
-              <div className="p-4 sm:p-6">
-                {loading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                  </div>
-                ) : !roadmap ? (
+    <div className="flex flex-1 flex-col min-h-0 bg-background">
+      <div className="flex flex-1 min-h-0">
+        <div className="relative flex flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              {loading ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                </div>
+              ) : !roadmap ? (
                   <div className="mt-8 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 p-12 text-center">
                     {hasCompletedRoadmaps ? (
                       <>
@@ -720,25 +713,13 @@ function DashboardContent() {
                   />
                 )}
               </div>
-              {/* FAB removed as per request */}
             </div>
           </div>
-
-          <RightPanel>
-            {currentView === 'chat' && <ChatView />}
-            {currentView === 'posts' && <PostsView />}
-            {currentView === 'stats' && <StatsView />}
-          </RightPanel>
         </div>
       </div>
-    </RightPanelProvider>
   );
 }
 
 export default function DashboardPage() {
-  return (
-    <RightPanelProvider>
-      <DashboardContent />
-    </RightPanelProvider>
-  );
+  return <DashboardContent />;
 }

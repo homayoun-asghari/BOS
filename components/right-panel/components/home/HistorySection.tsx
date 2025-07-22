@@ -163,6 +163,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
           {completedRoadmaps.map((roadmap) => (
             <div key={roadmap.id} className="rounded-lg overflow-hidden">
                 <RoadmapVisualization
+                  isEditable={false}
                   roadmap={{
                     id: roadmap.id || '',
                     final_goal: roadmap.final_goal || 'Completed Roadmap',
@@ -222,7 +223,6 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
                 onCompleteConfirm={asyncNoop}
                 onCompletionDismiss={noop}
                 showActions={false}
-                isEditable={false}
                 onTaskStatusChange={handleTaskStatusChange}
               />
             </div>

@@ -32,16 +32,105 @@ export interface MilestoneType {
 
 interface BackupRoadmapTimelineProps {
   milestones: MilestoneType[];
+  isEditable?: boolean;
   onTaskStatusChange?: (taskId: string, status: 'todo' | 'in_progress' | 'done' | 'completed', priority?: 'low' | 'medium' | 'high') => Promise<boolean>;
 }
 
+import { supabase } from '@/lib/supabase/client';
+
 export function BackupRoadmapTimeline({ 
   milestones, 
+  isEditable = true,
   onTaskStatusChange 
 }: BackupRoadmapTimelineProps) {
+  const [milestonesState, setMilestonesState] = useState<MilestoneType[]>([]);
+
+  // Sync local state when prop changes
+  useEffect(() => {
+    setMilestonesState(milestones.map(m => ({ ...m, tasks: [...(m.tasks || [])] })));
+  }, [milestones]);
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
   const [pulsingTaskId, setPulsingTaskId] = useState<string | null>(null);
   const [isPulsing, setIsPulsing] = useState(true);
+
+  // Drag handlers
+  // Persist functions
+  const persistMilestonesOrder = async (updated: MilestoneType[]) => {
+    await Promise.all(updated.map(m =>
+      supabase.from('milestones').update({ order_index: m.order_index }).eq('id', m.id)
+    ));
+  };
+  const persistTasksOrder = async (updatedMilestones: MilestoneType[]) => {
+    const taskUpdates: Promise<any>[] = [];
+    updatedMilestones.forEach(m => {
+      m.tasks.forEach(t => {
+        taskUpdates.push(
+          supabase.from('tasks').update({ order_index: t.order_index, milestone_id: m.id }).eq('id', t.id)
+        );
+      });
+    });
+    await Promise.all(taskUpdates);
+  };
+
+  const handleMilestoneDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.dataTransfer.setData('type', 'milestone');
+    e.dataTransfer.setData('mIndex', index.toString());
+  };
+
+  const handleMilestoneDrop = (e: React.DragEvent<HTMLLIElement>, dropIndex: number) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type');
+    if (type !== 'milestone') return;
+    const dragIndex = parseInt(e.dataTransfer.getData('mIndex'));
+    if (dragIndex === dropIndex) return;
+    setMilestonesState(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(dragIndex, 1);
+      updated.splice(dropIndex, 0, moved);
+      const result = updated.map((m, idx) => ({ ...m, order_index: idx }));
+      if(isEditable) persistMilestonesOrder(result);
+      return result;
+    });
+  };
+
+  const handleTaskDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    milestoneId: string,
+    taskIndex: number
+  ) => {
+    e.dataTransfer.setData('type', 'task');
+    e.dataTransfer.setData('milestoneId', milestoneId);
+    e.dataTransfer.setData('tIndex', taskIndex.toString());
+  };
+
+  const handleTaskDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    milestoneId: string,
+    dropTaskIndex: number | null // null means add to end
+  ) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type');
+    if (type !== 'task') return;
+    const fromMilestoneId = e.dataTransfer.getData('milestoneId');
+    const dragIndex = parseInt(e.dataTransfer.getData('tIndex'));
+
+    setMilestonesState(prev => {
+      const copy = prev.map(m => ({ ...m, tasks: [...(m.tasks || [])] }));
+      const fromMilestone = copy.find(m => m.id === fromMilestoneId);
+      const toMilestone = copy.find(m => m.id === milestoneId);
+      if (!fromMilestone || !toMilestone) return prev;
+      const [task] = fromMilestone.tasks.splice(dragIndex, 1);
+      if (dropTaskIndex === null) {
+        toMilestone.tasks.push(task);
+      } else {
+        toMilestone.tasks.splice(dropTaskIndex, 0, task);
+      }
+      // update order_index values
+      copy.forEach(m => m.tasks.forEach((t, idx) => t.order_index = idx));
+      if(isEditable) persistTasksOrder(copy);
+      return copy;
+    });
+  };
 
   // Debug log to check the incoming milestones and tasks
   useEffect(() => {
@@ -202,9 +291,9 @@ export function BackupRoadmapTimeline({
   return (
     <div className="w-full">
       <ol className="relative border-l-2 border-gray-200 dark:border-gray-600 space-y-8 ml-2">
-        {milestones
+        {milestonesState
           .sort((a, b) => a.order_index - b.order_index)
-          .map((milestone) => {
+          .map((milestone, idx) => {
             // Sort tasks for this milestone by due date and then by priority
             const sortedTasks = milestone.tasks ? [...milestone.tasks].sort((a, b) => {
               // First, sort by due date
@@ -226,7 +315,10 @@ export function BackupRoadmapTimeline({
             }) : [];
             
             return (
-              <li key={`milestone-${milestone.id}`} className="ml-4">
+              <li key={`milestone-${milestone.id}`} className="ml-4"
+                  onDragOver={isEditable ? (e)=>e.preventDefault() : undefined}
+                  onDrop={isEditable ? (e)=>handleMilestoneDrop(e, idx) : undefined}
+                >
                 <div className="absolute -left-2 -translate-y-1/2">
                   <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
                 </div>
@@ -235,6 +327,8 @@ export function BackupRoadmapTimeline({
                     <div className="flex-1">
                       <div 
                         className="flex items-center cursor-pointer group"
+                        draggable={isEditable}
+                        onDragStart={isEditable ? (e)=>handleMilestoneDragStart(e, idx) : undefined}
                         onClick={() => toggleMilestone(milestone.id)}
                       >
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
@@ -281,9 +375,13 @@ export function BackupRoadmapTimeline({
                 {/* Tasks for this milestone */}
                 {expandedMilestones[milestone.id] && sortedTasks.length > 0 && (
                   <div className="mt-2 ml-4 space-y-2">
-                    {sortedTasks.map((task) => (
+                    {sortedTasks.map((task, taskIdx) => (
                       <div 
                         key={`task-${task.id}`}
+                        onDragOver={isEditable ? (e)=>e.preventDefault() : undefined}
+                        onDrop={isEditable ? (e)=>handleTaskDrop(e, milestone.id, taskIdx) : undefined}
+                        draggable={isEditable}
+                        onDragStart={isEditable ? (e)=>handleTaskDragStart(e, milestone.id, taskIdx) : undefined}
                         className={cn(
                           "relative pl-6 transition-all duration-1000 ease-in-out py-2",
                           pulsingTaskId === task.id && isPulsing && "opacity-70"
@@ -319,6 +417,8 @@ export function BackupRoadmapTimeline({
                         </div>
                       </div>
                     ))}
+                    {/* drop zone at end */}
+                    <div className="h-2" onDragOver={isEditable ? (e)=>e.preventDefault() : undefined} onDrop={(e)=>handleTaskDrop(e, milestone.id, null)} />
                   </div>
                 )}
               </li>

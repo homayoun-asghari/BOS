@@ -8,6 +8,7 @@ import { MobileRightPanelProvider } from '@/context/mobile-right-panel-context';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { ProfileProvider } from '@/context/profile-context';
 import { RefreshProvider } from '@/contexts/RefreshContext';
+import { RightPanelProvider } from "@/components/right-panel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,9 +42,11 @@ export default function RootLayout({
             <ProfileProvider>
               <RefreshProvider>
                 <MobileRightPanelProvider>
-                  <LayoutWrapper>
-                    {children}
-                  </LayoutWrapper>
+                  <RightPanelProvider>
+                    <LayoutWrapper>
+                      {children}
+                    </LayoutWrapper>
+                  </RightPanelProvider>
                 </MobileRightPanelProvider>
               </RefreshProvider>
             </ProfileProvider>

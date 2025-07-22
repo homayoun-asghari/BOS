@@ -2,11 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Resizable panel styles */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  margin-left: -6px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 50;
+  transition: all 0.15s ease;
+  opacity: 0;
+  touch-action: none;
+}
+
+/* Show handle on hover or when resizing */
+.group:hover .resize-handle,
+.resizing .resize-handle {
+  opacity: 1;
+}
+
+/* Active handle state */
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: transparent;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 1px;
+}
+
+.group:hover .resize-handle::after,
+.resizing .resize-handle::after {
+  background-color: #3b82f6; /* blue-500 */
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.resize-handle:active::after,
+.resizing .resize-handle::after {
+  background-color: #2563eb; /* blue-600 */
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.15);
+  width: 3px;
+  margin-left: -0.5px;
+}
+
+/* Prevent text selection during resize */
+body.resizing {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  cursor: col-resize !important;
+}
+
+/* Smooth transitions for panel resizing */
+.right-panel {
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1), 
+              transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+  will-change: width, transform;
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
+/* Optimize performance during resize */
+.resizing .right-panel,
+.resizing .main-content {
+  transition: none;
+  /* Improve performance during resize */
+  contain: strict;
+  will-change: width, transform;
+}
+
+/* Ensure smooth scrolling in the panel */
+.right-panel > div {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Improve resize handle hit area on touch devices */
+@media (pointer: coarse) {
+  .resize-handle {
+    width: 20px;
+    margin-left: -10px;
+  }
+}
+
 /* Mobile viewport fixes */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    -webkit-tap-highlight-color: transparent;
     height: 100%;
   }
   
@@ -168,29 +257,26 @@
 
 /* ========== 🌞 Light Theme ========== */
 :root {
-  /* Brand colors */
-  --arsenic: 219 13% 26%;          /* #3B444B -> 0 0% 3% */
-  --baby-powder: 60 100% 99%;      /* #FEFEFA -> 0 0% 96% */ 
-
-  /* Core tokens */
-  --background: var(--baby-powder);
-  --foreground: var(--arsenic);
-  --primary: var(--arsenic);
-  --primary-foreground: var(--baby-powder);
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
   --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: var(--arsenic);
+  --secondary-foreground: 240 5.9% 10%;
   --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 5% 50%;
+  --muted-foreground: 240 3.8% 46.1%;
   --accent: 240 4.8% 95.9%;
-  --accent-foreground: var(--arsenic);
+  --accent-foreground: 240 5.9% 10%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
   --border: 240 5.9% 90%;
   --input: 240 5.9% 90%;
   --ring: 240 5% 64.9%;
   --radius: 0.5rem;
-
-  /* SVG Colors (MODIFIED FOR VISIBILITY & BLENDING) */
   --svg-mountain-color: var(--foreground); /* Mountain: visible against background */
   --svg-ant-color: var(--background);     /* Ant: blends with background */
 
@@ -212,70 +298,65 @@
 
 /* ========== 🌚 Dark Theme ========== */
 .dark {
-  --background: var(--arsenic);
-  --foreground: var(--baby-powder);
-  --primary: var(--baby-powder); /* This is the foreground in dark mode */
-  --primary-foreground: var(--arsenic); /* This is the background in dark mode */
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
   --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: var(--baby-powder);
+  --secondary-foreground: 0 0% 98%;
   --muted: 240 3.7% 15.9%;
   --muted-foreground: 240 5% 64.9%;
   --accent: 240 3.7% 15.9%;
-  --accent-foreground: var(--baby-powder);
+  --accent-foreground: 0 0% 98%;
   --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 85.7% 97.3%;
+  --destructive-foreground: 0 0% 98%;
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
   --ring: 240 4.9% 83.9%;
-
-  /* SVG Colors (MODIFIED FOR VISIBILITY & BLENDING IN DARK MODE) */
-  --svg-mountain-color: var(--foreground); /* Mountain is light in dark mode */
-  --svg-ant-color: var(--background);     /* Ant is dark in dark mode (blends with BG) */
-
+  --svg-mountain-color: var(--background);
+  --svg-ant-color: var(--foreground);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 /* ========== 🧩 Base Styles ========== */
 /* Knowledge Graph Styles */
 .note-graph-container {
-  background-color: hsl(var(--baby-powder));
+  background-color: hsl(var(--background));
   transition: background-color 0.3s ease;
 }
 
 /* Dark mode styles */
 .dark .note-graph-container {
-  background-color: hsl(var(--arsenic));
+  background-color: hsl(var(--background));
 }
 
 .note-graph-node {
-  fill: hsl(0, 0%, 20%);
-  stroke: hsl(0, 0%, 10%);
+  fill: hsl(var(--muted-foreground));
+  stroke: hsl(var(--muted-foreground) / 0.8);
   stroke-width: 1.5px;
   transition: all 0.2s ease;
 }
 
 .note-graph-node:hover {
-  fill: hsl(0, 0%, 10%) !important;
-  stroke: hsl(0, 0%, 5%) !important;
+  fill: hsl(var(--foreground)) !important;
+  stroke: hsl(var(--foreground) / 0.9) !important;
   stroke-width: 2px;
 }
 
 /* Ensure text remains visible on dark nodes */
-.note-graph-node text {
-  fill: hsl(0, 0%, 90%);
-  font-size: 12px;
-  font-weight: 500;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  pointer-events: none;
-}
-
 .note-graph-node text {
   fill: hsl(var(--foreground));
   font-size: 12px;
@@ -300,7 +381,7 @@
 .note-graph-link g.animation > *,
 .note-graph-link g.animation > * > *,
 .note-graph-link g.animation > * > * > * {
-  stroke: hsla(0, 0%, 90%, 0.8) !important;
+  stroke: hsl(var(--muted-foreground) / 0.8) !important;
   stroke-width: 1.5px !important;
   stroke-dasharray: 5, 5 !important;
   animation: linkAnimation 1.5s linear infinite !important;
@@ -316,15 +397,15 @@
   }
 }
 
-/* Debug styles */
+/* Debug styles - Only active in development */
 .note-graph-link * {
-  outline: 1px solid rgba(255, 0, 0, 0.2) !important;
+  outline: 1px solid hsl(var(--destructive) / 0.2) !important;
 }
 
 /* Target specific animation elements */
 .note-graph-link g.animation,
 .note-graph-link .link-animation {
-  outline: 2px solid rgba(0, 255, 0, 0.5) !important;
+  outline: 2px solid hsl(var(--primary) / 0.5) !important;
 }
 
 /* Target the actual path/line elements */
@@ -332,7 +413,7 @@
 .note-graph-link g.animation line,
 .note-graph-link .link-animation path,
 .note-graph-link .link-animation line {
-  outline: 2px solid rgba(0, 0, 255, 0.5) !important;
+  outline: 2px solid hsl(var(--accent) / 0.5) !important;
 }
 
 .note-graph-link:hover {
