@@ -63,7 +63,7 @@ AS $$
     ) as unread_count
   FROM chat_rooms r
   JOIN chat_participants cp ON r.id = cp.room_id
-  WHERE cp.user_id = user_id
+  WHERE cp.user_id = user_id AND cp.left_at IS NULL
   GROUP BY r.id, r.name, r.is_group, r.created_at, r.updated_at
   ORDER BY (
     SELECT m.created_at

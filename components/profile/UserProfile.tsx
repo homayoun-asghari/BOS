@@ -11,6 +11,8 @@ import { useProfile } from "@/context/profile-context";
 import { format } from 'date-fns';
 import { RoadmapVisualization } from '@/components/dashboard/roadmap-visualization';
 import { StoredProcedureRoadmap, toRoadmap } from '@/types/roadmap';
+import { useChatContext } from '@/context/chat-context';
+import { useRightPanelControls } from '@/components/right-panel/right-panel';
 
 // Define the Post type since it's not imported
 interface Post {
@@ -29,8 +31,10 @@ interface UserProfileProps {
 export function UserProfile({ className, onClose }: UserProfileProps) {
   const router = useRouter();
   const { profile, stats, posts, currentRoadmap, completedRoadmaps, publicNotes, loading, error, setSelectedUser } = useProfile();
+  const { startDirectMessage, setActiveConversation } = useChatContext();
+  const { openPanel } = useRightPanelControls();
   console.log('UserProfile - Received currentRoadmap:', currentRoadmap);
-  const [activeTab, setActiveTab] = useState<'roadmap' | 'posts' | 'notes'>('roadmap');
+  const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'notes'>('posts');
 
   // Handle back navigation
   const handleBack = () => {
@@ -240,7 +244,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
   };
 
   // Function to handle tab change
-  const handleTabChange = (value: string) => {
+  const handleTabChange = (value: 'posts' | 'roadmap' | 'notes') => {
     setActiveTab(value);
   };
 
@@ -411,11 +415,44 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
                     <button 
                       className="p-1 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                       aria-label="Send direct message"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        // TODO: Implement direct message functionality
-                        console.log('Direct message clicked for user:', profile.username);
+                        console.log('DM button clicked');
+                        if (!profile?.id) {
+                          console.log('No profile ID');
+                          return;
+                        }
+                        
+                        try {
+                          console.log('Starting direct message with user:', profile.id);
+                          // Start a direct message conversation first
+                          const conversation = await startDirectMessage(profile.id);
+                          console.log('startDirectMessage completed, conversation:', conversation);
+                          
+                          if (!conversation) {
+                            console.error('Failed to start direct message - no conversation returned');
+                            return;
+                          }
+                          
+                          console.log('Opening chat panel for conversation:', conversation.id);
+                          // Clear selected user so UserProfile view closes
+                          setSelectedUser(null);
+                          // Set active conversation via context so ChatView picks it up
+                          setActiveConversation(conversation.id);
+                          // Then open the chat panel to show the conversation
+                          openPanel('chat');
+                          
+                          // Force a small delay to ensure state updates
+                          setTimeout(() => {
+                            console.log('Current active conversation should be set to:', conversation.id);
+                            console.log('Current conversations in state should include new conversation');
+                          }, 100);
+                          
+                        } catch (error) {
+                          console.error('Error in DM button click handler:', error);
+                        }
                       }}
+                      disabled={!profile?.id}
                     >
                       <MessageIcon className="w-4 h-4" />
                     </button>

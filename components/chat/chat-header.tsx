@@ -14,6 +14,30 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ conversation, currentUserId, className, onBack }: ChatHeaderProps) {
+  console.log('[ChatHeader] Props:', {
+    conversation: {
+      ...conversation,
+      participants: conversation?.participants?.map(p => ({
+        id: p.id,
+        username: p.username,
+        display_name: p.display_name,
+        hasAvatar: !!p.avatar_url
+      }))
+    },
+    currentUserId,
+    className
+  });
+  console.log('[ChatHeader] Rendering with:', {
+    conversationId: conversation?.id,
+    currentUserId,
+    hasOnBack: !!onBack,
+    isGroup: conversation?.is_group
+  });
+  
+  const handleBack = () => {
+    console.log('[ChatHeader] Back button clicked');
+    onBack?.();
+  };
   if (!conversation) {
     return (
       <div className={cn('p-4', className)}>
@@ -24,16 +48,32 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
 
   // For direct messages, show the other participant's info
   const otherParticipant = !conversation.is_group
-    ? conversation.participants.find((p) => p.id !== currentUserId)
+    ? conversation.participants?.find((p) => p.id !== currentUserId) || null
     : null;
 
-  const displayName = conversation.is_group
+  console.log('[ChatHeader] Conversation data:', {
+    conversationId: conversation.id,
+    isGroup: conversation.is_group,
+    name: conversation.name,
+    participants: conversation.participants,
+    currentUserId,
+    otherParticipant
+  });
+
+  const displayName = (conversation.is_group && conversation.name)
     ? conversation.name
-    : otherParticipant?.username || 'Unknown';
+    : otherParticipant?.display_name || otherParticipant?.username || 'Unknown';
 
   const avatarUrl = conversation.is_group
-    ? conversation.media_urls?.[0]
-    : otherParticipant?.avatar_url;
+    ? conversation.media_urls?.[0] || undefined
+    : otherParticipant?.avatar_url || undefined;
+    
+  const avatarFallback = displayName
+    .split(' ')
+    .map((n) => n[0] || '')
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
 
   return (
     <div className={cn('p-4', className)}>
@@ -43,23 +83,22 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
             variant="ghost"
             size="icon"
             className="h-8 w-8 -ml-2 mr-1"
-            onClick={onBack}
+            onClick={handleBack}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
         <Avatar className="h-10 w-10">
-          <AvatarImage src={avatarUrl || ''} alt={displayName} />
-          <AvatarFallback>
-            {displayName
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
-              .toUpperCase()}
-          </AvatarFallback>
+          <AvatarImage src={avatarUrl} alt={displayName} />
+          <AvatarFallback>{avatarFallback}</AvatarFallback>
         </Avatar>
         <div className="flex-1">
           <h2 className="font-semibold">{displayName}</h2>
+          {!conversation.is_group && otherParticipant?.username && (
+            <p className="text-sm text-muted-foreground">
+              @{otherParticipant.username}
+            </p>
+          )}
           {conversation.is_group && (
             <p className="text-sm text-muted-foreground">
               {conversation.participants.length} participants

@@ -45,21 +45,42 @@ export function useChat(): UseChatReturn {
   const [isSearching, setIsSearching] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const [activeConversation, _setActiveConversation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const subscriptionRef = useRef<(() => void) | null>(null);
+  const initialMount = useRef(true);
 
   // Get current conversation details
   const currentConversation = useMemo<Conversation | null>(() => {
-    if (!activeConversation) return null;
-    return conversations.find(c => c.id === activeConversation) || null;
+    console.log('[useChat] Finding current conversation:', { 
+      activeConversation, 
+      conversationIds: conversations.map(c => c.id) 
+    });
+    
+    if (!activeConversation) {
+      console.log('[useChat] No active conversation');
+      return null;
+    }
+    
+    const found = conversations.find(c => c.id === activeConversation) || null;
+    console.log('[useChat] Found conversation:', found ? found.id : 'not found');
+    return found;
   }, [activeConversation, conversations]);
+  
+  // Log when active conversation changes
+  useEffect(() => {
+    console.log('[useChat] Active conversation updated:', {
+      activeConversation,
+      hasCurrentConversation: !!currentConversation,
+      conversationCount: conversations.length
+    });
+  }, [activeConversation, currentConversation, conversations]);
 
   // Fetch user's conversations
   const fetchConversations = useCallback(async (): Promise<Conversation[]> => {
-    if (isLoading || !userId) return conversations; // Prevent concurrent fetches
+    if (!userId) return [];
     
     console.log('Fetching conversations...');
     setIsLoading(true);
@@ -68,6 +89,18 @@ export function useChat(): UseChatReturn {
     try {
       const userConversations = await chatService.getConversations(userId);
       setConversations(userConversations);
+      
+      // Activate pending conversation if stored
+      if (typeof window !== 'undefined') {
+        const pendingId = localStorage.getItem('pendingConversationId');
+        if (pendingId) {
+          const exists = userConversations.some(c => c.id === pendingId);
+          if (exists) {
+            setActiveConversation(pendingId);
+          }
+          localStorage.removeItem('pendingConversationId');
+        }
+      }
       return userConversations;
     } catch (err) {
       const error = err as Error & { details?: string; hint?: string; code?: string };
@@ -82,7 +115,20 @@ export function useChat(): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [userId, isLoading, conversations]);
+  }, [userId]);
+
+  // Initial fetch of conversations when component mounts or userId changes
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Only fetch on initial mount or when userId changes
+    if (initialMount.current || userId) {
+      if (initialMount.current) {
+        initialMount.current = false;
+      }
+      fetchConversations();
+    }
+  }, [userId]); // Removed fetchConversations and isLoading from deps
 
   // Fetch messages for a conversation
   const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
@@ -112,35 +158,62 @@ export function useChat(): UseChatReturn {
     console.log('Sending message to conversation:', activeConversation);
     
     try {
+      console.log('Calling chatService.sendMessage with:', { 
+        roomId: activeConversation, 
+        userId, 
+        content, 
+        mediaUrls 
+      });
+      
       const newMessage = await chatService.sendMessage(activeConversation, userId, content, mediaUrls);
+      console.log('Received new message from service:', newMessage);
       
-      if (!newMessage) return null;
+      if (!newMessage) {
+        console.error('No message returned from chatService.sendMessage');
+        return null;
+      }
       
-      // Update messages list
-      setMessages(prev => [newMessage, ...prev]);
+      // Validate the message has required fields
+      if (!newMessage.id || !newMessage.created_at) {
+        console.error('Invalid message format received:', newMessage);
+        throw new Error('Invalid message format received from server');
+      }
+      
+      // Update messages list - add new message to the end
+      setMessages(prev => {
+        const newMessages = [...prev, newMessage];
+        console.log('Updated messages list:', newMessages);
+        return newMessages;
+      });
       
       // Update last message in conversations list
-      setConversations(prev => 
-        prev.map(conv => {
+      setConversations(prev => {
+        const updated = prev.map(conv => {
           if (conv.id !== activeConversation) return conv;
           
-          return {
+          const updatedConv = {
             ...conv,
             last_message: {
               id: newMessage.id,
               content: newMessage.content,
               created_at: newMessage.created_at,
-              user_id: userId,
-              user: {
+              user_id: newMessage.user_id || userId,
+              user: newMessage.user || {
                 id: userId,
                 username: user?.username || 'You',
                 avatar_url: user?.avatar_url || null
               }
             },
-            updated_at: newMessage.created_at
+            updated_at: newMessage.created_at || new Date().toISOString()
           };
-        })
-      );
+          
+          console.log('Updated conversation:', updatedConv);
+          return updatedConv;
+        });
+        
+        console.log('Updated conversations list:', updated);
+        return updated;
+      });
       
       return newMessage;
     } catch (error) {
@@ -165,9 +238,9 @@ export function useChat(): UseChatReturn {
       // Don't show the user's own messages here (they're handled by sendMessage)
       if (newMessage.user_id === userId) return;
       
-      // Add the new message to the current conversation's messages
+      // Add the new message to the current conversation's messages - add to the end
       if (activeConversation === newMessage.room_id) {
-        setMessages(prev => [newMessage, ...prev]);
+        setMessages(prev => [...prev, newMessage]);
         
         // Mark as read if the room is currently open
         if (activeConversation === newMessage.room_id && userId) {
@@ -268,6 +341,36 @@ export function useChat(): UseChatReturn {
     };
   }, [activeConversation, currentConversation?.id, fetchMessages]);
 
+  // Set active conversation with proper state management and message loading
+  const setActiveConversation = useCallback((conversationId: string | null) => {
+    console.log('[useChat] setActiveConversation called with:', conversationId);
+    
+    // Only update if the conversation is actually changing
+    if (conversationId === activeConversation) {
+      console.log('[useChat] Conversation already active, skipping update');
+      return;
+    }
+    
+    // Update the active conversation state
+    _setActiveConversation(conversationId);
+    
+    // Clear messages when changing conversations
+    console.log('[useChat] Clearing messages for conversation change');
+    setMessages([]);
+    
+    // If we have a conversation ID, load its messages
+    if (conversationId) {
+      console.log('[useChat] Loading messages for conversation:', conversationId);
+      fetchMessages(conversationId).then(messages => {
+        console.log(`[useChat] Successfully loaded ${messages.length} messages for conversation ${conversationId}`);
+      }).catch(error => {
+        console.error(`[useChat] Failed to load messages for conversation ${conversationId}:`, error);
+      });
+    } else {
+      console.log('[useChat] No conversation ID provided, messages cleared');
+    }
+  }, [activeConversation, fetchMessages]);
+
   // Search for users
   const searchUsers = useCallback(async (query: string) => {
     if (!userId) return [];
@@ -293,18 +396,40 @@ export function useChat(): UseChatReturn {
 
   // Start a new direct message conversation
   const startDirectMessage = useCallback(async (otherUserId: string) => {
-    if (!userId) return null;
+    console.log('[useChat] startDirectMessage called with otherUserId:', otherUserId);
+    if (!userId) {
+      console.log('[useChat] No userId, returning null');
+      return null;
+    }
+    
     try {
+      console.log('[useChat] Creating direct message with chatService');
       const conversation = await chatService.createDirectMessage(userId, otherUserId);
+      console.log('[useChat] chatService.createDirectMessage returned:', conversation);
+      
+      if (!conversation) {
+        console.error('[useChat] No conversation returned from chatService');
+        return null;
+      }
+      
       // Add to conversations if not already there
+      console.log('[useChat] Updating conversations state');
       setConversations(prev => {
         const exists = prev.some(c => c.id === conversation.id);
-        return exists ? prev : [conversation, ...prev];
+        console.log(`[useChat] Conversation ${conversation.id} exists in state:`, exists);
+        const updated = exists ? prev : [conversation, ...prev];
+        console.log('[useChat] Updated conversations:', updated);
+        return updated;
       });
+      
+      // Set the active conversation
+      console.log('[useChat] Setting active conversation to:', conversation.id);
       setActiveConversation(conversation.id);
+      
+      console.log('[useChat] startDirectMessage completed successfully');
       return conversation;
     } catch (error) {
-      console.error('Error starting direct message:', error);
+      console.error('[useChat] Error in startDirectMessage:', error);
       setError(error as Error);
       return null;
     }

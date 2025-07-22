@@ -384,11 +384,13 @@ export function RightPanel({ className, children }: RightPanelProps) {
                               {user.username?.charAt(0).toUpperCase() || 'U'}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1 min-w-0">
-                            {user.display_name && (
-                              <p className="font-medium text-sm truncate">{user.display_name}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {user.display_name || user.username}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              @{user.username}
+                            </p>
                           </div>
                         </button>
                       ))
@@ -397,18 +399,9 @@ export function RightPanel({ className, children }: RightPanelProps) {
                     )}
                   </div>
                 )}
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    onClick={clearSearch}
-                    className="absolute right-10 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                ) : null}
                 <button
                   type="button"
-                  onClick={() => setIsSearchOpen(false)}
+                  onClick={searchQuery ? clearSearch : () => setIsSearchOpen(false)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground px-2 py-1 text-sm"
                 >
                   <X className="h-4 w-4" />

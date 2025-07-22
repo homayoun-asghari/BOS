@@ -2,14 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { useChat } from '@/hooks/use-chat';
+import { useChatContext } from '@/context/chat-context';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ConversationList } from './conversation-list';
 import { MessageItem } from './message-item';
 import { ChatHeader } from './chat-header';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Send } from 'lucide-react';
+import { MessageInput } from './message-input';
 
 interface ChatViewProps {
   className?: string;
@@ -18,7 +16,10 @@ interface ChatViewProps {
 }
 
 export function ChatView({ className, onInputFocusChange, onActiveConversationChange }: ChatViewProps) {
+  console.log('[ChatView] Rendering with props:', { className });
   const { user } = useAuth();
+  console.log('[ChatView] Current user:', user?.id);
+  
   const {
     conversations,
     messages,
@@ -27,14 +28,54 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
     sendMessage,
     isLoading,
     error
-  } = useChat();
+  } = useChatContext();
   
   const activeConversation = currentConversation?.id || null;
+  console.log('[ChatView] Current conversation state:', { 
+    activeConversation, 
+    hasCurrentConversation: !!currentConversation,
+    conversationCount: conversations.length,
+    messageCount: messages.length,
+    isLoading,
+    error: error?.message 
+  });
 
   // Notify parent about active conversation state
   useEffect(() => {
-    onActiveConversationChange?.(!!activeConversation);
-  }, [activeConversation, onActiveConversationChange]);
+    console.log('[ChatView] Active conversation changed:', { 
+      activeConversation,
+      hasCurrentConversation: !!currentConversation,
+      conversationCount: conversations.length
+    });
+    
+    // Ensure we have a valid conversation before notifying parent
+    if (activeConversation && currentConversation) {
+      console.log('[ChatView] Notifying parent of active conversation');
+      onActiveConversationChange?.(true);
+    } else if (!activeConversation) {
+      console.log('[ChatView] Notifying parent of no active conversation');
+      onActiveConversationChange?.(false);
+    }
+  }, [activeConversation, currentConversation, conversations, onActiveConversationChange]);
+  
+  // Log when messages or conversations change
+  useEffect(() => {
+    console.log('[ChatView] Messages updated:', {
+      count: messages.length,
+      hasActiveConversation: !!activeConversation,
+      activeConversationId: activeConversation
+    });
+  }, [messages, activeConversation]);
+  
+  // Log when conversations change
+  useEffect(() => {
+    console.log('[ChatView] Conversations updated:', {
+      count: conversations.length,
+      conversationIds: conversations.map(c => c.id),
+      activeConversationId: activeConversation,
+      isActiveInList: conversations.some(c => c.id === activeConversation)
+    });
+  }, [conversations, activeConversation]);
 
   const [newMessage, setNewMessage] = useState('');
 
@@ -86,31 +127,21 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
         </div>
 
         {/* Message Input - Fixed at bottom with safe area for mobile */}
-        <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border p-4 z-50 pb-0">
+        <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border z-50">
           <div className="max-w-3xl mx-auto w-full">
-            <div className="flex gap-2 w-full">
-              <Input
-                placeholder="Type a message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                onFocus={() => onInputFocusChange?.(true)}
-                onBlur={() => onInputFocusChange?.(false)}
-                className="flex-1 min-h-[40px]"
-              />
-              <Button 
-                size="icon" 
-                onClick={handleSendMessage} 
-                className="h-10 w-10 flex-shrink-0"
-                type="button"
-                disabled={!newMessage.trim()}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-            {/* Safe area for mobile browsers - accounts for bottom navigation */}
-            <div className="h-20 lg:h-4" />
+            <MessageInput
+              value={newMessage}
+              onChange={setNewMessage}
+              onSubmit={handleSendMessage}
+              onFocus={() => onInputFocusChange?.(true)}
+              onBlur={() => onInputFocusChange?.(false)}
+              disabled={!activeConversation}
+              placeholder="Type a message..."
+              className="border-t-0 border-x-0 rounded-none"
+            />
           </div>
+          {/* Safe area for mobile browsers - accounts for bottom navigation */}
+          <div className="h-20 lg:h-4" />
         </div>
       </div>
     );

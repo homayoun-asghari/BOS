@@ -19,18 +19,54 @@ export function ConversationItem({
   onClick,
   className,
 }: ConversationItemProps) {
+  console.log('[ConversationItem] Props:', {
+    conversation: {
+      id: conversation.id,
+      is_group: conversation.is_group,
+      name: conversation.name,
+      participants: conversation.participants?.map(p => ({
+        id: p.id,
+        username: p.username,
+        display_name: p.display_name,
+        hasAvatar: !!p.avatar_url
+      })),
+      last_message: conversation.last_message ? {
+        id: conversation.last_message.id,
+        content: conversation.last_message.content,
+        created_at: conversation.last_message.created_at,
+        user_id: conversation.last_message.user_id
+      } : null,
+      media_urls: conversation.media_urls
+    },
+    isActive,
+    currentUserId,
+    className
+  });
+  
+  const handleClick = (e: React.MouseEvent) => {
+    console.log(`[ConversationItem] Clicked on conversation ${conversation.id}`);
+    e.stopPropagation();
+    onClick();
+  };
   // Get the other participant in direct messages
-  const otherParticipant = conversation.participants.find(
+  const otherParticipant = conversation.participants?.find(
     (p) => p.id !== currentUserId
-  );
+  ) || null;
 
-  const displayName = conversation.is_group
+  const displayName = conversation.is_group && conversation.name
     ? conversation.name
-    : otherParticipant?.username || 'Unknown';
+    : otherParticipant?.display_name || otherParticipant?.username || 'Unknown';
 
   const avatarUrl = conversation.is_group
-    ? conversation.media_urls?.[0]
-    : otherParticipant?.avatar_url;
+    ? conversation.media_urls?.[0] || undefined
+    : otherParticipant?.avatar_url || undefined;
+    
+  const avatarFallback = displayName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
 
   const lastMessage = conversation.last_message?.content
     ? conversation.last_message.content.length > 30
@@ -38,9 +74,22 @@ export function ConversationItem({
       : conversation.last_message.content
     : 'No messages yet';
 
+  console.log(`[ConversationItem] Derived data for conversation ${conversation.id}:`, {
+    displayName,
+    avatarUrl,
+    avatarFallback,
+    lastMessage,
+    otherParticipant: otherParticipant ? {
+      id: otherParticipant.id,
+      username: otherParticipant.username,
+      display_name: otherParticipant.display_name,
+      hasAvatar: !!otherParticipant.avatar_url
+    } : null
+  });
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
         'flex items-center gap-3 p-3 w-full text-left rounded-lg transition-colors',
         isActive
@@ -50,14 +99,8 @@ export function ConversationItem({
       )}
     >
       <Avatar className="h-10 w-10">
-        <AvatarImage src={avatarUrl || ''} alt={displayName} />
-        <AvatarFallback>
-          {displayName
-            .split(' ')
-            .map((n) => n[0])
-            .join('')
-            .toUpperCase()}
-        </AvatarFallback>
+        <AvatarImage src={avatarUrl} alt={displayName} />
+        <AvatarFallback>{avatarFallback}</AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">

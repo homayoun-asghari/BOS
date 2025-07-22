@@ -20,6 +20,7 @@ export interface ChatMessage {
   user: {
     id: string;
     username: string;
+    display_name?: string;
     avatar_url: string | null;
   };
 }
@@ -37,6 +38,7 @@ export interface Conversation {
   participants: Array<{
     id: string;
     username: string;
+    display_name?: string;
     avatar_url: string | null;
   }>;
   media_urls?: string[];

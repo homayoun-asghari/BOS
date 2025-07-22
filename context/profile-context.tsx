@@ -141,7 +141,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             setSearchResults(data.map(user => ({
               id: user.id,
               username: user.username || '',
-              // display_name is intentionally not used - kept for future use
+              display_name: user.display_name || null,
               avatar_url: user.avatar_url
             })) || []);
           }

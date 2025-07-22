@@ -623,6 +623,18 @@ USING (
   )
 );
 
+CREATE POLICY "Users can send messages to joined rooms"
+ON public.chat_messages FOR INSERT
+WITH CHECK (
+  sender_id = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.chat_participants 
+    WHERE chat_participants.room_id = chat_messages.room_id
+    AND chat_participants.user_id = auth.uid()
+    AND chat_participants.left_at IS NULL
+  )
+);
+
 
 
 

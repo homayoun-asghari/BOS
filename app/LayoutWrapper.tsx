@@ -8,6 +8,7 @@ import { Navbar } from '@/components/layout/navbar';
 import { SettingsModal } from '@/components/settings/settings-modal';
 import { HelpModal } from '@/components/help/help-modal';
 import Head from 'next/head';
+import { ChatProvider } from '@/context/chat-context';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -58,7 +59,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-background">
+    <ChatProvider>
+      <div className="flex-1 flex flex-col min-h-0 bg-background">
       <Head>
         <title>BOS Platform</title>
         <meta name="description" content="BOS Platform" />
@@ -119,5 +121,6 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         </>
       )}
     </div>
+    </ChatProvider>
   );
 }
