@@ -290,7 +290,7 @@ export function BackupRoadmapTimeline({
 
   return (
     <div className="w-full">
-      <ol className="relative border-l-2 border-gray-200 dark:border-gray-600 space-y-8 ml-2">
+      <ol className="relative border-l-2 border-gray-200 dark:border-gray-600 space-y-8 ml-2 w-full">
         {milestonesState
           .sort((a, b) => a.order_index - b.order_index)
           .map((milestone, idx) => {

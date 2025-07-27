@@ -167,7 +167,7 @@ export function RoadmapHeader({
   const dateBadge = getDateBadge();
   
   return (
-    <div className="sticky top-0 z-10 flex flex-col rounded-lg overflow-hidden h-[200px] bg-background/80">
+    <div className="sticky top-0 z-10 flex flex-col rounded-lg overflow-hidden h-[222px] bg-background/80">
       <div className="relative h-full p-4">
         
         {/* Cover Image */}

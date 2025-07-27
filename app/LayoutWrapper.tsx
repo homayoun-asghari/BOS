@@ -105,7 +105,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 paddingRight: 'var(--right-panel-width)'
               }}
             >
-              <div className="w-full p-4 md:p-6 lg:pl-8 transition-all duration-300">
+              <div className="w-full p-4 md:p-8 lg:px-20 transition-all duration-300">
                 {children}
               </div>
             </div>

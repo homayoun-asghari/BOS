@@ -30,11 +30,11 @@ interface UserProfileProps {
 
 export function UserProfile({ className, onClose }: UserProfileProps) {
   const router = useRouter();
-  const { profile, stats, posts, currentRoadmap, completedRoadmaps, publicNotes, loading, error, setSelectedUser } = useProfile();
+  const { profile, stats, posts, currentRoadmap, completedRoadmaps, /* publicNotes, */ loading, error, setSelectedUser } = useProfile();
   const { startDirectMessage, setActiveConversation } = useChatContext();
   const { openPanel } = useRightPanelControls();
   console.log('UserProfile - Received currentRoadmap:', currentRoadmap);
-  const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'notes'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'history' | 'notes'>('posts');
 
   // Handle back navigation
   const handleBack = () => {
@@ -244,7 +244,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
   };
 
   // Function to handle tab change
-  const handleTabChange = (value: 'posts' | 'roadmap' | 'notes') => {
+  const handleTabChange = (value: 'posts' | 'roadmap' | 'history' | 'notes') => {
     setActiveTab(value);
   };
 
@@ -267,7 +267,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       value: 'roadmap',
       label: 'Roadmap',
       content: currentRoadmap ? (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full">
           {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -309,7 +309,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       value: 'posts',
       label: 'Posts',
       content: (
-        <div className="space-y-4 p-4">
+        <div className="space-y-4 p-4 w-full">
           {posts.length > 0 ? (
             posts.map((post) => (
               <div key={post.id} className="rounded-2xl bg-background/50 p-4">
@@ -322,64 +322,65 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
         </div>
       ),
     },
-    {
-      value: 'notes',
-      label: 'Notes',
-      content: (
-        <div className="space-y-4 p-4">
-          {publicNotes.length > 0 ? (
-            publicNotes.map((note) => {
-              // Extract text content from JSON
-              let contentText = '';
-              if (note.content) {
-                if (typeof note.content === 'string') {
-                  // Handle case where content is a string
-                  contentText = note.content.replace(/<[^>]*>?/gm, '');
-                } else if (note.content.type === 'doc' && Array.isArray(note.content.content)) {
-                  // Handle TipTap JSON structure
-                  const extractText = (node: any): string => {
-                    if (node.text) return node.text;
-                    if (node.content && Array.isArray(node.content)) {
-                      return node.content.map(extractText).join('');
-                    }
-                    return '';
-                  };
-                  contentText = note.content.content.map(extractText).join(' ');
-                } else if (typeof note.content === 'object') {
-                  // Fallback for other JSON structures
-                  contentText = JSON.stringify(note.content).replace(/<[^>]*>?/gm, '');
-                }
-              }
+    // Temporarily hiding Notes tab - keeping the code for future use
+    // {
+    //   value: 'notes',
+    //   label: 'Notes',
+    //   content: (
+    //     <div className="space-y-4 p-4">
+    //       {publicNotes.length > 0 ? (
+    //         publicNotes.map((note) => {
+    //           // Extract text content from JSON
+    //           let contentText = '';
+    //           if (note.content) {
+    //             if (typeof note.content === 'string') {
+    //               // Handle case where content is a string
+    //               contentText = note.content.replace(/<[^>]*>?/gm, '');
+    //             } else if (note.content.type === 'doc' && Array.isArray(note.content.content)) {
+    //               // Handle TipTap JSON structure
+    //               const extractText = (node: any): string => {
+    //                 if (node.text) return node.text;
+    //                 if (node.content && Array.isArray(node.content)) {
+    //                   return node.content.map(extractText).join('');
+    //                 }
+    //                 return '';
+    //               };
+    //               contentText = note.content.content.map(extractText).join(' ');
+    //             } else if (typeof note.content === 'object') {
+    //               // Fallback for other JSON structures
+    //               contentText = JSON.stringify(note.content).replace(/<[^>]*>?/gm, '');
+    //             }
+    //           }
 
-              return (
-                <div key={note.id} className="p-4 border rounded-lg">
-                  <h3 className="font-medium">{note.title}</h3>
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {contentText}
-                  </p>
-                  {note.tags && note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {note.tags.map((tag: string) => (
-                        <span key={tag} className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <p className="text-center text-muted-foreground py-8">No public notes yet</p>
-          )}
-        </div>
-      ),
-    },
+    //           return (
+    //             <div key={note.id} className="p-4 border rounded-lg">
+    //               <h3 className="font-medium">{note.title}</h3>
+    //               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+    //                 {contentText}
+    //               </p>
+    //               {note.tags && note.tags.length > 0 && (
+    //                 <div className="flex flex-wrap gap-2 mt-2">
+    //                   {note.tags.map((tag: string) => (
+    //                     <span key={tag} className="text-xs bg-muted px-2 py-0.5 rounded-full">
+    //                       {tag}
+    //                     </span>
+    //                   ))}
+    //                 </div>
+    //               )}
+    //             </div>
+    //           );
+    //         })
+    //       ) : (
+    //         <p className="text-center text-muted-foreground py-8">No public notes yet</p>
+    //       )}
+    //     </div>
+    //   ),
+    // },
     {
       value: 'history',
       label: 'History',
       content: (
-        <div className="h-full">
+        <div className="space-y-4 w-full">
           <HistorySection userId={profile.id} />
         </div>
       ),
@@ -387,11 +388,12 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
   ];
 
   return (
-    <div className={cn("flex flex-col h-full w-full overflow-hidden pb-[env(safe-area-inset-bottom)] lg:pb-0", className)}>
+    <div className={cn("flex flex-col h-full overflow-hidden pb-[env(safe-area-inset-bottom)] lg:pb-0", className)}
+         style={{ width: 'var(--right-panel-width, 100%)' }}>
       {/* Main Content with Single Scroll */}
-      <div className="flex-1 overflow-y-auto w-full">
+      <div className="flex-1 overflow-y-auto p-4" style={{ width: '100%' }}>
         {/* Profile Info */}
-        <div className="px-4 py-4 w-full relative">
+        <div className="w-full">
 
           <div className="flex items-start gap-3 w-full">
             <button 
@@ -494,7 +496,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
         </div>
 
         {/* Tab navigation with underline only for active tab */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mt-4">
+        <Tabs value={activeTab} onValueChange={(value) => handleTabChange(value as 'posts' | 'roadmap' | 'history' | 'notes')} className="w-full mt-4">
           <div className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pt-2 w-full">
             <TabsList className="h-10 w-full justify-start rounded-none bg-transparent p-0">
               {tabs.map((tab) => (
@@ -513,9 +515,9 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
               ))}
             </TabsList>
           </div>
-          <div className="mt-4">
+          <div className="mt-4 w-full">
             {tabs.map((tab) => (
-              <TabsContent key={tab.value} value={tab.value} className="mt-0">
+              <TabsContent key={tab.value} value={tab.value} className="mt-0 w-full">
                 {tab.content}
               </TabsContent>
             ))}

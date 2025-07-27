@@ -189,7 +189,7 @@ export function RoadmapVisualization({
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto w-full">
+          <div className="w-full">
             {/* Non-sticky header for view mode */}
             {!isEditable && (
               <div className="mb-6">
