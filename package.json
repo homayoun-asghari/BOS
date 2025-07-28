@@ -119,6 +119,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@faker-js/faker": "^9.9.0",
     "@tailwindcss/postcss": "^4",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.20",
@@ -128,6 +129,7 @@
     "@types/react-dom": "^19",
     "@types/turndown": "^5.0.5",
     "autoprefixer": "^10.4.17",
+    "dotenv": "^17.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
     "markdown-it-link-attributes": "^4.0.1",

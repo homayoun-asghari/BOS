@@ -34,7 +34,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
   const { startDirectMessage, setActiveConversation } = useChatContext();
   const { openPanel } = useRightPanelControls();
   console.log('UserProfile - Received currentRoadmap:', currentRoadmap);
-  const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'history' | 'notes'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'history' | 'notes'>('roadmap');
 
   // Handle back navigation
   const handleBack = () => {
@@ -70,13 +70,13 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
     return null;
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-50"></div>
-      </div>
-    );
-  }
+  // if (loading) {
+  //   return (
+  //     <div className="flex items-center justify-center h-full">
+  //       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-50"></div>
+  //     </div>
+  //   );
+  // }
 
   if (error) {
     return (
@@ -441,8 +441,8 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
                           setSelectedUser(null);
                           // Set active conversation via context so ChatView picks it up
                           setActiveConversation(conversation.id);
-                          // Then open the chat panel to show the conversation
-                          openPanel('chat');
+                          // Then open the messages panel to show the conversation
+                          openPanel('messages');
                           
                           // Force a small delay to ensure state updates
                           setTimeout(() => {
@@ -467,30 +467,33 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
           </div>
           
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-2 mt-6">
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.totalLikes || 0}</span>
-              <span className="text-xs text-muted-foreground">Likes</span>
+          <div className="space-y-2 mt-6">
+            {/* First Row: Likes and Posts */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
+                <span className="text-xl font-bold">{stats?.totalLikes || 0}</span>
+                <span className="text-xs text-muted-foreground">Likes</span>
+              </div>
+              <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
+                <span className="text-xl font-bold">{stats?.totalPosts || 0}</span>
+                <span className="text-xs text-muted-foreground">Posts</span>
+              </div>
             </div>
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.totalPosts || 0}</span>
-              <span className="text-xs text-muted-foreground">Posts</span>
-            </div>
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.totalPublicNotes || 0}</span>
-              <span className="text-xs text-muted-foreground">Notes</span>
-            </div>
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.completedRoadmaps || 0}</span>
-              <span className="text-xs text-muted-foreground">Roadmaps</span>
-            </div>
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.completedMilestones || 0}</span>
-              <span className="text-xs text-muted-foreground">Milestones</span>
-            </div>
-            <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-              <span className="text-xl font-bold">{stats?.completedTasks || 0}</span>
-              <span className="text-xs text-muted-foreground">Tasks</span>
+            
+            {/* Second Row: Roadmaps, Milestones, Tasks */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
+                <span className="text-xl font-bold">{stats?.completedRoadmaps || 0}</span>
+                <span className="text-xs text-muted-foreground">Roadmaps</span>
+              </div>
+              <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
+                <span className="text-xl font-bold">{stats?.completedMilestones || 0}</span>
+                <span className="text-xs text-muted-foreground">Milestones</span>
+              </div>
+              <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
+                <span className="text-xl font-bold">{stats?.completedTasks || 0}</span>
+                <span className="text-xs text-muted-foreground">Tasks</span>
+              </div>
             </div>
           </div>
         </div>

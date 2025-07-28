@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
+import { roadmapVectorService } from '@/lib/roadmap/roadmap-vector-service';
+
 
 export type MediaUrl = {
   url: string;
@@ -16,11 +18,12 @@ export type CreatePostParams = {
   taskId?: string;
 };
 
-type UpdatePostParams = {
-  id: string;
-  content?: string;
-  mediaUrls?: MediaUrl[];
-};
+// Commented out unused type
+// type UpdatePostParams = {
+//   id: string;
+//   content?: string;
+//   mediaUrls?: MediaUrl[];
+// };
 
 export const createPost = async (post: CreatePostParams) => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -74,7 +77,7 @@ export const getPostsByUserId = async (userId: string, isPublicProfile: boolean 
     .from('posts')
     .select(`
       *,
-      profiles:user_id (username, avatar_url),
+      profiles:user_id (username, display_name, avatar_url),
       roadmap:roadmap_id (id, title, is_public, final_goal),
       milestone:milestone_id (id, title, start_date, end_date),
       task:task_id (id, title),
@@ -104,7 +107,7 @@ export const getPostsByUserId = async (userId: string, isPublicProfile: boolean 
     // Check if the current user has liked this post
     const isLiked = currentUserId ? 
       Array.isArray(post.post_likes) ? 
-        post.post_likes.some(like => like.user_id === currentUserId) : 
+        post.post_likes.some((like: { user_id: string }) => like.user_id === currentUserId) : 
         post.post_likes?.user_id === currentUserId : 
       false;
 
@@ -128,7 +131,7 @@ export const getPostsByUserId = async (userId: string, isPublicProfile: boolean 
   });
 };
 
-export const getFeedPosts = async () => {
+export const getFeedPosts = async (similarOnly: boolean = true) => {
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -143,17 +146,35 @@ export const getFeedPosts = async () => {
 
     console.log('Fetching feed posts for user:', user.id);
     
-    // Get posts with all necessary data including roadmap privacy status and like information
-    const { data, error, status, statusText } = await supabase
+    // Get similar users if similarOnly is true
+    let similarUserIds: string[] = [];
+    if (similarOnly) {
+      const similarUsers = await roadmapVectorService.findSimilarUsers(user.id, 20, 0.3);
+      similarUserIds = similarUsers.map(u => u.user_id);
+      // Always include current user's posts
+      similarUserIds.push(user.id);
+      console.log(`Found ${similarUserIds.length} similar users including self`);
+    }
+    
+    // Build the query
+    let query = supabase
       .from('posts')
       .select(`
         *,
-        profiles:user_id (username, avatar_url),
+        profiles:user_id (username, display_name, avatar_url),
         roadmap:roadmap_id (id, title, is_public, final_goal),
         milestone:milestone_id (id, title, start_date, end_date),
         task:task_id (id, title),
         post_likes!left(user_id)
-      `)
+      `);
+      
+    // Filter by similar users if needed
+    if (similarOnly && similarUserIds.length > 0) {
+      query = query.in('user_id', similarUserIds);
+    }
+    
+    // Execute the query
+    const { data, error, status, statusText } = await query
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -173,7 +194,7 @@ export const getFeedPosts = async () => {
     const postsWithLikes = (data || []).map(post => {
       // Check if the current user has liked this post
       const isLiked = Array.isArray(post.post_likes) ? 
-        post.post_likes.some(like => like.user_id === user.id) : 
+        post.post_likes.some((like: { user_id: string }) => like.user_id === user.id) : 
         post.post_likes?.user_id === user.id;
 
       // Get the like count
@@ -227,7 +248,6 @@ export const toggleLike = async (postId: string) => {
   }
 
   try {
-    // Use a single RPC call to handle the like toggle and get the updated count
     const { data, error } = await supabase.rpc('toggle_post_like', {
       p_post_id: postId,
       p_user_id: user.id
@@ -239,8 +259,8 @@ export const toggleLike = async (postId: string) => {
     }
 
     return {
-      action: data.action,
-      likeCount: data.like_count,
+      action: data?.action || 'error',
+      likeCount: data?.like_count || 0,
       success: true
     };
   } catch (error) {
@@ -252,13 +272,13 @@ export const toggleLike = async (postId: string) => {
 // Keep these for backward compatibility, but they'll use toggleLike internally
 export const likePost = async (postId: string) => {
   const result = await toggleLike(postId);
-  if (result.action === 'liked') return result.data;
+  if (result.action === 'liked') return { success: true, likeCount: result.likeCount };
   throw new Error('Post was already liked');
 };
 
 export const unlikePost = async (postId: string) => {
   const result = await toggleLike(postId);
-  if (result.action === 'unliked') return true;
+  if (result.action === 'unliked') return { success: true, likeCount: result.likeCount };
   throw new Error('Post was not liked');
 };
 

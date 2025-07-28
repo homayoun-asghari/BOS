@@ -22,8 +22,12 @@ export function StatsSection() {
     completed_tasks: 0,
     total_likes: 0,
     total_posts: 0,
-    public_notes: 0,
+    public_notes: 0, // This will be updated with total notes count
   });
+  
+  const [totalNotes, setTotalNotes] = useState(0); // New state for total notes
+  const [similarPathUsers, setSimilarPathUsers] = useState(0);
+  const [completedPathUsers, setCompletedPathUsers] = useState(0);
   
   const { user } = useAuth();
   const { refreshKey } = useRefresh();
@@ -36,14 +40,118 @@ export function StatsSection() {
     }));
   };
   
+  // Function to fetch total notes count
+  const fetchTotalNotes = async () => {
+    if (!user?.id) return 0;
+    
+    try {
+      const { count, error } = await supabase
+        .from('notes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+        
+      if (error) throw error;
+      return count || 0;
+    } catch (error) {
+      console.error('Error fetching total notes:', error);
+      return 0;
+    }
+  };
+  
+  // Function to fetch users in similar path
+  const fetchSimilarPathUsers = async () => {
+    if (!user?.id) return { similar: 0, completed: 0 };
+    
+    console.log('Fetching similar path users for user:', user.id);
+    
+    try {
+      // First, verify we can find the current user's roadmap vector
+      const { data: currentUserVector, error: vectorError } = await supabase
+        .from('user_roadmap_vectors')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (vectorError || !currentUserVector) {
+        console.error('Error or no vector found for current user:', vectorError);
+        return { similar: 0, completed: 0 };
+      }
+      
+      console.log('Current user vector found, searching for similar users...');
+      
+      // Get users with similar paths (lower threshold to 0.5 to find more matches)
+      const { data: similarUsers, error } = await supabase
+        .rpc('find_similar_users', {
+          p_user_id: user.id,
+          p_limit: 100,
+          p_min_similarity: 0.5, // Lowered from 0.7 to find more matches
+          p_score_type: 'cosine'
+        });
+      
+      if (error) {
+        console.error('Error in find_similar_users RPC:', error);
+        return { similar: 0, completed: 0 };
+      }
+      
+      console.log('Similar users raw response:', similarUsers);
+      
+      if (similarUsers && similarUsers.length > 0) {
+        // Get user IDs of similar users (filter out any null/undefined)
+        const userIds = similarUsers
+          .map((u: any) => u?.user_id)
+          .filter(Boolean);
+        
+        console.log('Found similar user IDs:', userIds);
+        
+        if (userIds.length > 0) {
+          // Check which of these users have completed roadmaps
+          const { data: completedStats, error: statsError } = await supabase
+            .from('user_roadmap_vectors')
+            .select('user_id, metadata')
+            .in('user_id', userIds);
+            
+          if (statsError) {
+            console.error('Error fetching completed stats:', statsError);
+            return { similar: userIds.length, completed: 0 };
+          }
+          
+          console.log('Completed stats:', completedStats);
+          
+          const completedCount = completedStats?.filter(stat => 
+            stat?.metadata?.completed_roadmaps > 0
+          ).length || 0;
+          
+          console.log(`Found ${userIds.length} similar users, ${completedCount} completed`);
+          
+          return {
+            similar: userIds.length,
+            completed: completedCount
+          };
+        }
+      }
+      
+      console.log('No similar users found');
+      return { similar: 0, completed: 0 };
+    } catch (error) {
+      console.error('Error in fetchSimilarPathUsers:', error);
+      return { similar: 0, completed: 0 };
+    }
+  };
+  
   // Function to fetch and update all stats
   const fetchAllStats = async () => {
     if (!user?.id) return;
     
     try {
-      const { data: userStats, error: statsError } = await supabase
-        .rpc('get_user_completed_stats', { target_user_id: user.id });
-        
+      // Fetch stats in parallel
+      const [statsResponse, notesCount, pathStats] = await Promise.all([
+        supabase.rpc('get_user_completed_stats', { target_user_id: user.id }),
+        fetchTotalNotes(),
+        fetchSimilarPathUsers()
+      ]);
+      
+      const { data: userStats, error: statsError } = statsResponse;
+      
       if (statsError) throw statsError;
       
       const statsData = Array.isArray(userStats) ? userStats[0] : userStats;
@@ -58,6 +166,11 @@ export function StatsSection() {
           total_posts: statsData.total_posts || 0,
           public_notes: statsData.public_notes || 0,
         }));
+        
+        // Update total notes and path stats
+        setTotalNotes(notesCount);
+        setSimilarPathUsers(pathStats.similar);
+        setCompletedPathUsers(pathStats.completed);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -110,8 +223,25 @@ export function StatsSection() {
   }, [user?.id]);
 
   return (
-    <div className="p-4">
-      <div className="grid grid-cols-3 gap-2">
+    <div className="p-4 space-y-4">
+      {/* Similar Path Stats - Full width rows at the top */}
+      <div className="space-y-2">
+        <div className="w-full p-3 bg-muted/20 rounded-lg">
+          <div className="text-center">
+            <span className="text-2xl font-bold">{similarPathUsers}</span>
+            <p className="text-sm text-muted-foreground">People on similar paths</p>
+          </div>
+        </div>
+        <div className="w-full p-3 bg-muted/20 rounded-lg">
+          <div className="text-center">
+            <span className="text-2xl font-bold">{completedPathUsers}</span>
+            <p className="text-sm text-muted-foreground">Completed similar paths</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Regular Stats Grid */}
+      <div className="grid grid-cols-3 gap-2 pt-2">
         <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
           <span className="text-xl font-bold">{stats.total_likes || 0}</span>
           <span className="text-xs text-muted-foreground">Likes</span>
@@ -121,7 +251,7 @@ export function StatsSection() {
           <span className="text-xs text-muted-foreground">Posts</span>
         </div>
         <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">
-          <span className="text-xl font-bold">{stats.public_notes || 0}</span>
+          <span className="text-xl font-bold">{totalNotes}</span>
           <span className="text-xs text-muted-foreground">Notes</span>
         </div>
         <div className="flex flex-col items-center p-2 bg-muted/20 rounded-lg">

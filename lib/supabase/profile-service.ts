@@ -5,9 +5,10 @@ import { StoredProcedureRoadmap, toRoadmap } from '@/types/roadmap';
 interface UserProfile {
   id: string;
   username: string | null;
-  email: string;
+  email?: string;
   avatar_url: string | null;
   created_at: string;
+  display_name?: string | null;
 }
 
 interface UserStats {
@@ -30,7 +31,7 @@ export const profileService = {
       const pattern = `%${query.toLowerCase()}%`;
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, username, display_name, avatar_url, created_at')
         .ilike('username', pattern)
         .order('username');
 

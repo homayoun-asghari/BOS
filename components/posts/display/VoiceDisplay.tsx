@@ -9,30 +9,10 @@ import { formatTime } from '@/lib/utils/date';
 import WaveSurfer from 'wavesurfer.js';
 import { TimelineOverlay } from './TimelineOverlay';
 
-interface VoiceDisplayProps {
-  id: string;
+import { PostDisplayProps } from './PostDisplayProps';
+
+interface VoiceDisplayProps extends Omit<PostDisplayProps, 'content'> {
   audioUrl: string;
-  user: {
-    name: string;
-    username: string;
-    avatarUrl?: string;
-  };
-  currentRoadmap?: {
-    id: string;
-    title: string;
-  } | null;
-  currentMilestone?: {
-    id: string;
-    title: string;
-  } | null;
-  currentTask?: {
-    id: string;
-    title: string;
-  } | null;
-  likes?: number;
-  isLiked?: boolean;
-  onLike?: () => void;
-  className?: string;
 }
 
 export function VoiceDisplay({

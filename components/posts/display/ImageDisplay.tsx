@@ -5,32 +5,10 @@ import { TimelineOverlay } from "./TimelineOverlay";
 import { cn } from "@/lib/utils";
 import { LikeButton } from '../LikeButton';
 
-interface ImageDisplayProps {
-  id: string;
-  user: {
-    name: string;
-    avatarUrl?: string;
-    username: string;
-  };
+import { PostDisplayProps } from './PostDisplayProps';
+
+interface ImageDisplayProps extends Omit<PostDisplayProps, 'content'> {
   imageUrl: string;
-  timestamp: string | Date;
-  currentRoadmap: {
-    id: string;
-    title: string;
-  };
-  currentMilestone: {
-    id: string;
-    title: string;
-  };
-  currentTask: {
-    id: string;
-    title: string;
-  };
-  likes: number;
-  isLiked?: boolean;
-  onLike?: () => Promise<void>;
-  onUnlike?: () => Promise<void>;
-  className?: string;
 }
 
 export function ImageDisplay({

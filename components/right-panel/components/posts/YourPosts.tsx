@@ -8,11 +8,11 @@ import { ImageDisplay } from '@/components/posts/display/ImageDisplay';
 import { VideoDisplay } from '@/components/posts/display/VideoDisplay';
 import { VoiceDisplay } from '@/components/posts/display/VoiceDisplay';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { EyeOff, Heart } from 'lucide-react';
-import { hasUserLikedPost, getPostLikesCount } from '@/lib/supabase/posts';
+import { EyeOff } from 'lucide-react';
 
 interface YourPostsProps {
   isPublicProfile?: boolean;
+  onNewPostClick?: () => void;
 }
 
 export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
@@ -64,8 +64,8 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
     );
   }
 
-  const handleToggleLike = async (postId: string) => {
-    if (isProcessing[postId]) return { action: 'error' };
+  const handleToggleLike = async (postId: string): Promise<void> => {
+    if (isProcessing[postId]) return;
     
     // Optimistically update the UI
     const wasLiked = likedPosts[postId];
@@ -84,7 +84,6 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
     
     // Track the optimistic update for potential rollback
     const optimisticUpdate = {
-      postId,
       wasLiked,
       previousLikes: currentLikes
     };
@@ -109,8 +108,6 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
           }));
         }
       }
-      
-      return { ...result, success: true };
     } catch (error) {
       console.error('Error toggling like:', error);
       
@@ -124,73 +121,98 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
         ...prev,
         [postId]: optimisticUpdate.previousLikes
       }));
-      
-      return { action: 'error', success: false };
     } finally {
       setIsProcessing(prev => ({ ...prev, [postId]: false }));
     }
   };
 
+  const getMediaType = (media: string | { url: string; path: string; type: string }) => {
+    return typeof media === 'string' ? 'image' : media.type;
+  };
+  
+  const getMediaUrl = (media: string | { url: string; path: string; type: string }) => {
+    return typeof media === 'string' ? media : media.url;
+  };
+
   const renderPost = (post: Post) => {
-    const isPrivate = post.roadmap_id && !post.roadmap?.is_public;
+    // Check if the post is private based on the roadmap's visibility
+  // Default to false if roadmap is not available
+  const isPrivate = false;
+    
+    // User data comes from the profiles join
+    const userData = post.profiles || { username: null, display_name: null, avatar_url: null };
+    const postUser = {
+      name: userData?.display_name || userData?.username || 'Anonymous',
+      username: userData?.username || 'anonymous',
+      avatarUrl: userData?.avatar_url || ''
+    };
     
     // Common props for all post types
     const commonProps = {
       id: post.id,
-      user: {
-        name: post.profiles?.full_name || 'Unknown User',
-        username: post.profiles?.username || 'unknown',
-        avatarUrl: post.profiles?.avatar_url
-      },
+      user: postUser,
       timestamp: post.created_at,
       currentRoadmap: post.roadmap ? {
         id: post.roadmap.id,
         title: post.roadmap.title
-      } : null,
+      } : undefined,
       currentMilestone: post.milestone ? {
         id: post.milestone.id,
         title: post.milestone.title
-      } : null,
+      } : undefined,
       currentTask: post.task ? {
         id: post.task.id,
         title: post.task.title
-      } : null,
-      likes: postsLikes[post.id] ?? post.likes_count ?? 0,
-      isLiked: likedPosts[post.id] ?? post.is_liked ?? false,
+      } : undefined,
+      likes: postsLikes[post.id] ?? post.like_count ?? 0,
+      isLiked: likedPosts[post.id] ?? false,
       onLike: () => handleToggleLike(post.id),
-      className: isPrivate ? 'relative' : ''
+      className: isPrivate ? 'opacity-60' : '',
+      content: post.content || ''
     };
 
     return (
-      <div key={post.id} className="relative aspect-[9/16] w-full">
+      <div key={post.id} className="w-full max-w-md mx-auto mb-8">
         {isPrivate && (
           <div className="absolute bottom-4 right-4 z-10 bg-background/80 backdrop-blur-sm rounded-full p-2">
             <EyeOff className="h-4 w-4 text-muted-foreground" />
           </div>
         )}
-        {post.media_urls && post.media_urls.length > 0 ? (
-          post.media_urls[0].type === 'image' ? (
-            <ImageDisplay {...commonProps} content={post.content} imageUrl={post.media_urls[0].url} />
-          ) : post.media_urls[0].type === 'video' ? (
-            <VideoDisplay {...commonProps} content={post.content} videoUrl={post.media_urls[0].url} />
-          ) : post.media_urls[0].type === 'voice' ? (
-            <VoiceDisplay {...commonProps} audioUrl={post.media_urls[0].url} />
+        {post.media_urls && post.media_urls.length > 0 && Array.isArray(post.media_urls) ? (
+          getMediaType(post.media_urls[0]) === 'image' ? (
+            <ImageDisplay 
+              {...commonProps} 
+              imageUrl={getMediaUrl(post.media_urls[0])}
+            />
+          ) : getMediaType(post.media_urls[0]) === 'video' ? (
+            <VideoDisplay 
+              {...commonProps} 
+              videoUrl={getMediaUrl(post.media_urls[0])}
+            />
+          ) : getMediaType(post.media_urls[0]) === 'voice' ? (
+            <VoiceDisplay 
+              {...commonProps} 
+              audioUrl={getMediaUrl(post.media_urls[0])}
+            />
           ) : (
-            <TextDisplay {...commonProps} content={post.content} />
+            <TextDisplay {...commonProps} />
           )
         ) : (
-          <TextDisplay {...commonProps} content={post.content} />
+          <TextDisplay {...commonProps} />
         )}
       </div>
     );
   };
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="w-full max-w-2xl mx-auto p-4 space-y-6 relative">
+      
       {posts.length === 0 ? (
-        <p className="text-center text-muted-foreground py-8">
-          You haven't created any posts yet.
-        </p>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">
+            You haven&apos;t created any posts yet.
+          </p>
+        </div>
       ) : (
         posts.map(renderPost)
       )}

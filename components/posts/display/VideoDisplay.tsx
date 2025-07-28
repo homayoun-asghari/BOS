@@ -7,32 +7,10 @@ import { TimelineOverlay } from "./TimelineOverlay";
 import { cn } from "@/lib/utils";
 import { LikeButton } from '../LikeButton';
 
-interface VideoDisplayProps {
-  id: string;
-  user: {
-    name: string;
-    username?: string;
-    avatarUrl?: string;
-  };
+import { PostDisplayProps } from './PostDisplayProps';
+
+interface VideoDisplayProps extends Omit<PostDisplayProps, 'content'> {
   videoUrl: string;
-  timestamp: string | Date;
-  currentRoadmap: {
-    id: string;
-    title: string;
-  };
-  currentMilestone: {
-    id: string;
-    title: string;
-  };
-  currentTask: {
-    id: string;
-    title: string;
-  };
-  likes: number;
-  isLiked?: boolean;
-  onLike?: () => Promise<void>;
-  onUnlike?: () => Promise<void>;
-  className?: string;
 }
 
 export function VideoDisplay({
@@ -111,7 +89,8 @@ export function VideoDisplay({
             user={{
               name: user.name,
               username: user.username || 'user',
-              avatarUrl: user.avatarUrl
+              avatarUrl: user.avatarUrl,
+              display_name: user.display_name
             }}
             currentRoadmap={currentRoadmap ? {
               id: currentRoadmap.id,

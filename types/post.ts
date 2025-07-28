@@ -14,8 +14,9 @@ export interface Post {
   roadmap_id?: string | null;
   milestone_id?: string | null;
   task_id?: string | null;
-  user?: {
+  profiles?: {
     username: string | null;
+    display_name?: string | null;
     avatar_url: string | null;
   };
   roadmap?: {

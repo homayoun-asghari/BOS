@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
+import { roadmapVectorService } from '@/lib/roadmap/roadmap-vector-service';
 
 import { Button } from '@/components/ui/button';
 import { deleteRoadmapCover } from '@/lib/utils/roadmap-cover-utils';
@@ -132,6 +133,7 @@ async function processMilestoneTasks(milestone: Milestone) {
 }
 
 export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapModalProps) {
+  const { user } = useAuth();
   const [goal, setGoal] = useState(roadmap?.final_goal || '');
   const [goalStartDate, setGoalStartDate] = useState<Date | undefined>(
     roadmap?.start_date ? new Date(roadmap.start_date) : new Date()
@@ -146,8 +148,26 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       : null
   );
   const [pendingCoverRemoval, setPendingCoverRemoval] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(roadmap?.is_public || false);
   
+  // Prepare roadmap data for vector update
+  const getRoadmapForVector = useCallback((currentGoal: string, currentMilestones: Milestone[]) => {
+    if (!currentGoal) return undefined;
+    
+    return {
+      goal: currentGoal,
+      milestones: currentMilestones.map(milestone => ({
+        title: milestone.title,
+        description: '',
+        tasks: (milestone.subtasks || []).map(task => ({
+          title: task.title,
+          description: ''
+        }))
+      }))
+    };
+  }, []);
+
   const [milestones, setMilestones] = useState<Milestone[]>(() => {
     if (roadmap?.milestones?.length) {
       return roadmap.milestones.map(milestone => ({
@@ -288,8 +308,6 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     })));
   };
 
-  const { user } = useAuth();
-
   const handleCoverImageChange = useCallback((newCoverImage: CoverImage | null) => {
     setCoverImage(newCoverImage);
     if (!newCoverImage) {
@@ -339,6 +357,8 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       toast.error('You must be logged in to save a roadmap');
       return;
     }
+    
+    setIsSaving(true);
     
     const error = getValidationError();
     if (error) {
@@ -547,25 +567,45 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
         }
       }
 
-      onSave?.();
+      // Update the roadmap vector after successful save
+      try {
+        console.log('Starting vector update process...');
+        const roadmapForVector = getRoadmapForVector(goal, milestones);
+        
+        if (roadmapForVector && user?.id) {
+          console.log(`Updating vector for user ${user.id}`);
+          const result = await roadmapVectorService.updateRoadmapVector(
+            user.id,
+            roadmapForVector
+          );
+          
+          if (!result.success) {
+            console.error('Failed to update roadmap vector:', result.message);
+            toast.error('Roadmap saved, but failed to update similarity data');
+          } else {
+            console.log('Roadmap vector updated successfully');
+            
+            // After updating vector, find and log similar users (for debugging)
+            const similarUsers = await roadmapVectorService.findSimilarUsers(user.id, 5);
+            console.log('Similar users:', similarUsers);
+          }
+        } else {
+          console.log('Skipping vector update - missing roadmap data or user ID');
+        }
+      } catch (error) {
+        console.error('Error updating roadmap vector:', error);
+        // Don't fail the whole save if vector update fails
+        toast.error('Roadmap saved, but failed to update similarity data');
+      }
+
+      if (onSave) onSave();
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving roadmap:', error);
-      
-      // Log additional error details if available
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
-      } else if (error) {
-        console.error('Error details:', JSON.stringify(error, null, 2));
-      }
-      
-      // Show a more descriptive error message to the user
-      toast.error('Failed to save roadmap. Please check the console for details.');
-      console.error('Error saving roadmap:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save roadmap');
+      throw error;
+    } finally {
+      setIsSaving(false);
     }
   }, [
     user, 
@@ -579,7 +619,8 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     coverImage,
     pendingCoverRemoval,
     roadmap?.cover_image_url,
-    isPublic
+    isPublic,
+    getRoadmapForVector
   ]);
 
   return (

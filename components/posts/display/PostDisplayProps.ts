@@ -1,26 +1,28 @@
 export interface PostDisplayProps {
   id: string;
   user: {
-    name: string;
+    name?: string;
     username: string;
     avatarUrl?: string;
+    display_name?: string;
   };
   timestamp: string | Date;
-  currentRoadmap: {
+  currentRoadmap?: {
     id: string;
     title: string;
-  } | null;
-  currentMilestone: {
+  };
+  currentMilestone?: {
     id: string;
     title: string;
-  } | null;
-  currentTask: {
+  };
+  currentTask?: {
     id: string;
     title: string;
-  } | null;
+  };
   likes: number;
   isLiked?: boolean;
   onLike?: () => Promise<void>;
   onUnlike?: () => Promise<void>;
   className?: string;
+  content: string;
 }

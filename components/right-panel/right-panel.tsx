@@ -10,8 +10,7 @@ import { useRightPanel } from "./context/right-panel-context";
 import { useMobileRightPanel } from "@/context/mobile-right-panel-context";
 
 import { ChatView } from "@/components/chat/chat-view";
-import { CreatePostModal } from "@/components/posts/CreatePostModal";
-import { Search, X, Plus, MessageSquare, FileText } from "lucide-react";
+import { Search, X, MessageSquare, FileText } from "lucide-react";
 import { dummyPosts } from "@/components/posts/dummy-posts";
 import { TextDisplay } from "@/components/posts/display/TextDisplay";
 import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
@@ -19,7 +18,6 @@ import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Home } from "./components/home";
 import { Posts } from "./components/posts";
-
 
 // Map dummy posts to match our Post type
 const posts: Post[] = dummyPosts.map(post => ({
@@ -67,15 +65,12 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
   
   // Toggle collapse state and close any open modals
   const toggleCollapse = useCallback(() => {
-    if (!isCollapsed) {
-      setIsPostModalOpen(false);
-    }
     setIsCollapsed(prev => !prev);
-  }, [isCollapsed]);
+  }, []);
+
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -229,7 +224,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       case 'messages':
         return <ChatView onActiveConversationChange={setIsChatActive} />;
       case 'posts':
-        return <Posts />;
+        return <Posts onNewPostClick={() => {}} />;
       case 'stats':
         return <Home />;
       default:
@@ -350,7 +345,10 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         <div className="w-10 flex-shrink-0 bg-background pt-4">
           <nav className="flex flex-col items-start space-y-4 pl-2">
             <button
-              onClick={() => openPanel('stats')}
+              onClick={() => {
+                openPanel('stats');
+                setIsSearchOpen(false);
+              }}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'stats' ? 'text-foreground' : ''
               }`}
@@ -361,7 +359,10 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
             </button>
             
             <button
-              onClick={() => openPanel('posts')}
+              onClick={() => {
+                openPanel('posts');
+                setIsSearchOpen(false);
+              }}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'posts' ? 'text-foreground' : ''
               }`}
@@ -372,13 +373,27 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
             </button>
             
             <button
-              onClick={() => openPanel('messages')}
+              onClick={() => {
+                openPanel('messages');
+                setIsSearchOpen(false);
+              }}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'messages' ? 'text-foreground' : ''
               }`}
             >
               <span className={`relative ${currentView === 'messages' ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
                 Messages
+              </span>
+            </button>
+            
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
+                isSearchOpen ? 'text-foreground' : ''
+              }`}
+            >
+              <span className={`relative ${isSearchOpen ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
+                Search
               </span>
             </button>
           </nav>
@@ -396,31 +411,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         // Includes safe area insets for mobile browsers
         paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 2rem))'
       }}>
-        {/* Search and Action Buttons - Hidden when viewing user profile */}
-        {!selectedUser && (currentView !== 'messages' || !isChatActive) && (
-          <div className="absolute right-4 top-4 z-10">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsSearchOpen(true)}
-                className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Search"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsDropdownOpen(!isDropdownOpen);
-                  }}
-                  className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Dropdown Menu */}
         {isDropdownOpen && (
@@ -454,9 +445,9 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         
         {/* Search Overlay */}
         {isSearchOpen && (
-          <div className="absolute inset-0 z-20 backdrop-blur-sm bg-background/80 flex items-start justify-end p-4">
-            <div className="w-full max-w-md relative">
-              <form onSubmit={handleSearch} className="relative">
+          <div className="absolute inset-0 z-20 bg-background flex flex-col">
+            <div className="w-full p-4 border-b border-border">
+              <form onSubmit={handleSearch} className="relative w-full">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchInputRef}
@@ -464,22 +455,22 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
                   value={searchQuery}
                   onChange={handleSearchChange}
                   placeholder="Search for users..."
-                  className="w-full rounded-lg border border-border bg-background/95 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-lg"
+                  className="w-full rounded-lg border border-border bg-background/95 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
                   autoFocus
                 />
                 {(isSearching || searchResults.length > 0) && (
-                  <div className="absolute z-50 mt-1 w-full rounded-md bg-background shadow-lg border border-border max-h-60 overflow-auto">
+                  <div className="absolute left-0 right-0 z-50 mt-1 bg-background shadow-lg border-x border-b border-border max-h-[calc(100vh-120px)] overflow-y-auto">
                     {isSearching ? (
-                      <div className="p-2 text-sm text-muted-foreground">Searching...</div>
+                      <div className="p-4 text-sm text-muted-foreground">Searching...</div>
                     ) : searchResults.length > 0 ? (
                       searchResults.map((user) => (
                         <button
                           key={user.id}
                           type="button"
                           onClick={() => handleUserSelect(user.id, user.username)}
-                          className="flex w-full items-center gap-2 p-2 text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+                          className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent hover:text-accent-foreground transition-colors border-t border-border first:border-t-0"
                         >
-                          <Avatar className="h-8 w-8">
+                          <Avatar className="h-10 w-10">
                             {user.avatar_url && <AvatarImage src={user.avatar_url} />}
                             <AvatarFallback>
                               {user.username?.charAt(0).toUpperCase() || 'U'}
@@ -496,7 +487,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
                         </button>
                       ))
                     ) : (
-                      <div className="p-2 text-sm text-muted-foreground">No users found</div>
+                      <div className="p-4 text-sm text-muted-foreground">No users found</div>
                     )}
                   </div>
                 )}
@@ -518,16 +509,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         </div>
       </div>
       
-      {/* Create Post Modal */}
-      <CreatePostModal 
-        isOpen={isPostModalOpen && !isCollapsed} 
-        onClose={() => setIsPostModalOpen(false)}
-        // @ts-expect-error - The component's type definition is incorrect, but it works
-        onSubmit={(post: { type: string; content: string | File | null }) => {
-          console.log('New post created:', post);
-          // Handle the post submission (e.g., upload to server, update state, etc.)
-        }}
-      />
+
     </div>
   );
 }

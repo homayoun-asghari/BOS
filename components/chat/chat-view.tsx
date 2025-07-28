@@ -58,6 +58,31 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
     }
   }, [activeConversation, currentConversation, conversations, onActiveConversationChange]);
   
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Set initial scroll position to bottom when messages or conversation changes
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    // Initial scroll
+    scrollToBottom();
+
+    // Add a small delay and scroll again to ensure it sticks
+    const timer = setTimeout(scrollToBottom, 100);
+    
+    // Handle window resize
+    window.addEventListener('resize', scrollToBottom);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', scrollToBottom);
+    };
+  }, [messages, activeConversation]);
+
   // Log when messages or conversations change
   useEffect(() => {
     console.log('[ChatView] Messages updated:', {
@@ -114,15 +139,18 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
         />
         
         {/* Messages Container - Takes remaining space and allows scrolling */}
-        <div className="flex-1 overflow-y-auto p-4 pb-24">
-          <div className="max-w-3xl mx-auto w-full space-y-4">
-            {messages.map((message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                isCurrentUser={message.user_id === user?.id}
-              />
-            ))}
+        <div className="flex-1 overflow-y-auto p-4 pb-24" style={{ display: 'flex', flexDirection: 'column-reverse' }}>
+          <div className="max-w-3xl mx-auto w-full">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  isCurrentUser={message.user_id === user?.id}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
           </div>
         </div>
 

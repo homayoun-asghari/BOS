@@ -7,8 +7,9 @@ import Link from 'next/link';
 interface TimelineOverlayProps {
   user: {
     name: string;
-    avatarUrl?: string;
     username: string;
+    avatarUrl?: string;
+    display_name?: string;
   };
   currentRoadmap: {
     id: string;
@@ -59,7 +60,7 @@ export function TimelineOverlay({
             </Avatar>
             <div className="space-y-0">
               <p className="text-sm font-semibold text-foreground leading-tight">
-                {user?.name || 'Unknown User'}
+                {user?.display_name || user?.name || 'User'}
               </p>
               <p className="text-xs text-foreground/70 leading-tight">
                 @{user?.username || 'unknown'}
