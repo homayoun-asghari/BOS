@@ -1,4 +1,4 @@
-export type RightPanelView = 'chat' | 'posts' | 'stats' | 'messages';
+export type RightPanelView = 'chat' | 'posts' | 'stats' | 'messages' | 'search';
 
 export interface RightPanelContextType {
   currentView: RightPanelView;

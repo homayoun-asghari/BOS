@@ -65,7 +65,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  if (isHome) {
+  // Exclude home, terms, privacy, help, contact, and about pages from the main layout
+  if (isHome || pathname === '/terms' || pathname === '/privacy' || pathname === '/help' || pathname === '/contact' || pathname === '/about') {
     return <>{children}</>;
   }
 

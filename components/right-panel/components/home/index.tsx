@@ -5,11 +5,11 @@ import { HistorySection } from './HistorySection';
 
 export function Home() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="shrink-0">
+    <div className="flex flex-col h-full overflow-y-auto">
+      <div>
         <StatsSection />
       </div>
-      <div className="flex-1 min-h-0">
+      <div>
         <HistorySection />
       </div>
     </div>

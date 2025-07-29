@@ -10,7 +10,7 @@ import { useRightPanel } from "./context/right-panel-context";
 import { useMobileRightPanel } from "@/context/mobile-right-panel-context";
 
 import { ChatView } from "@/components/chat/chat-view";
-import { Search, X, MessageSquare, FileText } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { dummyPosts } from "@/components/posts/dummy-posts";
 import { TextDisplay } from "@/components/posts/display/TextDisplay";
 import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
@@ -68,11 +68,10 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
     setIsCollapsed(prev => !prev);
   }, []);
 
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // Search is now a regular tab, no need for separate state
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const router = useRouter();
   const { searchUsers, searchResults, isSearching, selectedUser, setSelectedUser } = useProfile();
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -117,33 +116,19 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       currentUrl.searchParams.set('profile', username);
       router.replace(currentUrl.pathname + currentUrl.search);
       
-      setIsSearchOpen(false);
+      // User profile is shown, search tab is closed automatically
       setSearchQuery('');
     } catch (error) {
       console.error('Error selecting user:', error);
     }
   }, [setSelectedUser, router]);
 
-  // Close dropdown when clicking outside
+  // Focus the search input when search tab is opened
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [dropdownRef]);
-
-  // Focus the search input when search is opened
-  useEffect(() => {
-    if (isSearchOpen && searchInputRef.current) {
+    if (currentView === 'search' && searchInputRef.current) {
       searchInputRef.current.focus();
     }
-  }, [isSearchOpen]);
+  }, [currentView]);
 
   const handleSearch = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -177,12 +162,11 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
     if (value.trim()) {
       const timeout = setTimeout(() => {
         searchUsers(value);
-        setIsDropdownOpen(true);
       }, 300);
       
       setSearchTimeout(timeout);
     } else {
-      setIsDropdownOpen(false);
+      // Clear search results when input is empty
     }
   };
   
@@ -227,6 +211,73 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         return <Posts onNewPostClick={() => {}} />;
       case 'stats':
         return <Home />;
+      case 'search':
+        return (
+          <div className="h-full overflow-y-auto bg-background flex flex-col">
+            <div className="w-full p-4">
+              <form onSubmit={handleSearch} className="relative w-full">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  placeholder="Search for users..."
+                  className="w-full rounded-lg border border-border bg-background/95 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
+                  autoFocus
+                />
+                {(isSearching || searchResults.length > 0) && (
+                  <div className="absolute left-0 right-0 z-50 mt-1 bg-background shadow-lg border-x border-b border-border max-h-[calc(100vh-120px)] overflow-y-auto">
+                    {isSearching ? (
+                      <div className="p-4 text-sm text-muted-foreground">Searching...</div>
+                    ) : searchResults.length > 0 ? (
+                      searchResults.map((user) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleUserSelect(user.id, user.username)}
+                          className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent hover:text-accent-foreground transition-colors border-t border-border first:border-t-0"
+                        >
+                          <Avatar className="h-10 w-10">
+                            {user.avatar_url && <AvatarImage src={user.avatar_url} />}
+                            <AvatarFallback>
+                              {user.username?.charAt(0).toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {user.display_name || user.username}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              @{user.username}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-4 text-sm text-muted-foreground">No users found</div>
+                    )}
+                  </div>
+                )}
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground px-2 py-1 text-sm"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </form>
+            </div>
+            
+            {!searchQuery && (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-muted-foreground">Search for users to connect with</p>
+              </div>
+            )}
+          </div>
+        );
       default:
         return (
           <div className="h-full overflow-y-auto">
@@ -345,10 +396,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         <div className="w-10 flex-shrink-0 bg-background pt-4">
           <nav className="flex flex-col items-start space-y-4 pl-2">
             <button
-              onClick={() => {
-                openPanel('stats');
-                setIsSearchOpen(false);
-              }}
+              onClick={() => openPanel('stats')}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'stats' ? 'text-foreground' : ''
               }`}
@@ -359,10 +407,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
             </button>
             
             <button
-              onClick={() => {
-                openPanel('posts');
-                setIsSearchOpen(false);
-              }}
+              onClick={() => openPanel('posts')}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'posts' ? 'text-foreground' : ''
               }`}
@@ -373,10 +418,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
             </button>
             
             <button
-              onClick={() => {
-                openPanel('messages');
-                setIsSearchOpen(false);
-              }}
+              onClick={() => openPanel('messages')}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
                 currentView === 'messages' ? 'text-foreground' : ''
               }`}
@@ -387,12 +429,12 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
             </button>
             
             <button
-              onClick={() => setIsSearchOpen(true)}
+              onClick={() => openPanel('search')}
               className={`group h-24 w-10 flex items-center justify-center transform -rotate-90 origin-left whitespace-nowrap text-sm font-medium text-foreground/80 hover:text-foreground transition-colors ${
-                isSearchOpen ? 'text-foreground' : ''
+                currentView === 'search' ? 'text-foreground' : ''
               }`}
             >
-              <span className={`relative ${isSearchOpen ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
+              <span className={`relative ${currentView === 'search' ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
                 Search
               </span>
             </button>
@@ -413,95 +455,9 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       }}>
 
 
-        {/* Dropdown Menu */}
-        {isDropdownOpen && (
-          <div
-            ref={dropdownRef}
-            className="absolute right-4 top-12 z-20 w-48 rounded-md bg-background shadow-lg border border-border"
-          >
-            <button 
-              onClick={() => {
-                setIsDropdownOpen(false);
-                setIsPostModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              <FileText className="h-4 w-4" />
-              <span>New Post</span>
-            </button>
-            <button 
-              onClick={() => {
-                setIsDropdownOpen(false);
-                // Handle new message
-                console.log('New message');
-              }}
-              className="flex items-center gap-2 px-4 py-2 w-full text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>New Message</span>
-            </button>
-          </div>
-        )}
+        {/* Dropdown Menu removed - no longer needed with search as a tab */}
         
-        {/* Search Overlay */}
-        {isSearchOpen && (
-          <div className="absolute inset-0 z-20 bg-background flex flex-col">
-            <div className="w-full p-4 border-b border-border">
-              <form onSubmit={handleSearch} className="relative w-full">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  placeholder="Search for users..."
-                  className="w-full rounded-lg border border-border bg-background/95 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
-                  autoFocus
-                />
-                {(isSearching || searchResults.length > 0) && (
-                  <div className="absolute left-0 right-0 z-50 mt-1 bg-background shadow-lg border-x border-b border-border max-h-[calc(100vh-120px)] overflow-y-auto">
-                    {isSearching ? (
-                      <div className="p-4 text-sm text-muted-foreground">Searching...</div>
-                    ) : searchResults.length > 0 ? (
-                      searchResults.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => handleUserSelect(user.id, user.username)}
-                          className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent hover:text-accent-foreground transition-colors border-t border-border first:border-t-0"
-                        >
-                          <Avatar className="h-10 w-10">
-                            {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                            <AvatarFallback>
-                              {user.username?.charAt(0).toUpperCase() || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0 space-y-0.5">
-                            <p className="text-sm font-medium text-foreground truncate">
-                              {user.display_name || user.username}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              @{user.username}
-                            </p>
-                          </div>
-                        </button>
-                      ))
-                    ) : (
-                      <div className="p-4 text-sm text-muted-foreground">No users found</div>
-                    )}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={searchQuery ? clearSearch : () => setIsSearchOpen(false)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground px-2 py-1 text-sm"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
+        {/* Search has been moved to a regular tab */}
         
         {/* Main Content */}
         <div className="h-full overflow-hidden">

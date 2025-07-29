@@ -1,0 +1,14 @@
+html, body {
+  height: 100%;
+  overflow-y: auto !important;
+}
+
+:root {
+  --viewport-height: 100vh;
+}
+
+@media screen and (max-height: 450px) {
+  .container {
+    padding-bottom: 100px;
+  }
+}

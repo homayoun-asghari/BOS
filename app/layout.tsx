@@ -23,6 +23,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BOS",
   description: "BOS - Build on Stacks",
+  icons: {
+    icon: [
+      { url: '/logo-dark/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/logo-dark/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo-dark/favicon.ico' }
+    ],
+    apple: [
+      { url: '/logo-dark/apple-touch-icon.png' }
+    ],
+    other: [
+      { url: '/logo-dark/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/logo-dark/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' }
+    ]
+  },
+  manifest: '/logo-dark/site.webmanifest'
 };
 
 export default function RootLayout({
@@ -34,6 +49,29 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const theme = localStorage.getItem('theme') || 'system';
+                  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  const resolvedTheme = theme === 'system' ? systemTheme : theme;
+                  
+                  // Update favicon based on theme
+                  const themePrefix = resolvedTheme === 'dark' ? 'logo-light' : 'logo-dark';
+                  
+                  // Update icons
+                  document.querySelector('link[rel="icon"]')?.setAttribute('href', '/' + themePrefix + '/favicon.ico');
+                  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', '/' + themePrefix + '/apple-touch-icon.png');
+                  document.querySelector('link[rel="manifest"]')?.setAttribute('href', '/' + themePrefix + '/site.webmanifest');
+                } catch (e) {
+                  console.error('Error setting theme-aware favicon:', e);
+                }
+              })();
+            `
+          }}
+        />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} h-full`}>
         <div className="flex flex-col h-full">

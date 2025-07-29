@@ -155,10 +155,10 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4">
+      <div className="sticky top-0 bg-background z-50 p-4 border-b">
         <h3 className="text-sm font-medium text-muted-foreground">History</h3>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         <div className="space-y-4 p-4">
           {completedRoadmaps.map((roadmap) => (
             <div key={roadmap.id} className="rounded-lg overflow-hidden">
