@@ -62,10 +62,19 @@ export function StatsSection() {
   const fetchSimilarPathUsers = async () => {
     if (!user?.id) return { similar: 0, completed: 0 };
     
-    console.log('Fetching similar path users for user:', user.id);
-    
     try {
-      // First, verify we can find the current user's roadmap vector
+      // Check if the user has any roadmaps first
+      const { count, error: roadmapError } = await supabase
+        .from('roadmaps')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+        
+      if (roadmapError || !count || count === 0) {
+        // New user with no roadmaps yet, return early to avoid vector lookup
+        return { similar: 0, completed: 0 };
+      }
+      
+      // Now verify we can find the current user's roadmap vector
       const { data: currentUserVector, error: vectorError } = await supabase
         .from('user_roadmap_vectors')
         .select('*')
@@ -73,11 +82,9 @@ export function StatsSection() {
         .single();
       
       if (vectorError || !currentUserVector) {
-        console.error('Error or no vector found for current user:', vectorError);
+        // Silent fail for new users without vectors
         return { similar: 0, completed: 0 };
       }
-      
-      console.log('Current user vector found, searching for similar users...');
       
       // Get users with similar paths (lower threshold to 0.5 to find more matches)
       const { data: similarUsers, error } = await supabase

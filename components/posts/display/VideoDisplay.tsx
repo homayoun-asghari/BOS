@@ -87,24 +87,10 @@ export function VideoDisplay({
 
           {/* Timeline Overlay */}
           <TimelineOverlay
-            user={{
-              name: user.name,
-              username: user.username || 'user',
-              avatarUrl: user.avatarUrl,
-              display_name: user.display_name
-            }}
-            currentRoadmap={currentRoadmap ? {
-              id: currentRoadmap.id,
-              title: currentRoadmap.title
-            } : null}
-            currentMilestone={currentMilestone ? {
-              id: currentMilestone.id,
-              title: currentMilestone.title
-            } : null}
-            currentTask={currentTask ? {
-              id: currentTask.id,
-              title: currentTask.title
-            } : null}
+            user={user}
+            currentRoadmap={currentRoadmap}
+            currentMilestone={currentMilestone}
+            currentTask={currentTask}
           />
 
           {/* Play/Pause Button Overlay */}

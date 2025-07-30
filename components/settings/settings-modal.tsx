@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sun, Moon, Bell, User, Shield, Settings as SettingsIcon } from 'lucide-react';
+import { Sun, Moon, User, Shield, Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
+import { AvatarUploader } from './AvatarUploader';
 import { convertToMilliseconds } from '@/hooks/useShuffleSettings';
 import { useShuffleSettings, TimeUnit } from '@/hooks/useShuffleSettings';
 import { Input } from '@/components/ui/input';
@@ -15,14 +16,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from 'next-themes';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase/client';
 
 interface UserData {
   id: string;
   email?: string;
   user_metadata?: {
     full_name?: string;
+    name?: string;
+    display_name?: string;
     avatar_url?: string;
   };
+  full_name?: string;
+  name?: string;
+  display_name?: string;
+  avatar_url?: string;
 }
 
 interface SettingsModalProps {
@@ -33,10 +43,13 @@ interface SettingsModalProps {
 
 type SettingsTab = 'general' | 'notifications' | 'account' | 'security';
 
-export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) {
+export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
+  const { user, refreshSession } = useAuth();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Shuffle settings
   const {
@@ -71,8 +84,13 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
     setTimeUnit(unit);
   };
   const [formData, setFormData] = useState({
-    name: user?.user_metadata?.full_name || '',
-    email: user?.email || '',
+    name: '',
+    email: '',
+    avatarUrl: user?.user_metadata?.avatar_url || '',
+    newPassword: '',
+    confirmPassword: '',
+    avatarFile: null as File | null,
+    deleteAvatar: false,
     notifications: {
       email: true,
       push: true,
@@ -81,31 +99,222 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
     twoFactorAuth: false,
     language: 'en',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleSave = async () => {
-    setIsLoading(true);
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
     
-    // Save the current values
-    const ms = convertToMilliseconds(localTimeValue, localTimeUnit);
-    
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('codeShuffleInterval', ms.toString());
-        
-        // Dispatch a custom event that TheCode component can listen to
-        window.dispatchEvent(new CustomEvent('shuffleIntervalChanged', { detail: ms }));
-      } catch (e) {
-        console.error('Error saving to localStorage:', e);
+    if (formData.newPassword) {
+      if (formData.newPassword.length < 6) {
+        newErrors.newPassword = 'Password must be at least 6 characters';
+      }
+      
+      if (formData.newPassword !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
       }
     }
     
-    // Close the modal
-    setTimeout(() => {
-      setIsLoading(false);
-      onOpenChange(false);
-    }, 300);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
+  
+  const handleAvatarChange = (file: File | null) => {
+    setFormData(prev => ({
+      ...prev,
+      avatarFile: file,
+      deleteAvatar: file === null,
+      // If file is null (deleted), clear the preview URL
+      ...(file === null ? { avatarUrl: '' } : {})
+    }));
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user?.id) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete user data from storage
+      const { data: files } = await supabase.storage
+        .from('avatars')
+        .list(user.id);
+      
+      if (files && files.length > 0) {
+        const filePaths = files.map(f => `${user.id}/${f.name}`);
+        await supabase.storage.from('avatars').remove(filePaths);
+      }
+      
+      // Delete user's profile
+      await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+      
+      // Delete auth user
+      const { error: deleteError } = await supabase.rpc('delete_user');
+      if (deleteError) throw deleteError;
+      
+      // Sign out
+      await supabase.auth.signOut();
+      
+      // Refresh the page to clear all state
+      window.location.href = '/';
+      
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast.error(
+        error instanceof Error 
+          ? `Failed to delete account: ${error.message}`
+          : 'Failed to delete account. Please try again.'
+      );
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    
+    try {
+      // Save the shuffle settings to localStorage
+      const ms = convertToMilliseconds(localTimeValue, localTimeUnit);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('codeShuffleInterval', ms.toString());
+        window.dispatchEvent(new CustomEvent('shuffleIntervalChanged', { detail: ms }));
+      }
+      
+      // Handle avatar changes first
+      if (formData.avatarFile) {
+        // Upload new avatar
+        const fileExt = formData.avatarFile.name.split('.').pop();
+        const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+        const filePath = `${user?.id}/${fileName}`;
+
+        // Delete old avatars
+        const { data: files } = await supabase.storage
+          .from('avatars')
+          .list(user?.id || '');
+          
+        if (files && files.length > 0) {
+          const filePaths = files.map(f => `${user?.id}/${f.name}`);
+          await supabase.storage.from('avatars').remove(filePaths);
+        }
+
+        // Upload new file
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, formData.avatarFile, {
+            cacheControl: '3600',
+            upsert: true
+          });
+          
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        // Update profile with new avatar
+        await supabase
+          .from('profiles')
+          .update({ avatar_url: publicUrl })
+          .eq('id', user?.id);
+          
+        await supabase.auth.updateUser({
+          data: { avatar_url: publicUrl }
+        });
+      } else if (formData.deleteAvatar) {
+        // Delete avatar
+        const { data: files } = await supabase.storage
+          .from('avatars')
+          .list(user?.id || '');
+          
+        if (files && files.length > 0) {
+          const filePaths = files.map(f => `${user?.id}/${f.name}`);
+          await supabase.storage.from('avatars').remove(filePaths);
+        }
+        
+        // Remove avatar from profile
+        await supabase
+          .from('profiles')
+          .update({ avatar_url: null })
+          .eq('id', user?.id);
+          
+        await supabase.auth.updateUser({
+          data: { avatar_url: null }
+        });
+      }
+      
+      // Update profile if name changed
+      if (formData.name !== user?.user_metadata?.full_name) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ display_name: formData.name })
+          .eq('id', user?.id);
+          
+        if (profileError) throw profileError;
+      }
+      
+      // Update password if changed
+      if (formData.newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: formData.newPassword
+        });
+        
+        if (passwordError) throw passwordError;
+      }
+      
+      // Refresh session to get latest data
+      await refreshSession(true);
+      
+      // Close the modal
+      onOpenChange(false);
+      
+      // Show success message
+      toast.success('Settings saved successfully');
+      
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast.error(
+        error instanceof Error 
+          ? `Failed to save changes: ${error.message}`
+          : 'Failed to save changes. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initialize form data with user data
+  useEffect(() => {
+    if (user) {
+      // Get the user's display name from all possible locations
+      const displayName = user.user_metadata?.display_name || 
+                        user.user_metadata?.full_name || 
+                        user.user_metadata?.name || 
+                        user.display_name ||
+                        user.full_name || 
+                        user.name ||
+                        '';
+      
+      setFormData(prev => ({
+        ...prev,
+        name: displayName,
+        email: user.email || '',
+        avatarUrl: user.user_metadata?.avatar_url || user.avatar_url || '',
+        deleteAvatar: false,
+        avatarFile: null,
+      }));
+    }
+  }, [user]);
+
+  // Avatar updates are now handled directly in the AvatarUploader component
+  // with a page reload to ensure all components get the update
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -113,17 +322,27 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    
+    // Clear error for this field when user types
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
-  const handleNotificationChange = (key: string) => {
-    setFormData(prev => ({
-      ...prev,
-      notifications: {
-        ...prev.notifications,
-        [key]: !prev.notifications[key as keyof typeof prev.notifications]
-      }
-    }));
-  };
+  // Temporarily disabled notifications
+  // const handleNotificationChange = (key: string) => {
+  //   setFormData(prev => ({
+  //     ...prev,
+  //     notifications: {
+  //       ...prev.notifications,
+  //       [key]: !prev.notifications[key as keyof typeof prev.notifications]
+  //     }
+  //   }));
+  // };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -153,6 +372,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
             <SettingsIcon className="inline-block h-4 w-4 mr-2" />
             General
           </button>
+          {/* Temporarily disabled Notifications
           <button
             onClick={() => setActiveTab('notifications')}
             className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
@@ -164,6 +384,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
             <Bell className="inline-block h-4 w-4 mr-2" />
             Notifications
           </button>
+          */}
           <button
             onClick={() => setActiveTab('account')}
             className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
@@ -203,6 +424,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
               <SettingsIcon className="mr-2 h-4 w-4" />
               General
             </Button>
+            {/* Temporarily disabled Notifications
             <Button
               variant={activeTab === 'notifications' ? 'secondary' : 'ghost'}
               className="w-full justify-start"
@@ -211,6 +433,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
               <Bell className="mr-2 h-4 w-4" />
               Notifications
             </Button>
+            */}
             <Button
               variant={activeTab === 'account' ? 'secondary' : 'ghost'}
               className="w-full justify-start"
@@ -295,14 +518,11 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                   <label className="block mb-2 text-sm font-medium">Language</label>
                   <div className="relative">
                     <select
-                      value={formData.language}
-                      onChange={(e) => setFormData({...formData, language: e.target.value})}
-                      className="w-full pl-3 pr-8 py-2.5 text-sm border rounded-md appearance-none bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      value="en"
+                      disabled
+                      className="w-full pl-3 pr-8 py-2.5 text-sm border rounded-md appearance-none bg-muted/50 cursor-not-allowed text-muted-foreground"
                     >
-                      <option value="en">English</option>
-                      <option value="es">Español</option>
-                      <option value="fr">Français</option>
-                      <option value="de">Deutsch</option>
+                      <option value="en">English (Only available option)</option>
                     </select>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                       <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -315,6 +535,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
             </div>
           )}
 
+          {/* Temporarily disabled Notifications
           {activeTab === 'notifications' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Notification Settings</h2>
@@ -340,11 +561,20 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
               </div>
             </div>
           )}
+          */}
 
           {activeTab === 'account' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Account Information</h2>
-              <div className="space-y-4">
+              <div className="space-y-6">
+                <div className="flex flex-col items-center p-6 border rounded-lg space-y-4">
+                  <AvatarUploader 
+                    currentAvatarUrl={formData.avatarUrl}
+                    onAvatarChange={handleAvatarChange}
+                    isSaving={isLoading}
+                  />
+                </div>
+                
                 <div className="p-4 border rounded-lg space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Full Name</label>
@@ -366,23 +596,51 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                       className="w-full p-2 border rounded-md"
                       disabled
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Contact support to change your email</p>
+
                   </div>
                 </div>
 
-                <div className="p-4 border-2 border-red-200 dark:border-red-900 rounded-lg bg-red-50 dark:bg-red-950/30">
-                  <h3 className="font-medium text-red-700 dark:text-red-400">Danger Zone</h3>
-                  <p className="text-sm text-red-600 dark:text-red-400/80 mb-4">
-                    Once you delete your account, there is no going back. Please be certain.
+                <div className="p-4 border rounded-lg bg-background/50">
+                  <h3 className="font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Danger Zone
+                  </h3>
+                  <p className="text-sm text-muted-foreground my-3">
+                    Once you delete your account, all your data will be permanently removed. This action cannot be undone.
                   </p>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    onClick={() => {}}
-                    className="font-medium bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 transition-colors"
-                  >
-                    Delete Account
-                  </Button>
+                  
+                  {!showDeleteConfirm ? (
+                    <Button 
+                      variant="outline"
+                      size="sm" 
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="font-medium"
+                    >
+                      Delete Account
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Are you sure you want to delete your account?</p>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline"
+                          size="sm" 
+                          onClick={() => setShowDeleteConfirm(false)}
+                          disabled={isDeleting}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          variant="destructive"
+                          size="sm" 
+                          onClick={handleDeleteAccount}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Deleting...' : 'Yes, delete my account'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -392,6 +650,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Security</h2>
               <div className="space-y-4">
+                {/* Temporarily disabled Two-Factor Authentication
                 <div className="p-4 border rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
@@ -406,6 +665,7 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                         checked={formData.twoFactorAuth}
                         onChange={() => setFormData({...formData, twoFactorAuth: !formData.twoFactorAuth})}
                         className="sr-only peer"
+                        disabled
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
@@ -414,7 +674,6 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                     <div className="mt-4 p-3 bg-muted rounded-md">
                       <p className="text-sm">Scan this QR code with your authenticator app:</p>
                       <div className="mt-2 p-2 bg-white inline-block rounded">
-                        {/* Placeholder for QR code */}
                         <div className="w-32 h-32 bg-gray-200 flex items-center justify-center text-xs text-gray-500">
                           QR Code
                         </div>
@@ -422,22 +681,18 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                     </div>
                   )}
                 </div>
+                */}
 
                 <div className="p-4 border rounded-lg">
-                  <h3 className="font-medium mb-2">Change Password</h3>
+                  <h3 className="font-medium mb-4">Change Password</h3>
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Current Password</label>
-                      <input
-                        type="password"
-                        className="w-full p-2 border rounded-md"
-                        placeholder="Enter current password"
-                      />
-                    </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">New Password</label>
                       <input
                         type="password"
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleInputChange}
                         className="w-full p-2 border rounded-md"
                         placeholder="Enter new password"
                       />
@@ -446,24 +701,41 @@ export function SettingsModal({ open, onOpenChange, user }: SettingsModalProps) 
                       <label className="block text-sm font-medium mb-1">Confirm New Password</label>
                       <input
                         type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
                         className="w-full p-2 border rounded-md"
                         placeholder="Confirm new password"
                       />
                     </div>
-                    <Button size="sm">Update Password</Button>
+                    {errors.password && (
+                      <p className="text-sm text-red-500">{errors.password}</p>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="mt-8 flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </Button>
+          <div className="mt-8 flex justify-between items-center">
+            {errors.general && (
+              <p className="text-sm text-red-500">{errors.general}</p>
+            )}
+            <div className="flex space-x-2 ml-auto">
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSave} 
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

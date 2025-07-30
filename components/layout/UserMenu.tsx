@@ -13,9 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   LogOut, 
-  HelpCircle, 
   Zap,
-  ChevronRight,
   Mail,
   Loader2,
   Settings as SettingsIcon
@@ -34,10 +32,10 @@ interface UserMenuProps {
   loading: boolean;
   onOpenChange?: (open: boolean) => void;
   onOpenSettings: () => void;
-  onOpenHelp: () => void;
+
 }
 
-export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHelp }: UserMenuProps) {
+export function UserMenu({ user, loading, onOpenChange, onOpenSettings }: UserMenuProps) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { signOut } = useAuth();
@@ -112,6 +110,7 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHe
               <span>Settings</span>
             </button>
           </DropdownMenuItem>
+          {/* Temporarily disabled Help & Support
           <DropdownMenuItem asChild>
             <button 
               className="w-full cursor-pointer flex items-center"
@@ -124,35 +123,32 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings, onOpenHe
               <span>Help & Support</span>
             </button>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link 
-              href="/upgrade" 
-              className="w-full cursor-pointer flex items-center justify-between"
-              onClick={(e) => e.stopPropagation()}
-            >
+          */}
+          <DropdownMenuItem className="opacity-50 cursor-not-allowed" onClick={(e) => e.preventDefault()}>
+            <div className="w-full flex items-center justify-between">
               <div className="flex items-center">
-                <Zap className="mr-2 h-4 w-4 text-yellow-500" />
-                <span>Upgrade Plan</span>
+                <Zap className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Upgrade Plan</span>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
+              <span className="text-xs text-muted-foreground">Coming Soon</span>
+            </div>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <button 
-              className="w-full cursor-pointer flex items-center text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+              className="w-full cursor-pointer flex items-center hover:bg-accent"
               onClick={handleSignOut}
               disabled={isSigningOut}
             >
               {isSigningOut ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  <span>Signing out...</span>
+                  <span>Logging out...</span>
                 </>
               ) : (
                 <>
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>Log out</span>
                 </>
               )}
             </button>

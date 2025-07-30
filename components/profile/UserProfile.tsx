@@ -332,10 +332,14 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex items-start gap-4">
-              <Avatar className="w-20 h-20 flex-shrink-0">
-                <AvatarImage src={profile.avatar_url || ''} />
-                <AvatarFallback>{(profile.username || 'U')[0].toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <div className="relative flex-shrink-0">
+                <Avatar className="w-20 h-20 border-2 border-background/50 shadow-sm">
+                  <AvatarImage src={profile.avatar_url || ''} className="object-cover" />
+                  <AvatarFallback className="bg-foreground/5 text-foreground/80 text-2xl font-medium">
+                    {(profile.username || 'U')[0].toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
               <div className="flex-1">
                 <div>
                   <h1 className="text-2xl font-bold">{profile.display_name || profile.username || 'User'}</h1>

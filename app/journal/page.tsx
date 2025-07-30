@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import debounce from 'lodash/debounce';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { JournalDatePicker } from '@/components/journal/JournalDatePicker';
@@ -33,7 +34,7 @@ export default function JournalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [journal, setJournal] = useState<JournalEntry | null>(null);
-  const [isEditorReady, setIsEditorReady] = useState(false);
+  // Used to track when editor is ready to receive content
 
   // Format date as "YYYY DayOfWeek" (e.g., "2025 Friday")
   const formatDateHeader = useCallback((date: Date): string => {
@@ -204,122 +205,9 @@ export default function JournalPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase, createInitialContent]);
+  }, [createInitialContent, formatDateHeader]);  // Only include function dependencies, not supabase
 
-  // Save journal entry
-  const saveJournalEntry = useCallback(async () => {
-    if (!journal) return;
-    
-    try {
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (!userId) return;
-
-      // Define default empty content
-      const defaultContent: JournalContent = { type: 'doc', content: [] };
-      
-      // Ensure we have valid content to work with
-      const currentContent = journal.content || defaultContent;
-      const dateHeader = formatDateHeader(selectedDate);
-      
-      // Type guard to check if content has the date header
-      const hasDateHeader = (
-        currentContent.content && 
-        currentContent.content.length > 0 &&
-        currentContent.content[0]?.type === 'heading' &&
-        currentContent.content[0].content?.[0]?.text === dateHeader
-      );
-      
-      // If we don't have a date header, create one
-      if (!hasDateHeader) {
-        const newContent = createInitialContent(selectedDate);
-        
-        // If there's existing content, append it after the header
-        if (currentContent.content && currentContent.content.length > 0) {
-          // Create a safe array to work with
-          const safeContent = Array.isArray(currentContent.content) ? currentContent.content : [];
-          
-          // Skip the first element if it was a different header
-          const contentToAppend = safeContent[0]?.type === 'heading'
-            ? safeContent.slice(1)
-            : safeContent;
-            
-          // Ensure we have valid arrays to spread
-          const newContentArray = Array.isArray(newContent.content) ? newContent.content : [];
-          const appendArray = Array.isArray(contentToAppend) ? contentToAppend : [];
-          
-          newContent.content = [...newContentArray, ...appendArray];
-        }
-        
-        // Update the content with the new header
-        const updatedJournal = {
-          ...journal,
-          content: newContent
-        };
-        
-        setJournal(updatedJournal);
-        
-        // Use the updated content for saving
-        if (journal.id) {
-          const { error } = await supabase
-            .from('journals')
-            .update({ 
-              content: newContent,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', journal.id);
-
-          if (error) throw error;
-        } else {
-          const { data: newJournal, error } = await supabase
-            .from('journals')
-            .insert({
-              user_id: userId,
-              title: selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-              content: newContent,
-              day_index: getDayOfYear(selectedDate),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-          setJournal(newJournal as JournalEntry);
-        }
-      } else {
-        // Save the existing content as is
-        if (journal.id) {
-          const { error } = await supabase
-            .from('journals')
-            .update({ 
-              content: currentContent,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', journal.id);
-
-          if (error) throw error;
-        } else {
-          const { data: newJournal, error } = await supabase
-            .from('journals')
-            .insert({
-              user_id: userId,
-              title: selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-              content: currentContent,
-              day_index: getDayOfYear(selectedDate),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-          setJournal(newJournal as JournalEntry);
-        }
-      }
-    } catch (error) {
-      console.error('Error saving journal entry:', error);
-    }
-  }, [journal, selectedDate, supabase, formatDateHeader, createInitialContent]);
+  // Note: Previous saveJournalEntry function removed as it's replaced by saveJournalDebounced
   
   // Helper function to calculate day of year (1-366)
   const getDayOfYear = (date: Date): number => {
@@ -337,6 +225,59 @@ export default function JournalPage() {
     }
     return dayOfYear;
   };
+  
+  // Create a debounced save function - DEFINED FIRST to avoid circular reference
+  const saveJournalDebounced = useCallback(
+    // Using an inline function to satisfy the linter
+    function debouncedSave(updatedJournal: JournalEntry) {
+      const saveFunction = debounce(async (journalToSave: JournalEntry) => {
+        console.log('Auto-saving journal entry...');
+        try {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          if (!userId) return;
+  
+          if (journalToSave.id) {
+            // Update existing entry
+            const { error } = await supabase
+              .from('journals')
+              .update({ 
+                content: journalToSave.content,
+                updated_at: journalToSave.updated_at
+              })
+              .eq('id', journalToSave.id);
+  
+            if (error) throw error;
+            console.log('Journal entry updated successfully');
+          } else {
+            // Create new entry
+            const { data: newJournal, error } = await supabase
+              .from('journals')
+              .insert({
+                user_id: userId,
+                title: selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+                content: journalToSave.content,
+                day_index: getDayOfYear(selectedDate),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+  
+            if (error) throw error;
+            setJournal(newJournal as JournalEntry);
+            console.log('New journal entry created successfully');
+          }
+        } catch (error) {
+          console.error('Error saving journal entry:', error);
+        }
+      }, 1000);
+      
+      saveFunction(updatedJournal);
+      return saveFunction.cancel;
+    },
+    // Only including selectedDate as dependency since supabase is imported and won't change
+    [selectedDate]
+  );
 
   // Handle editor changes
   const handleEditorChange = useCallback((content: string) => {
@@ -346,72 +287,110 @@ export default function JournalPage() {
       // Parse the content string back to JSON
       const parsedContent = JSON.parse(content) as JournalContent;
       
+      // Check if we need to add the current year's date header
+      const dateHeader = formatDateHeader(selectedDate);
+      let contentToSave = parsedContent;
+      
+      // Check if the content has a header for the current year
+      const contentArray = Array.isArray(parsedContent.content) ? parsedContent.content : [];
+      const currentYear = selectedDate.getFullYear().toString();
+      
+      // Look for a heading that contains the current year (e.g., "2025 Wednesday")
+      const hasCurrentYearHeader = contentArray.some(node => 
+        node?.type === 'heading' && 
+        node?.content?.[0]?.text?.includes(currentYear)
+      );
+      
+      // If there's no header for the current year, add it at the beginning
+      if (!hasCurrentYearHeader) {
+        console.log('Adding new year header:', dateHeader);
+        
+        // Create a new header node for this year
+        const headerNode = {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: dateHeader }]
+        };
+        
+        // Always add the new year heading at the beginning
+        // This preserves all previous years' headings and content
+        contentArray.unshift(headerNode);
+        
+        // Update the content with the new header
+        contentToSave = {
+          ...parsedContent,
+          content: contentArray
+        };
+      } else {
+        // Current year header already exists, no changes needed
+        contentToSave = parsedContent;
+      }
+      
       // Update the local state with the new content
       const updatedJournal = {
         ...journal,
-        content: parsedContent,
+        content: contentToSave,
         updated_at: new Date().toISOString()
       };
       
       setJournal(updatedJournal);
       
-      // Auto-save after a short delay
-      const timer = setTimeout(async () => {
-        try {
-          const userId = (await supabase.auth.getUser()).data.user?.id;
-          if (!userId) return;
-
-          if (updatedJournal.id) {
-            // Update existing entry
-            const { error } = await supabase
-              .from('journals')
-              .update({ 
-                content: updatedJournal.content,
-                updated_at: updatedJournal.updated_at
-              })
-              .eq('id', updatedJournal.id);
-
-            if (error) throw error;
-          } else {
-            // Create new entry
-            const { data: newJournal, error } = await supabase
-              .from('journals')
-              .insert({
-                user_id: userId,
-                title: selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-                content: updatedJournal.content,
-                day_index: getDayOfYear(selectedDate),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-            if (error) throw error;
-            setJournal(newJournal as JournalEntry);
-          }
-        } catch (error) {
-          console.error('Error saving journal entry:', error);
-        }
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      // Set up auto-save with a persistent reference
+      saveJournalDebounced(updatedJournal);
     } catch (error) {
       console.error('Error parsing editor content:', error);
     }
-  }, [journal, selectedDate, supabase]);
+  }, [journal, selectedDate, formatDateHeader, saveJournalDebounced]);
   
-  // Set up editor ready state
+  // Set up date header when journal loads
   useEffect(() => {
     if (!journal) return;
     
-    // Use a small delay to ensure the editor is mounted
-    const timer = setTimeout(() => {
-      setIsEditorReady(true);
-    }, 100);
+    // Check if the journal content has a header for the current year
+    const dateHeader = formatDateHeader(selectedDate);
+    const currentContent = journal.content || { type: 'doc', content: [] };
+    const contentArray = Array.isArray(currentContent.content) ? currentContent.content : [];
+    const currentYear = selectedDate.getFullYear().toString();
     
-    return () => clearTimeout(timer);
-  }, [journal]);
+    // Look for a heading that contains the current year (e.g., "2025 Wednesday")
+    const hasCurrentYearHeader = contentArray.some(node => 
+      node?.type === 'heading' && 
+      node?.content?.[0]?.text?.includes(currentYear)
+    );
+    
+    // If there's no header for the current year, add it now
+    if (!hasCurrentYearHeader && !isLoading) {
+      console.log('Adding new year header on mount:', dateHeader);
+      
+      // Create a new header node for this year
+      const headerNode = {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: dateHeader }]
+      };
+      
+      // Always insert at the beginning to preserve existing content
+      const updatedContentArray = [headerNode, ...contentArray];
+      
+      const updatedContent = {
+        ...currentContent,
+        content: updatedContentArray
+      };
+      
+      // Update the journal with the new content
+      const updatedJournal = {
+        ...journal,
+        content: updatedContent
+      };
+      
+      setJournal(updatedJournal);
+      
+      // Save the updated journal with the header
+      saveJournalDebounced(updatedJournal);
+    }
+    
+    // No longer need to track isEditorReady state
+  }, [journal, selectedDate, formatDateHeader, isLoading, saveJournalDebounced]);
 
 
 
@@ -419,9 +398,8 @@ export default function JournalPage() {
   useEffect(() => {
     console.log('useEffect triggered with selectedDate:', selectedDate);
     
-    // Reset editor ready state when date changes
-    console.log('Resetting editor ready state');
-    setIsEditorReady(false);
+    // Reset and fetch when date changes
+    console.log('Date changed, fetching new journal entry');
     
     // Fetch the journal entry for the selected date
     console.log('Calling fetchJournalEntry with date:', selectedDate);

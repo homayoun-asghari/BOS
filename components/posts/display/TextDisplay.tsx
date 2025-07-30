@@ -63,23 +63,10 @@ export function TextDisplay({
       }}
     >
       <TimelineOverlay
-        user={{
-          name: user.name,
-          username: user.username,
-          avatarUrl: user.avatarUrl
-        }}
-        currentRoadmap={currentRoadmap ? {
-          id: currentRoadmap.id,
-          title: currentRoadmap.title
-        } : null}
-        currentMilestone={currentMilestone ? {
-          id: currentMilestone.id,
-          title: currentMilestone.title
-        } : null}
-        currentTask={currentTask ? {
-          id: currentTask.id,
-          title: currentTask.title
-        } : null}
+        user={user}
+        currentRoadmap={currentRoadmap}
+        currentMilestone={currentMilestone}
+        currentTask={currentTask}
       />
       
       <div className="absolute inset-0 flex flex-col p-4">

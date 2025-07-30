@@ -18,13 +18,28 @@ export function ImagePost({ preview: initialPreview, onFileChange }: Omit<ImageP
   const [isCapturing, setIsCapturing] = useState(false);
   const [preview, setPreview] = useState<string | null>(initialPreview || null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement> | File) => {
+    let file: File | null = null;
+    
+    if (e instanceof File) {
+      file = e;
+    } else {
+      file = e.target.files?.[0] || null;
+    }
+    
+    if (!file) return;
 
-    const previewUrl = URL.createObjectURL(selectedFile);
+    const previewUrl = URL.createObjectURL(file);
     setPreview(previewUrl);
-    onFileChange(selectedFile);
+    
+    // Create a mock event object that matches what the parent component expects
+    const mockEvent = {
+      target: {
+        files: [file]
+      }
+    } as unknown as React.ChangeEvent<HTMLInputElement>;
+    
+    onFileChange(mockEvent);
   };
 
   const startCamera = async () => {
@@ -119,11 +134,10 @@ export function ImagePost({ preview: initialPreview, onFileChange }: Omit<ImageP
     if (!blob) return;
 
     const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    const previewUrl = URL.createObjectURL(blob);
-
-    setPreview(previewUrl);
-    onFileChange(file);
-
+    
+    // Call handleFileChange directly with the file
+    handleFileChange(file);
+    
     stopCamera();
   };
 

@@ -3,6 +3,7 @@
 import { useAuth } from './AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -181,7 +182,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             terms_accepted_at: new Date().toISOString(),
             terms_version: '1.0'
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/roadmap`,
         },
       });
 
@@ -230,7 +231,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}?reset=true`,
+        redirectTo: `${window.location.origin}/?reset=true`,
       });
 
       if (error) throw error;
@@ -303,10 +304,10 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   if (mode === 'forgot-password') {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px]" aria-describedby="reset-password-description">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-2xl font-bold">Reset Password</DialogTitle>
-            <CardDescription className="mt-1">
+            <CardDescription className="mt-1" id="reset-password-description">
               Enter your email to receive a password reset link
             </CardDescription>
           </DialogHeader>
@@ -346,11 +347,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   if (mode === 'reset-password') {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px]" aria-describedby="reset-password-description">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-2xl font-bold">Set New Password</DialogTitle>
-            <CardDescription className="mt-1">
-              Enter your new password below
+            <CardDescription className="mt-1" id="reset-password-description">
+              Create a new password for your account
             </CardDescription>
           </DialogHeader>
           <form onSubmit={handleResetPassword} className="space-y-4 mt-4">
@@ -395,11 +396,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       onOpenChange(openState);
       if (!openState) resetForm(); // Reset when closing
     }}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" aria-describedby="auth-description">
         <DialogHeader className="space-y-1">
           <DialogTitle className="text-2xl font-bold">
             {mode === 'login' ? 'Welcome back' : 'Create an account'}
           </DialogTitle>
+          <p id="auth-description" className="text-sm text-muted-foreground hidden">
+            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+          </p>
           <CardDescription className="mt-1">
             {mode === 'login' 
               ? 'Enter your credentials to sign in to your account.'
@@ -516,15 +520,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 />
               </div>
               <div className="flex items-start space-x-2 py-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   id="terms-checkbox"
                   checked={acceptedTerms}
-                  onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  onCheckedChange={(checked: boolean) => setAcceptedTerms(checked)}
+                  className="border-foreground/30 dark:border-foreground/50 data-[state=checked]:bg-foreground/10 data-[state=checked]:border-foreground/50 dark:data-[state=checked]:bg-foreground/20 mt-0.5"
                   required
                 />
-                <label htmlFor="terms-checkbox" className="text-sm text-muted-foreground">
+                <label htmlFor="terms-checkbox" className="text-xs text-muted-foreground">
                   I agree to the <a onClick={(e) => { e.preventDefault(); const w = window.open('about:blank', '_blank'); if (w) w.location.href = window.location.origin + '/terms'; }} className="text-primary hover:underline cursor-pointer">Terms and Conditions</a> and <a onClick={(e) => { e.preventDefault(); const w = window.open('about:blank', '_blank'); if (w) w.location.href = window.location.origin + '/privacy'; }} className="text-primary hover:underline cursor-pointer">Privacy Policy</a>
                 </label>
               </div>

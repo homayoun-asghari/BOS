@@ -46,23 +46,33 @@ export function TimelineOverlay({
       "backdrop-blur-sm",
       "text-foreground dark:text-foreground/90",
       "rounded-t-[1rem]",
+      "z-40", /* Add high z-index to ensure overlay is always on top */
       className
     )}>
       <div className="flex flex-col gap-2">
         {/* User Info */}
         <div className="flex items-center gap-3">
-          <Link href={`/roadmap?profile=${user?.username || 'unknown'}`} className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 border border-foreground/20">
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-foreground text-background text-xs font-bold">
-                {user?.name?.charAt(0) || 'U'}
+          <Link 
+            href={`/roadmap?profile=${user?.username || 'unknown'}`} 
+            className="flex items-center gap-3 cursor-pointer z-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const url = `/roadmap?profile=${user?.username || 'unknown'}`;
+              window.location.href = url;
+            }}
+          >
+            <Avatar className="h-10 w-10 border border-foreground/10">
+              <AvatarImage src={user?.avatarUrl} className="object-cover" />
+              <AvatarFallback className="bg-foreground/5 text-foreground/80 text-sm font-medium">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
-            <div className="space-y-0">
-              <p className="text-sm font-semibold text-foreground leading-tight">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-foreground leading-none">
                 {user?.display_name || user?.name || 'User'}
               </p>
-              <p className="text-xs text-foreground/70 leading-tight">
+              <p className="text-xs text-foreground/50 leading-none">
                 @{user?.username || 'unknown'}
               </p>
             </div>

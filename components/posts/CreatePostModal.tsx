@@ -644,6 +644,16 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
             videoRef={videoRef}
           />
         );
+      case 'voice':
+        return (
+          <VoicePost 
+            onRecordingComplete={(blob) => {
+              const audioFile = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
+              setMediaFile(audioFile);
+            }}
+            onCancel={() => setType(null)}
+          />
+        );
       default:
         return null;
     }

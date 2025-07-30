@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -12,6 +12,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 export default function NotePage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const [note, setNote] = useState<Note | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,8 +35,19 @@ export default function NotePage() {
         if (currentNote) {
           setNote(currentNote);
         } else {
-          console.log('Note not found, redirecting to new note');
-          router.push('/notes/new');
+          // Check if there are query parameters
+          const hasQueryParams = searchParams.toString().length > 0;
+          
+          if (hasQueryParams) {
+            // Redirect to knowledge graph with the same query parameters
+            const queryString = searchParams.toString();
+            console.log('Note not found, redirecting to knowledge graph with query params');
+            router.push(`/knowledge?view=graph&${queryString}`);
+          } else {
+            // No query params, go to new note
+            console.log('Note not found, redirecting to new note');
+            router.push('/notes/new');
+          }
           return;
         }
       }
@@ -46,7 +58,7 @@ export default function NotePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [params?.id, router, supabase]);
+  }, [params?.id, router, searchParams]);
 
   useEffect(() => {
     fetchNotes();
@@ -79,23 +91,24 @@ export default function NotePage() {
           </div>
         </div>
         <div className="flex-1 min-h-0 p-0 sm:p-4">
-          <NoteForm 
-            initialData={{
-              id: '',
-              content: '',
-              title: '',
-              type: null,
-              status: null,
-              tags: [],
-              created_at: new Date(),
-              updated_at: new Date(),
-              user_id: ''
-            }}
-            onSave={handleSave}
-            notes={[]}
-            autoSave={true}
-            className="h-full w-full"
-          />
+          <div className="h-full w-full">
+            <NoteForm 
+              initialData={{
+                id: '',
+                content: '',
+                title: '',
+                type: null,
+                status: null,
+                tags: [],
+                created_at: new Date(),
+                updated_at: new Date(),
+                user_id: ''
+              }}
+              onSave={handleSave}
+              notes={[]}
+              autoSave={true}
+            />
+          </div>
           <div className="mt-4 text-center">
             <button
               onClick={() => router.push('/notes/new')}

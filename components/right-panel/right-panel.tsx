@@ -238,12 +238,14 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
                           onClick={() => handleUserSelect(user.id, user.username)}
                           className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent hover:text-accent-foreground transition-colors border-t border-border first:border-t-0"
                         >
-                          <Avatar className="h-10 w-10">
-                            {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                            <AvatarFallback>
-                              {user.username?.charAt(0).toUpperCase() || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar className="h-10 w-10 border border-foreground/10 shadow-sm">
+                              {user.avatar_url && <AvatarImage src={user.avatar_url} className="object-cover" />}
+                              <AvatarFallback className="bg-foreground/5 text-foreground/80 text-sm font-medium">
+                                {user.username?.charAt(0).toUpperCase() || 'U'}
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
                           <div className="flex-1 min-w-0 space-y-0.5">
                             <p className="text-sm font-medium text-foreground truncate">
                               {user.display_name || user.username}

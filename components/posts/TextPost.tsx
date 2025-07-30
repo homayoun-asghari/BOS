@@ -147,8 +147,10 @@ export function TextPost({
               lineHeight: '1.2',
               padding: '0 2rem',
               overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis'
             }}
-            placeholder="Type something..."
+            placeholder="Type..."
           />
           {isMaxLength && (
             <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-foreground/50">
