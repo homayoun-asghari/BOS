@@ -35,6 +35,7 @@ interface RoadmapVisualizationProps {
   onDeleteConfirm: () => Promise<void>;
   onDeleteCancel: () => void;
   onCompleteConfirm: () => Promise<boolean>;
+  onShutdownConfirm?: () => Promise<boolean>;
   onCompletionDismiss: () => void;
   showActions?: boolean;
   isEditable?: boolean;
@@ -49,6 +50,7 @@ export function RoadmapVisualization({
   onDeleteConfirm,
   onDeleteCancel,
   onCompleteConfirm,
+  onShutdownConfirm,
   onCompletionDismiss,
   showCompletionPrompt = false,
   showActions = true,
@@ -165,6 +167,7 @@ export function RoadmapVisualization({
             onDeleteConfirm={handleDeleteRoadmap}
             onDeleteCancel={onDeleteCancel}
             onCompleteConfirm={onCompleteConfirm}
+            onShutdownConfirm={onShutdownConfirm}
             onCompletionDismiss={onCompletionDismiss}
             showActions={showActions}
           />

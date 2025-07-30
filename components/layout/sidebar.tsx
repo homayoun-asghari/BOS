@@ -24,7 +24,7 @@ export function Sidebar({ className }: SidebarProps) {
   const items: SidebarItem[] = [
     {
       name: 'Roadmap',
-      href: '/dashboard',
+      href: '/roadmap',
       icon: <LayoutDashboard className="h-5 w-5" />,
     },
     {

@@ -35,6 +35,7 @@ interface RoadmapHeaderProps {
   onDeleteConfirm: () => Promise<void>;
   onDeleteCancel: () => void;
   onCompleteConfirm: () => Promise<boolean>;
+  onShutdownConfirm?: () => Promise<boolean>;
   onCompletionDismiss: () => void;
   showActions?: boolean;
 }
@@ -53,6 +54,7 @@ export function RoadmapHeader({
   showActions = true,
   isEditable = true,
   onCompleteConfirm,
+  onShutdownConfirm,
   showCompletionPrompt = false,
   onCompletionDismiss,
 }: RoadmapHeaderProps) {
@@ -99,12 +101,21 @@ export function RoadmapHeader({
   // Calculate days remaining or completed
   const getDateBadge = () => {
     const isCompleted = roadmap.status === 'completed';
+    const isOverdue = roadmap.end_date && new Date(roadmap.end_date) < new Date() && !isCompleted;
     
     if (isCompleted && roadmap.updated_at) {
       return {
         text: `Completed on ${formatDate(roadmap.updated_at)}`,
         icon: <Check className="h-4 w-4 mr-1" />,
         variant: 'default' as const
+      };
+    }
+    
+    if (isOverdue) {
+      return {
+        text: 'Shut down?',
+        icon: <X className="h-4 w-4 mr-1" />,
+        variant: 'destructive' as const
       };
     }
     
@@ -192,12 +203,15 @@ export function RoadmapHeader({
         <div className="flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
-              <h2 className={cn(
-                "text-2xl font-bold tracking-tight",
-                hasCoverImage ? "text-white" : "text-foreground"
-              )}>
-                {roadmap.final_goal}
-              </h2>
+              <div className="flex flex-col">
+                <h2 className={cn(
+                  "text-2xl font-bold tracking-tight",
+                  hasCoverImage ? "text-white" : "text-foreground"
+                )}>
+                  {roadmap.final_goal}
+                </h2>
+
+              </div>
               {typeof roadmap.is_public !== 'undefined' && (
                 <span className={cn(
                   "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
@@ -318,13 +332,29 @@ export function RoadmapHeader({
                   );
                 } else {
                   return (
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-md flex items-center gap-1",
-                      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                    )}>
-                      <Clock className="h-3 w-3" />
-                      Ended {Math.abs(diffDays)} {Math.abs(diffDays) === 1 ? 'day' : 'days'} ago
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {/* Removed timestamp badge for unfinished roadmaps */}
+                      {dateBadge?.text === 'Shut down?' && onShutdownConfirm && (
+                        <button 
+                          onClick={async () => {
+                            try {
+                              await onShutdownConfirm();
+                            } catch (error) {
+                              console.error('Error shutting down roadmap:', error);
+                            }
+                          }}
+                          className={cn(
+                            "text-xs px-2 py-1 rounded-md flex items-center gap-1",
+                            "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+                            "hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors",
+                            "focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                          )}
+                        >
+                          <X className="h-3 w-3" />
+                          Shut down?
+                        </button>
+                      )}
+                    </div>
                   );
                 }
               })()}

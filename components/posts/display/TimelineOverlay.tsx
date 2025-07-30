@@ -51,7 +51,7 @@ export function TimelineOverlay({
       <div className="flex flex-col gap-2">
         {/* User Info */}
         <div className="flex items-center gap-3">
-          <Link href={`/dashboard?profile=${user?.username || 'unknown'}`} className="flex items-center gap-2">
+          <Link href={`/roadmap?profile=${user?.username || 'unknown'}`} className="flex items-center gap-2">
             <Avatar className="h-8 w-8 border border-foreground/20">
               <AvatarImage src={user?.avatarUrl} />
               <AvatarFallback className="bg-foreground text-background text-xs font-bold">

@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
               
               // Use router instead of window.location
-              router.replace('/dashboard');
+              router.replace('/roadmap');
               return urlSession;
             }
           } catch (error) {

@@ -1,14 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Post } from '@/types/post';
 import { getPostsByUserId, toggleLike } from '@/lib/supabase/posts';
 import { TextDisplay } from '@/components/posts/display/TextDisplay';
 import { ImageDisplay } from '@/components/posts/display/ImageDisplay';
 import { VideoDisplay } from '@/components/posts/display/VideoDisplay';
 import { VoiceDisplay } from '@/components/posts/display/VoiceDisplay';
+import { PostMenu } from '@/components/posts/PostMenu';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { EyeOff } from 'lucide-react';
+import { useRightPanel } from '../../context/right-panel-context';
 
 interface YourPostsProps {
   isPublicProfile?: boolean;
@@ -16,12 +19,31 @@ interface YourPostsProps {
 }
 
 export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { selectedPostId, setSelectedPostId } = useRightPanel();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
   const [postsLikes, setPostsLikes] = useState<Record<string, number>>({});
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
+  
+  // Handle post selection and update URL
+  const handlePostClick = (postId: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('post', postId);
+    router.push(`?${newParams.toString()}`);
+    setSelectedPostId(postId);
+  };
+  
+  // Check for post ID in URL on component load
+  useEffect(() => {
+    const postId = searchParams.get('post');
+    if (postId && postId !== selectedPostId) {
+      setSelectedPostId(postId);
+    }
+  }, [searchParams, selectedPostId, setSelectedPostId]);
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -136,8 +158,8 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
 
   const renderPost = (post: Post) => {
     // Check if the post is private based on the roadmap's visibility
-  // Default to false if roadmap is not available
-  const isPrivate = false;
+    // Default to false if roadmap is not available
+    const isPrivate = false;
     
     // User data comes from the profiles join
     const userData = post.profiles || { username: null, display_name: null, avatar_url: null };
@@ -172,12 +194,32 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
     };
 
     return (
-      <div key={post.id} className="w-full max-w-md mx-auto mb-8">
+      <div 
+        key={post.id} 
+        className={`w-full max-w-md mx-auto mb-8 cursor-pointer transition-all relative ${selectedPostId === post.id ? 'ring-2 ring-primary' : ''}`}
+        onClick={() => handlePostClick(post.id)}
+      >
         {isPrivate && (
           <div className="absolute bottom-4 right-4 z-10 bg-background/80 backdrop-blur-sm rounded-full p-2">
             <EyeOff className="h-4 w-4 text-muted-foreground" />
           </div>
         )}
+        {/* owner post menu */}
+        <div
+          className="absolute top-3 right-3 z-20"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          <PostMenu
+            postId={post.id}
+            mediaUrls={post.media_urls as (string | { path: string })[] }
+            isOwner
+            onDeleted={() => {
+              setPosts((prev) => prev.filter((p) => p.id !== post.id));
+            }}
+          />
+        </div>
         {post.media_urls && post.media_urls.length > 0 && Array.isArray(post.media_urls) ? (
           getMediaType(post.media_urls[0]) === 'image' ? (
             <ImageDisplay 
@@ -204,17 +246,23 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
     );
   };
 
+  // Sort posts with newest first
+  const sortedPosts = [...posts].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA;
+  });
+
   return (
-    <div className="w-full max-w-2xl mx-auto p-4 space-y-6 relative">
-      
-      {posts.length === 0 ? (
+    <div className="w-full max-w-2xl mx-auto p-4 space-y-6">
+      {sortedPosts.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">
             You haven&apos;t created any posts yet.
           </p>
         </div>
       ) : (
-        posts.map(renderPost)
+        sortedPosts.map(renderPost)
       )}
     </div>
   );

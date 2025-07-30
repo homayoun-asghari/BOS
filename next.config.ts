@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/storage/v1/object/sign/notes-attachments/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'ndvulkwhacsgvunvjtze.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/post-media/**',
+      },
     ],
   },
 };

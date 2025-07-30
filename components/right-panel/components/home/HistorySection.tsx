@@ -5,15 +5,20 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { RoadmapVisualization } from '@/components/dashboard/roadmap-visualization';
 
-interface CompletedRoadmap {
+interface HistoryRoadmap {
   id: string;
   title: string;
   description: string | null;
   final_goal: string;
   start_date?: string | null;
   end_date?: string | null;
+  status?: 'draft' | 'in_progress' | 'completed' | 'archived';
   cover_image_url?: string | null;
   is_public?: boolean;
+  completed_at?: string;
+  progress: number;
+  totalTasks: number;
+  completedTasks: number;
   milestones?: Array<{
     id: string;
     title: string;
@@ -36,10 +41,6 @@ interface CompletedRoadmap {
     }>;
     isCompleted?: boolean;
   }>;
-  completed_at: string;
-  progress: number;
-  totalTasks: number;
-  completedTasks: number;
 }
 
 interface HistorySectionProps {
@@ -47,11 +48,46 @@ interface HistorySectionProps {
 }
 
 export function HistorySection({ userId: propUserId }: HistorySectionProps = {}) {
-  const [completedRoadmaps, setCompletedRoadmaps] = useState<CompletedRoadmap[]>([]);
+  type RoadmapFromDB = {
+    id: string;
+    title?: string;
+    description?: string | null;
+    final_goal?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    cover_image_url?: string | null;
+    is_public?: boolean;
+    completed_at?: string;
+    total_tasks?: number;
+    completed_tasks?: number;
+    milestones?: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+      order_index: number;
+      tasks?: Array<{
+        id: string;
+        title: string;
+        description?: string | null;
+        status: 'todo' | 'in_progress' | 'done';
+        milestone_id: string;
+        order_index: number;
+        due_date: string | null;
+        priority: 'low' | 'medium' | 'high';
+        created_at?: string;
+        updated_at?: string;
+      }>;
+    }>;
+  };
+
+  const [roadmaps, setRoadmaps] = useState<HistoryRoadmap[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
   const [hasFetched, setHasFetched] = useState(false);
-  
+  const { user } = useAuth();
+
   // Define callbacks at the top level
   const handleTaskStatusChange = useCallback(async () => {
     // No-op for completed roadmaps
@@ -59,74 +95,93 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
   }, []);
 
   const noop = useCallback(() => {}, []);
-  const asyncNoop = useCallback(async () => {}, []);
+  const asyncNoop = useCallback(async () => true, []);
 
   useEffect(() => {
-    const fetchCompletedRoadmaps = async () => {
-      // Use propUserId if provided, otherwise fall back to authenticated user's ID
-      const targetUserId = propUserId || user?.id;
-      console.log('Fetching completed roadmaps for user:', targetUserId, 'isProfileView:', !!propUserId);
-      if (!targetUserId || hasFetched) {
-        console.log('Skipping fetch - missing userId or already fetched');
-        return;
-      }
-      
+    if (!user && !propUserId) return;
+    if (hasFetched) return;
+
+    (async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        // Use the get_completed_roadmaps function
-        const isPublicOnly = !!(propUserId && propUserId !== user?.id);
-        const { data: roadmapData, error } = await supabase
+        const targetUserId = propUserId || user?.id;
+        if (!targetUserId) return;
+
+        // Fetch completed roadmaps
+        const { data: completedData, error: completedError } = await supabase
           .rpc('get_completed_roadmaps', {
             user_id: targetUserId,
-            is_public_only: isPublicOnly
+            is_public_only: false
           });
+
+        if (completedError) throw completedError;
+
+        // Fetch unfinished roadmaps
+        const { data: unfinishedData, error: unfinishedError } = await supabase
+          .rpc('get_unfinished_roadmaps', {
+            user_id: targetUserId,
+            is_public_only: false
+          });
+
+        if (unfinishedError) throw unfinishedError;
+
+        console.log('Raw roadmaps data:', { completedData, unfinishedData });
+
+        // Transform and combine the data
+        const formatRoadmap = (roadmap: RoadmapFromDB, isCompleted: boolean) => {
+          const totalTasks = roadmap.total_tasks || 0;
+          const completedTasks = roadmap.completed_tasks || 0;
           
-        if (error) {
-          console.error('Error fetching completed roadmaps:', error);
-          return;
-        }
-        
-        console.log('Fetched completed roadmaps:', roadmapData);
-        
-        // Transform the data to match our interface
-        const formattedData = (roadmapData || []).map(roadmap => ({
-          id: roadmap.id,
-          title: roadmap.title,
-          description: roadmap.description,
-          final_goal: roadmap.final_goal || '',
-          start_date: roadmap.start_date,
-          end_date: roadmap.end_date,
-          cover_image_url: roadmap.cover_image_url,
-          is_public: roadmap.is_public,
-          milestones: (roadmap.milestones || []).map((m: any) => ({
-            ...m,
-            tasks: (m.tasks || []).map((t: any) => ({
-              ...t,
-              milestone_id: m.id,
-              created_at: t.created_at || new Date().toISOString(),
-              updated_at: t.updated_at || new Date().toISOString()
+          return {
+            id: roadmap.id,
+            title: roadmap.title || 'Untitled Roadmap',
+            description: roadmap.description || null,
+            final_goal: roadmap.final_goal || 'No goal specified',
+            start_date: roadmap.start_date || null,
+            end_date: roadmap.end_date || null,
+            status: isCompleted ? 'completed' : 'in_progress',
+            cover_image_url: roadmap.cover_image_url || null,
+            is_public: roadmap.is_public || false,
+            completed_at: isCompleted ? roadmap.completed_at : undefined,
+            progress: totalTasks > 0 
+              ? Math.round((completedTasks / totalTasks) * 100) 
+              : 0,
+            totalTasks,
+            completedTasks,
+            milestones: (roadmap.milestones || []).map((m) => ({
+              ...m,
+              tasks: (m.tasks || []).map((t) => ({
+                ...t,
+                milestone_id: m.id,
+                created_at: t.created_at || new Date().toISOString(),
+                updated_at: t.updated_at || new Date().toISOString()
+              }))
             }))
-          })),
-          completed_at: roadmap.completed_at,
-          progress: roadmap.total_tasks > 0 
-            ? Math.round((roadmap.completed_tasks / roadmap.total_tasks) * 100) 
-            : 0,
-          totalTasks: roadmap.total_tasks,
-          completedTasks: roadmap.completed_tasks
-        }));
+          };
+        };
+
+        const formattedData = [
+          ...(completedData as RoadmapFromDB[]).map(r => formatRoadmap(r, true)),
+          ...(unfinishedData as RoadmapFromDB[]).map(r => formatRoadmap(r, false))
+        ] as HistoryRoadmap[];
         
-        console.log('Formatted completed roadmaps:', formattedData);
-        setCompletedRoadmaps(formattedData);
+        // Sort roadmaps by start_date in descending order (latest on top)
+        formattedData.sort((a, b) => {
+          // Default to current date if start_date is null or undefined
+          const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
+          const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+          return dateB - dateA; // Descending order
+        });
+        
+        console.log('Formatted and sorted roadmaps:', formattedData);
+        setRoadmaps(formattedData);
         setHasFetched(true);
       } catch (error) {
-        console.error('Error fetching completed roadmaps:', error);
+        console.error('Error fetching roadmaps:', error);
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchCompletedRoadmaps();
+    })();
   }, [user, hasFetched, propUserId]);
 
   if (loading) {
@@ -137,18 +192,17 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
     );
   }
 
-  if (completedRoadmaps.length === 0) {
-    console.log('No completed roadmaps to display. State:', {
+  if (roadmaps.length === 0) {
+    console.log('No roadmaps to display. State:', {
       loading,
       hasFetched,
       user: user?.id,
       propUserId,
-      completedRoadmapsCount: completedRoadmaps.length,
-      completedRoadmaps
+      roadmapsCount: roadmaps.length
     });
     return (
       <div className="p-4 text-center text-muted-foreground">
-        <p>No completed roadmaps yet.</p>
+        <p>No roadmaps yet.</p>
       </div>
     );
   }
@@ -160,7 +214,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
       </div>
       <div className="flex-1">
         <div className="space-y-4 p-4">
-          {completedRoadmaps.map((roadmap) => (
+          {roadmaps.map((roadmap) => (
             <div key={roadmap.id} className="rounded-lg overflow-hidden">
                 <RoadmapVisualization
                   isEditable={false}

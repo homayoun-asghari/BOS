@@ -101,7 +101,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       resetForm();
       onOpenChange(false);
       // Navigate to dashboard after successful login
-      router.push('/dashboard');
+      router.push('/roadmap');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {

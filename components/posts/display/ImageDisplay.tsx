@@ -4,6 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { TimelineOverlay } from "./TimelineOverlay";
 import { cn } from "@/lib/utils";
 import { LikeButton } from '../LikeButton';
+import { ShareButton } from '../ShareButton';
 
 import { PostDisplayProps } from './PostDisplayProps';
 
@@ -88,13 +89,16 @@ export function ImageDisplay({
             } : null}
           />
 
-          {/* Like Button */}
-          <div className="absolute bottom-4 left-4 right-4">
+          {/* Like and Share Buttons */}
+          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
             <LikeButton 
               initialLikes={likes}
               initialLiked={!!isLiked}
               onLike={handleLike}
               onUnlike={handleUnlike}
+            />
+            <ShareButton 
+              postId={id} 
             />
           </div>
         </div>

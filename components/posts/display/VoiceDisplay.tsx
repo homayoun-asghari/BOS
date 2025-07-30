@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { LikeButton } from '../LikeButton';
+import { ShareButton } from '../ShareButton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/utils/date';
@@ -181,12 +182,15 @@ export function VoiceDisplay({
         className="z-10"
       />
       
-      {/* Like Button - Left Side */}
-      <div className="absolute left-4 bottom-4 z-10">
+      {/* Like and Share Buttons */}
+      <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between">
         <LikeButton
           initialLikes={likes}
           initialLiked={isLiked}
           onLike={onLike || (async () => ({ action: isLiked ? 'unliked' : 'liked' }))}
+        />
+        <ShareButton
+          postId={id}
         />
       </div>
 

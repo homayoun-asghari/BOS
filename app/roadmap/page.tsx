@@ -34,7 +34,7 @@ function DashboardContent() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
-  const [hasCompletedRoadmaps, setHasCompletedRoadmaps] = useState(false);
+  // Removed unused hasCompletedRoadmaps state
   
   const calculateProgress = (roadmap: Roadmap | undefined) => {
     if (!roadmap?.milestones?.length) return 0;
@@ -148,12 +148,44 @@ function DashboardContent() {
       // Trigger stats refresh
       triggerRefresh();
       
-      setShowCompletionPrompt(false);
       toast.success('Roadmap marked as completed!');
       return true;
     } catch (error) {
       console.error('Error completing roadmap:', error);
       toast.error('Failed to mark roadmap as completed');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Handle roadmap shutdown (mark as unfinished)
+  const handleShutdownRoadmap = async () => {
+    if (!roadmap) return false;
+    
+    try {
+      setLoading(true);
+      
+      // Call the database function to update status to 'unfinished'
+      const { data, error } = await supabase
+        .rpc('update_roadmap_status_to_unfinished', { roadmap_id: roadmap.id });
+        
+      if (error) throw error;
+      
+      if (data) {
+        // Refresh the roadmap data
+        await fetchRoadmap(roadmap.id);
+        // Trigger stats refresh
+        triggerRefresh();
+        toast.success('Roadmap marked as unfinished');
+      } else {
+        toast.error('Failed to mark roadmap as unfinished');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error shutting down roadmap:', error);
+      toast.error('Failed to mark roadmap as unfinished');
       return false;
     } finally {
       setLoading(false);
@@ -363,17 +395,7 @@ function DashboardContent() {
         
         // First check for completed roadmaps
         console.log('=== DEBUG: Checking for completed roadmaps ===');
-        const { data: completedRoadmaps, error: completedError } = await supabase
-          .from('roadmaps')
-          .select('id, status, title')
-          .eq('user_id', userId)
-          .eq('status', 'completed');
-          
-        if (completedError) {
-          console.error('Error checking completed roadmaps:', completedError);
-        } else {
-          setHasCompletedRoadmaps(completedRoadmaps.length > 0);
-        }
+        // Removed completed roadmaps check since we're simplifying the empty state
 
         // Get current roadmap
         const { data: roadmapData, error: roadmapError } = await supabase
@@ -452,37 +474,16 @@ function DashboardContent() {
                 </div>
               ) : !roadmap ? (
                   <div className="mt-8 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 p-12 text-center">
-                    {hasCompletedRoadmaps ? (
-                      <>
-                        <h3 className="text-lg font-medium text-muted-foreground">Congratulations! You just finished a roadmap 🎉</h3>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Ready to start your next challenge?
-                        </p>
-                        <button
-                          onClick={() => {
-                            setIsEditModalOpen(true);
-                          }}
-                          className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                        >
-                          Next?
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <h3 className="text-lg font-medium text-muted-foreground">No roadmap created yet</h3>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Get started by creating your first roadmap
-                        </p>
-                        <button
-                          onClick={() => {
-                            setIsEditModalOpen(true);
-                          }}
-                          className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                        >
-                          Create Roadmap
-                        </button>
-                      </>
-                    )}
+                    <h3 className="text-lg font-medium text-muted-foreground">You don&apos;t have any active roadmap yet</h3>
+                    <p className="text-sm text-muted-foreground mt-2">Start new chapter of your life here</p>
+                    <button
+                      onClick={() => {
+                        setIsEditModalOpen(true);
+                      }}
+                      className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      Next?
+                    </button>
                   </div>
                 ) : (
                   <RoadmapVisualization
@@ -512,6 +513,7 @@ function DashboardContent() {
                     completedTasks={calculateCompletedMilestones(roadmap)}
                     showCompletionPrompt={showCompletionPrompt}
                     onCompleteConfirm={handleCompleteRoadmap}
+                    onShutdownConfirm={handleShutdownRoadmap}
                     onCompletionDismiss={handleDismissCompletion}
                     onTaskStatusChange={async (taskId: string, status: 'todo' | 'in_progress' | 'done' | 'completed', priority: 'low' | 'medium' | 'high' = 'medium') => {
                       try {

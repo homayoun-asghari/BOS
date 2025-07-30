@@ -8,12 +8,14 @@ import { PostDisplayProps } from "./PostDisplayProps";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import Link from 'next/link';
 import { LikeButton } from '../LikeButton';
+import { ShareButton } from '../ShareButton';
 
 interface TextDisplayProps extends PostDisplayProps {
   content: string;
 }
 
 export function TextDisplay({
+  id,
   content,
   timestamp,
   user,
@@ -89,12 +91,15 @@ export function TextDisplay({
           </div>
         </div>
 
-        <div className="absolute bottom-4 left-4 right-4">
+        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
           <LikeButton 
             initialLikes={likes}
             initialLiked={isLiked ?? false}
             onLike={handleLike}
             onUnlike={handleUnlike}
+          />
+          <ShareButton 
+            postId={id} 
           />
         </div>
       </div>

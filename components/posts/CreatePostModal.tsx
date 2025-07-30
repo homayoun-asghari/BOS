@@ -45,7 +45,7 @@ interface CreatePostModalProps {
 }
 
 export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 'onSubmit'>) {
-  const [publicRoadmap, setPublicRoadmap] = useState<any>(null);
+  const [publicRoadmap, setPublicRoadmap] = useState<Record<string, any> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { createPost, isCreating } = usePosts();
   const { user: currentUser } = useAuth();
@@ -57,6 +57,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  // isUploading tracks the status of the upload process
   const [isUploading, setIsUploading] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -193,7 +194,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       items.push(roadmapItem);
       
       // Add milestones and tasks
-      publicRoadmap.milestones?.forEach((milestone: any) => {
+      publicRoadmap.milestones?.forEach((milestone: Record<string, any>) => {
         const milestoneItem: MilestoneItem = {
           id: milestone.id,
           title: milestone.title,
@@ -204,7 +205,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
         items.push(milestoneItem);
         
         // Add tasks for this milestone
-        milestone.tasks?.forEach((task: any) => {
+        milestone.tasks?.forEach((task: Record<string, any>) => {
           const taskItem: TaskItem = {
             id: task.id,
             title: task.title,
@@ -282,6 +283,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
 
   // File change is handled in the respective components (ImagePost, VideoPost)
 
+  // This function only sets up the camera preview without starting recording
   const startRecording = async () => {
     try {
       // Stop any existing tracks first
@@ -314,8 +316,8 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (err) {
-        console.warn('Could not get ideal constraints, trying with minimum...');
+      } catch (error) {
+        console.warn('Could not get ideal constraints, trying with minimum...', error);
         // If that fails, try with minimum constraints
         constraints.video = {
           facingMode: 'environment',
@@ -411,7 +413,8 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
         }
       };
       
-      mediaRecorder.start(100);
+      // Set recording state but don't actually start recording yet
+      // Just show the preview
       setIsRecording(true);
       
     } catch (err) {
@@ -462,6 +465,17 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     return 'roadmap';
   }, [selectedItems]);
 
+  // Function to actually start the media recording
+  const startMediaRecording = () => {
+    if (!mediaStream || !mediaRecorderRef.current) return;
+    
+    // Clear any previous chunks
+    chunksRef.current = [];
+    
+    // Start recording in 1 second chunks
+    mediaRecorderRef.current.start(1000);
+  };
+  
   const handleSubmit = useCallback(async () => {
     if (!type) return;
     
@@ -563,6 +577,16 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       setPreview(URL.createObjectURL(file));
     }
   };
+  
+  // Handle video files from VideoPost component
+  const handleVideoChange = (file: File) => {
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please provide a valid video file');
+      return;
+    }
+    setMediaFile(file);
+    setPreview(URL.createObjectURL(file));
+  };
 
   const renderPostForm = () => {
     if (!type || !currentUser) return null;
@@ -614,21 +638,10 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
             preview={preview}
             isRecording={isRecording}
             onStartRecording={startRecording}
+            onStartMediaRecording={startMediaRecording}
             onStopRecording={stopRecording}
-            onFileChange={handleFileChange}
+            onFileChange={handleVideoChange}
             videoRef={videoRef}
-            category={getCategory()}
-          />
-        );
-      case 'voice':
-        return (
-          <VoicePost
-            onRecordingComplete={(file) => {
-              setMediaFile(file);
-              setPreview(URL.createObjectURL(file));
-            }}
-            onCancel={() => setType(null)}
-            maxDuration={30}
           />
         );
       default:

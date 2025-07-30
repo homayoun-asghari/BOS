@@ -317,3 +317,58 @@ export const getPostLikesCount = async (postId: string) => {
 
   return count || 0;
 };
+
+export const getPostById = async (postId: string) => {
+  // Get the current user ID for like status
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id;
+
+  // Fetch the post with all related data
+  const { data, error } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      profiles:user_id (username, display_name, avatar_url),
+      roadmap:roadmap_id (id, title, is_public, final_goal),
+      milestone:milestone_id (id, title, start_date, end_date),
+      task:task_id (id, title),
+      post_likes!left(user_id)
+    `)
+    .eq('id', postId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching post:', error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // Check if the current user has liked this post
+  const isLiked = currentUserId ? 
+    Array.isArray(data.post_likes) ? 
+      data.post_likes.some((like: { user_id: string }) => like.user_id === currentUserId) : 
+      data.post_likes?.user_id === currentUserId : 
+    false;
+
+  // Get the like count
+  const likeCount = Array.isArray(data.post_likes) ? 
+    data.post_likes.length : 
+    data.post_likes ? 1 : 0;
+
+  // Transform the data to match the expected structure
+  return {
+    ...data,
+    roadmap: data.roadmap ? {
+      ...data.roadmap,
+      // Use final_goal as the title if available
+      title: data.roadmap.final_goal || data.roadmap.title
+    } : null,
+    milestone: data.milestone || null,
+    task: data.task || null,
+    is_liked: isLiked,
+    likes_count: likeCount
+  };
+};

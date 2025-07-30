@@ -1,18 +1,21 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, ArrowLeft, MessageCircle, Calendar, BookOpen, CheckCircle, MessageCircle as MessageIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Heart, ArrowLeft, BookOpen, CheckCircle, MessageCircle as MessageIcon } from 'lucide-react';
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProfile } from "@/context/profile-context";
-import { format } from 'date-fns';
+
 import { RoadmapVisualization } from '@/components/dashboard/roadmap-visualization';
-import { StoredProcedureRoadmap, toRoadmap } from '@/types/roadmap';
+import { StoredProcedureRoadmap } from '@/types/roadmap';
 import { useChatContext } from '@/context/chat-context';
 import { useRightPanelControls } from '@/components/right-panel/right-panel';
+import { PostThumbnail } from '@/components/posts/display/PostThumbnail';
+import { PostDetail } from '@/components/right-panel/components/posts/PostDetail';
+import { useRightPanel } from '@/components/right-panel/context/right-panel-context';
 
 // Define the Post type since it's not imported
 interface Post {
@@ -30,11 +33,23 @@ interface UserProfileProps {
 
 export function UserProfile({ className, onClose }: UserProfileProps) {
   const router = useRouter();
-  const { profile, stats, posts, currentRoadmap, completedRoadmaps, /* publicNotes, */ loading, error, setSelectedUser } = useProfile();
+  const searchParams = useSearchParams();
+  const { profile, stats, posts, currentRoadmap, /* completedRoadmaps, */ /* publicNotes, */ loading, error, setSelectedUser } = useProfile();
   const { startDirectMessage, setActiveConversation } = useChatContext();
   const { openPanel } = useRightPanelControls();
+  const { selectedPostId, setSelectedPostId } = useRightPanel();
   console.log('UserProfile - Received currentRoadmap:', currentRoadmap);
   const [activeTab, setActiveTab] = useState<'posts' | 'roadmap' | 'history' | 'notes'>('roadmap');
+  
+  // Update selectedPostId from URL params when they change
+  useEffect(() => {
+    const postId = searchParams.get('post');
+    if (postId) {
+      setSelectedPostId(postId);
+      // Set the active tab to posts when a post is selected
+      setActiveTab('posts');
+    }
+  }, [searchParams, setSelectedPostId]);
 
   // Handle back navigation
   const handleBack = () => {
@@ -124,124 +139,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
     );
   };
 
-  // Helper function to render posts
-  const renderPost = (post: Post) => {
-    if (!post) return null;
-    
-    // Handle JSONB media_urls
-    const mediaUrls = Array.isArray(post.media_urls) ? post.media_urls : [];
-    const hasMedia = mediaUrls.length > 0;
-    const firstMedia = mediaUrls[0];
-    const isVideo = firstMedia && typeof firstMedia === 'string' && firstMedia.match(/\.(mp4|webm|ogg)$/i);
-
-    // Get media URL from database
-    const getMediaUrl = (url: any) => {
-      if (!url) return null;
-      
-      // Get the user's ID from the profile context
-      const userId = profile?.id;
-      
-      // If it's an object with path property, use that
-      if (typeof url === 'object' && url.path) {
-        // Extract the filename from the path
-        const pathParts = url.path.split('/');
-        const fileName = pathParts[pathParts.length - 1];
-        
-        console.log('Image URL:', {
-          original: url,
-          full: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`,
-          env: process.env.NEXT_PUBLIC_SUPABASE_URL,
-          pathParts: { userId, fileName }
-        });
-        
-        return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`;
-      }
-      
-      // If it's a string URL, use it as is
-      if (typeof url === 'string' && url.startsWith('http')) {
-        console.log('Image URL:', {
-          original: url,
-          full: url,
-          env: process.env.NEXT_PUBLIC_SUPABASE_URL
-        });
-        return url;
-      }
-      
-      // If it's a string path, construct the URL
-      if (typeof url === 'string') {
-        // Extract the filename from the path
-        const pathParts = url.split('/');
-        const fileName = pathParts[pathParts.length - 1];
-        
-        console.log('Image URL:', {
-          original: url,
-          full: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`,
-          env: process.env.NEXT_PUBLIC_SUPABASE_URL,
-          pathParts: { userId, fileName }
-        });
-        
-        return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`;
-      }
-      
-      return null;
-    };
-
-    return (
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          {new Date(post.created_at).toLocaleDateString()}
-        </p>
-        <p>{post.content}</p>
-        {hasMedia && (
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {mediaUrls.map((url: any, index: number) => (
-              <div key={index} className="relative w-full h-32">
-                {/* Using img element with proper alt text for now */}
-                {/* In a real app, consider using next/image for optimization */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src={getMediaUrl(url)} 
-                  alt={`Post media ${index + 1}`} 
-                  className="rounded-lg object-cover h-full w-full"
-                  onError={(e) => {
-                    console.error('Image load error:', {
-                      url: getMediaUrl(url),
-                      error: e.target.error
-                    });
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-        {isVideo && (
-          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-            <video 
-              src={getMediaUrl(firstMedia)}
-              className="w-full h-full object-cover"
-              controls
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          </div>
-        )}
-        
-        <div className="flex items-center text-xs text-muted-foreground gap-4">
-          <span>{format(new Date(post.created_at), 'MMM d, yyyy')}</span>
-          <div className="flex items-center gap-1">
-            <Heart className="w-3 h-3" />
-            <span>{post.like_count}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <MessageCircle className="w-3 h-3" />
-            <span>{post.comment_count}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // PostThumbnail component now handles all post rendering types
 
   // Function to handle tab change
   const handleTabChange = (value: 'posts' | 'roadmap' | 'history' | 'notes') => {
@@ -309,13 +207,44 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       value: 'posts',
       label: 'Posts',
       content: (
-        <div className="space-y-4 p-4 w-full">
-          {posts.length > 0 ? (
-            posts.map((post) => (
-              <div key={post.id} className="rounded-2xl bg-background/50 p-4">
-                {renderPost(post)}
-              </div>
-            ))
+        <div className="p-4 w-full">
+          {selectedPostId ? (
+            <div>
+              <button 
+                onClick={() => {
+                  const newParams = new URLSearchParams(searchParams.toString());
+                  newParams.delete('post');
+                  router.push(`?${newParams.toString()}`);
+                  setSelectedPostId(null);
+                }}
+                className="flex items-center gap-2 mb-4 p-2 hover:bg-accent rounded-md"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to posts</span>
+              </button>
+              <PostDetail postId={selectedPostId} />
+            </div>
+          ) : posts.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              {posts.map((post) => (
+                <div 
+                  key={post.id} 
+                  className="aspect-[9/16] cursor-pointer"
+                  onClick={() => {
+                    const newParams = new URLSearchParams(searchParams.toString());
+                    newParams.set('post', post.id);
+                    router.push(`?${newParams.toString()}`);
+                    setSelectedPostId(post.id);
+                  }}
+                >
+                  <PostThumbnail 
+                    post={post} 
+                    userId={profile?.id} 
+                    className="w-full h-full rounded-lg" 
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-center text-muted-foreground py-8">No posts yet</p>
           )}

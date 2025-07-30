@@ -1,21 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Post } from '@/types/post';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getFeedPosts, toggleLike } from '@/lib/supabase/posts';
+import { useRightPanel } from '../../context/right-panel-context';
 import { TextDisplay } from '@/components/posts/display/TextDisplay';
 import { ImageDisplay } from '@/components/posts/display/ImageDisplay';
 import { VideoDisplay } from '@/components/posts/display/VideoDisplay';
 import { VoiceDisplay } from '@/components/posts/display/VoiceDisplay';
 
 export function RoadmatesPosts() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { selectedPostId, setSelectedPostId } = useRightPanel();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
   const [postsLikes, setPostsLikes] = useState<Record<string, number>>({});
   const [isProcessing, setIsProcessing] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
+
+  const handlePostClick = (postId: string) => {
+    // Update URL with post ID parameter
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('post', postId);
+    router.push(`?${newParams.toString()}`);
+    setSelectedPostId(postId);
+  };
 
   const handleToggleLike = async (postId: string) => {
     if (!user?.id) return { action: 'unliked' as const, likeCount: 0 };
@@ -69,10 +82,20 @@ export function RoadmatesPosts() {
     }
   };
 
+  // Check for post ID in URL and update state accordingly
+  useEffect(() => {
+    const postId = searchParams.get('post');
+    if (postId && postId !== selectedPostId) {
+      setSelectedPostId(postId);
+    }
+  }, [searchParams, selectedPostId, setSelectedPostId]);
+
   useEffect(() => {
     const loadPosts = async () => {
-      if (!user?.id) return;
-      
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         console.log('Fetching feed posts...');
@@ -139,7 +162,6 @@ export function RoadmatesPosts() {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground text-center">
         <p className="text-lg font-medium">No posts from your roadmates yet</p>
-        <p className="text-sm mt-2">Follow more users or check back later!</p>
       </div>
     );
   }
@@ -166,7 +188,8 @@ export function RoadmatesPosts() {
           return null;
         }
         
-        const isPrivate = post.roadmap_id && !post.roadmap?.is_public;
+        // Check if roadmap is private (if roadmap exists and has is_public property that is false)
+        const isPrivate = post.roadmap_id && post.roadmap && 'is_public' in post.roadmap && !post.roadmap.is_public;
         if (isPrivate) {
           console.log('Skipping private post:', post.id);
           return null;
@@ -185,9 +208,7 @@ export function RoadmatesPosts() {
         
         console.log('Creating postUser from:', {
           profiles: post.profiles,
-          userData,
-          hasDisplayName: !!userData?.display_name,
-          hasUsername: !!userData?.username
+          userData
         });
         
         const postUser = {
@@ -196,8 +217,6 @@ export function RoadmatesPosts() {
           username: userData?.username || 'anonymous',
           avatarUrl: userData?.avatar_url ? String(userData.avatar_url) : ''
         };
-        
-        console.log('Created postUser:', postUser);
         
         const currentRoadmap = post.roadmap ? {
           id: post.roadmap.id,
@@ -230,7 +249,11 @@ export function RoadmatesPosts() {
         };
 
         return (
-          <div key={post.id} className="w-full max-w-md mx-auto mb-8">
+          <div 
+            key={post.id} 
+            className={`w-full max-w-md mx-auto mb-8 cursor-pointer transition-all ${selectedPostId === post.id ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => handlePostClick(post.id)}
+          >
             {post.media_urls && post.media_urls.length > 0 && Array.isArray(post.media_urls) ? (
               getMediaType(post.media_urls[0]) === 'image' ? (
                 <ImageDisplay 

@@ -167,16 +167,59 @@ export const uploadPostMedia = async (file: File | null | undefined, type: 'imag
 };
 
 export const deletePostMedia = async (path: string): Promise<void> => {
-  if (!path) return;
+  if (!path) {
+    console.log('No path provided to deletePostMedia');
+    return;
+  }
   
   const BUCKET_NAME = 'post-media';
-  const { error } = await supabase.storage
-    .from(BUCKET_NAME)
-    .remove([path]);
+  
+  try {
+    console.log('Starting deletePostMedia with path:', path);
     
-  if (error) {
-    console.error('Error deleting media file:', error);
-    throw new Error(`Failed to delete file: ${error.message}`);
+    // Get the user ID from the current session
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const userId = user?.id;
+    
+    if (userError || !userId) {
+      console.error('Error getting user session:', userError?.message || 'No user session');
+      throw new Error('Authentication required to delete media');
+    }
+    
+    // Construct the full path with user ID
+    const fullPath = `${userId}/${path}`;
+    console.log('Attempting to delete from storage:', {
+      bucket: BUCKET_NAME,
+      userId,
+      originalPath: path,
+      fullPath
+    });
+    
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .remove([fullPath]);
+    
+    console.log('Storage deletion response:', { data, error });
+    
+    if (error) {
+      console.error('Error deleting media file:', {
+        error,
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
+      throw new Error(`Failed to delete file: ${error.message}`);
+    }
+    
+    console.log('Successfully deleted media file:', fullPath);
+  } catch (error) {
+    console.error('Unexpected error in deletePostMedia:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      path,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
   }
 };
 

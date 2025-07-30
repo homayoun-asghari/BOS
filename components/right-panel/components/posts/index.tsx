@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoadmatesPosts } from "./RoadmatesPosts";
 import { YourPosts } from "./YourPosts";
+import { PostDetail } from "./PostDetail";
 import { CreatePostModal } from "@/components/posts/CreatePostModal";
 import { Plus } from 'lucide-react';
+import { useRightPanel } from '../../context/right-panel-context';
 
 interface PostsProps {
   isPublicProfile?: boolean;
@@ -13,6 +16,8 @@ interface PostsProps {
 }
 
 export function Posts({ isPublicProfile = false }: PostsProps) {
+  const searchParams = useSearchParams();
+  const { selectedPostId, setSelectedPostId } = useRightPanel();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
   const handleNewPost = () => {
@@ -23,7 +28,35 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
     console.log('New post created:', post);
     setIsCreateModalOpen(false);
   };
+  
+  const handleBackToFeed = () => {
+    // Clear the post parameter from URL and reset selected post
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('post');
+    window.history.pushState({}, '', `?${newParams.toString()}`);
+    setSelectedPostId(null);
+  };
 
+  // If a post is selected, show the post detail view
+  if (selectedPostId) {
+    return (
+      <div className="h-full flex flex-col relative">
+        <div className="sticky top-0 z-10 bg-background/50 backdrop-blur-sm border-b px-4 py-2 flex items-center">
+          <button 
+            onClick={handleBackToFeed}
+            className="text-sm flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Back to feed
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <PostDetail />
+        </div>
+      </div>
+    );
+  }
+
+  // Otherwise show the standard feed tabs
   return (
     <div className="h-full flex flex-col relative">
       <Tabs defaultValue="roadmates" className="h-full flex flex-col">
@@ -69,13 +102,11 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
           <YourPosts isPublicProfile={isPublicProfile} onNewPostClick={handleNewPost} />
           
           {isCreateModalOpen && (
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-30 flex items-center justify-center p-4">
               <div className="w-full max-w-2xl bg-background border rounded-lg shadow-lg overflow-hidden">
                 <CreatePostModal 
                   isOpen={isCreateModalOpen}
                   onClose={() => setIsCreateModalOpen(false)}
-                  type="text"
-                  content={null}
                 />
               </div>
             </div>

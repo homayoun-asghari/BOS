@@ -26,7 +26,7 @@ function useResponsiveNavigation() {
 
       // If screen is lg or larger and we're on the right panel page, redirect to dashboard
       if (!isMobileView && window.location.pathname === "/right-panel") {
-        router.replace("/dashboard");
+        router.replace("/roadmap");
       }
     };
 
