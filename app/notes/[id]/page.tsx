@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
+import { useSearchParams } from '@/components/utils/SearchParamsProvider';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import NoteForm from '@/components/notes/NoteForm';

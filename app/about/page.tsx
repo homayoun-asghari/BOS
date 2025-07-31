@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Linkedin, Github, Mail } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import './page-styles.css';
@@ -21,21 +21,18 @@ export default function AboutPage() {
         <div className="prose dark:prose-invert max-w-none">
           <section className="mb-10">
             <h2>Our Mission</h2>
-            <p>
-              At BOS, we're building a platform that helps people define, track, and achieve their goals while connecting with others on similar journeys. 
-              We believe that structured progress tracking combined with community support creates the ideal environment for personal and professional growth.
+            <p className="text-lg leading-relaxed">
+              BOS is a cutting-edge platform designed to help individuals and teams define, track, and achieve their goals through structured roadmaps and meaningful connections. We combine the power of goal-setting methodology with intelligent matching algorithms to create a supportive ecosystem for personal and professional development.
             </p>
           </section>
           
           <section className="mb-10">
             <h2>Our Story</h2>
-            <p>
-              BOS was founded in 2024 by a team of developers, designers, and productivity enthusiasts who were frustrated with existing tools. 
-              We wanted to create something that combined the structure of project management software with the supportive nature of social networks.
+            <p className="mb-4">
+              In 2025, Homayoun Asghari identified a critical gap in the market for goal achievement tools. While project management software provided structure, it lacked the human element of support and accountability. Social platforms offered connection but without the necessary structure for meaningful progress.
             </p>
             <p>
-              After months of development and testing with early users, we launched our platform to help people define their roadmaps, break them down into achievable milestones, 
-              and connect with others who are on similar paths.
+              After extensive research and development, BOS was born—a platform that seamlessly integrates structured goal-setting with community support, powered by advanced algorithms that connect users with like-minded individuals on similar journeys.
             </p>
           </section>
           
@@ -71,24 +68,34 @@ export default function AboutPage() {
           
           <section className="mb-10">
             <h2>Our Team</h2>
-            <p>
-              BOS is built by a small but dedicated team of professionals committed to helping people achieve their goals.
+            <p className="max-w-2xl">
+              Currently, BOS is built and maintained by a solo founder with a vision to help people achieve their goals through innovative technology and thoughtful design. We look forward to expanding our team in the near future to better serve our growing community.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 my-6">
-              <div className="text-center">
-                <div className="w-24 h-24 rounded-full bg-muted mx-auto mb-3"></div>
-                <h3 className="text-lg font-medium">Alex Chen</h3>
-                <p className="text-sm text-muted-foreground">Founder & CEO</p>
-              </div>
-              <div className="text-center">
-                <div className="w-24 h-24 rounded-full bg-muted mx-auto mb-3"></div>
-                <h3 className="text-lg font-medium">Sarah Johnson</h3>
-                <p className="text-sm text-muted-foreground">Chief Product Officer</p>
-              </div>
-              <div className="text-center">
-                <div className="w-24 h-24 rounded-full bg-muted mx-auto mb-3"></div>
-                <h3 className="text-lg font-medium">Michael Brown</h3>
-                <p className="text-sm text-muted-foreground">Lead Developer</p>
+            <div className="flex justify-center my-8">
+              <div className="text-center group">
+                <div className="w-32 h-32 rounded-full overflow-hidden mx-auto mb-4 border-2 border-primary/20 group-hover:border-primary/50 transition-all duration-300">
+                  <Image 
+                    src="/347748+8.jpg" 
+                    alt="Homayoun Asghari"
+                    width={128}
+                    height={128}
+                    className="w-full h-full object-cover"
+                    priority
+                  />
+                </div>
+                <h3 className="text-lg font-medium">Homayoun Asghari</h3>
+                <p className="text-sm text-muted-foreground mb-2">Founder & Lead Developer</p>
+                <div className="flex justify-center space-x-3 mt-2">
+                  <a href="https://linkedin.com/in/homayoun-asghari" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                    <Linkedin className="h-5 w-5" />
+                  </a>
+                  <a href="https://github.com/homayoun-asghari" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                    <Github className="h-5 w-5" />
+                  </a>
+                  <a href="mailto:contact@bos.app" className="text-muted-foreground hover:text-primary transition-colors">
+                    <Mail className="h-5 w-5" />
+                  </a>
+                </div>
               </div>
             </div>
           </section>

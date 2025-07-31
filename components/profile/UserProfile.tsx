@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
@@ -6,26 +6,19 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, ArrowLeft, BookOpen, CheckCircle, MessageCircle as MessageIcon } from 'lucide-react';
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useSearchParams } from 'next/navigation';
 import { useProfile } from "@/context/profile-context";
 
 import { RoadmapVisualization } from '@/components/dashboard/roadmap-visualization';
-import { StoredProcedureRoadmap } from '@/types/roadmap';
+
 import { useChatContext } from '@/context/chat-context';
 import { useRightPanelControls } from '@/components/right-panel/right-panel';
 import { PostThumbnail } from '@/components/posts/display/PostThumbnail';
 import { PostDetail } from '@/components/right-panel/components/posts/PostDetail';
 import { useRightPanel } from '@/components/right-panel/context/right-panel-context';
 
-// Define the Post type since it's not imported
-interface Post {
-  id: string;
-  content: string;
-  media_urls?: (string | { path: string })[] | null;
-  created_at: string;
-  like_count: number;
-  comment_count: number;
-}
+
 interface UserProfileProps {
   className?: string;
   onClose?: () => void;
@@ -34,7 +27,7 @@ interface UserProfileProps {
 export function UserProfile({ className, onClose }: UserProfileProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { profile, stats, posts, currentRoadmap, /* completedRoadmaps, */ /* publicNotes, */ loading, error, setSelectedUser } = useProfile();
+  const { profile, stats, posts, currentRoadmap, loading, error, setSelectedUser } = useProfile();
   const { startDirectMessage, setActiveConversation } = useChatContext();
   const { openPanel } = useRightPanelControls();
   const { selectedPostId, setSelectedPostId } = useRightPanel();

@@ -34,7 +34,7 @@ function DashboardContent() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
-  // Removed unused hasCompletedRoadmaps state
+  const [hasCompletedRoadmaps, setHasCompletedRoadmaps] = useState(false);
   
   const calculateProgress = (roadmap: Roadmap | undefined) => {
     if (!roadmap?.milestones?.length) return 0;
@@ -276,16 +276,27 @@ function DashboardContent() {
   };
   
   // Function to check if user has any completed roadmaps
-  const checkCompletedRoadmaps = async (userId: string) => {
+  const checkCompletedRoadmaps = async (userId?: string) => {
     try {
-      console.log('Checking completed roadmaps for user:', userId);
+      // If userId is not provided, get it from the session
+      let effectiveUserId = userId;
+      if (!effectiveUserId) {
+        const session = await supabase.auth.getSession();
+        effectiveUserId = session.data.session?.user?.id;
+        if (!effectiveUserId) {
+          console.log('No user session found');
+          return false;
+        }
+      }
       
-      // First check if there are any roadmaps at all
+      console.log('=== DEBUG: Checking for completed roadmaps for user:', effectiveUserId, '===');
+      
+      // First get all roadmaps to debug
       const { data: allRoadmaps, error: allError } = await supabase
         .from('roadmaps')
         .select('id, status, title')
-        .eq('user_id', userId);
-      
+        .eq('user_id', effectiveUserId);
+        
       if (allError) throw allError;
       console.log('All roadmaps:', allRoadmaps);
       
@@ -293,7 +304,7 @@ function DashboardContent() {
       const { data: completedRoadmaps, error: completedError } = await supabase
         .from('roadmaps')
         .select('id, status, title')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveUserId)
         .eq('status', 'completed');
       
       if (completedError) throw completedError;

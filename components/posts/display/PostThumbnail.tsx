@@ -3,7 +3,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { FileText, Video, Mic, ThumbsUp } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useSearchParams } from '@/components/utils/SearchParamsProvider';
 import { useRightPanel } from '@/components/right-panel/context/right-panel-context';
 
 interface PostThumbnailProps {
@@ -38,9 +39,9 @@ export function PostThumbnail({ post, className, userId }: PostThumbnailProps) {
   };
   
   // Determine post type based on media_urls
-  const hasMedia = post.media_urls && post.media_urls.length > 0;
+  const hasMedia = post.media_urls && post.media_urls.length > 0 && post.media_urls[0] !== null;
   let mediaType = post.type || 'text';
-  const firstMedia = hasMedia ? post.media_urls[0] : null;
+  const firstMedia = hasMedia && post.media_urls ? post.media_urls[0] : null;
   
   // Detect media type from URL if not explicitly provided
   if (hasMedia && !post.type) {
@@ -88,21 +89,23 @@ export function PostThumbnail({ post, className, userId }: PostThumbnailProps) {
   }
 
   // Get the first media URL for display
-  const getMediaUrl = (url: string | { path: string }) => {
+  const getMediaUrl = (url: string | { path: string } | null | undefined): string | null => {
+    if (!url) return null;
+    
     // If it's an object with path property
-    if (typeof url === 'object' && url.path) {
+    if (typeof url === 'object' && 'path' in url && url.path) {
       const pathParts = url.path.split('/');
       const fileName = pathParts[pathParts.length - 1];
       return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`;
     }
     
     // If it's a string URL, use it as is
-    if (typeof url === 'string' && url.startsWith('http')) {
-      return url;
-    }
-    
-    // If it's a string path, construct the URL
     if (typeof url === 'string') {
+      if (url.startsWith('http')) {
+        return url;
+      }
+      
+      // If it's a string path, construct the URL
       const pathParts = url.split('/');
       const fileName = pathParts[pathParts.length - 1];
       return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${userId}/${fileName}`;
@@ -226,7 +229,7 @@ export function PostThumbnail({ post, className, userId }: PostThumbnailProps) {
       className={`aspect-[9/16] rounded-lg overflow-hidden relative ${className || ''}`}
       style={{ minHeight: '200px' }}
     >
-      {mediaType === 'image' && hasMedia && (
+      {mediaType === 'image' && hasMedia && firstMedia && (
         <div className="relative w-full h-full">
           <Image 
             src={getMediaUrl(firstMedia) || '/placeholder.png'} 
@@ -251,7 +254,7 @@ export function PostThumbnail({ post, className, userId }: PostThumbnailProps) {
         </div>
       )}
 
-      {mediaType === 'video' && hasMedia && (
+      {mediaType === 'video' && hasMedia && firstMedia && (
         <VideoThumbnail videoUrl={getMediaUrl(firstMedia) || ''} />
       )}
 

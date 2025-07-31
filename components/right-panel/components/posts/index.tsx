@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from '@/components/utils/SearchParamsProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoadmatesPosts } from "./RoadmatesPosts";
 import { YourPosts } from "./YourPosts";
@@ -22,11 +22,6 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
   
   const handleNewPost = () => {
     setIsCreateModalOpen(true);
-  };
-  
-  const handlePostSubmit = (post: { type: string; content: string | File | null }) => {
-    console.log('New post created:', post);
-    setIsCreateModalOpen(false);
   };
   
   const handleBackToFeed = () => {

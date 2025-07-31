@@ -1,14 +1,15 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useSearchParams } from '@/components/utils/SearchParamsProvider';
 import { profileService } from '@/lib/supabase/profile-service';
 import { Post, Roadmap, Note } from '@/types/post';
 
 interface UserProfile {
   id: string;
   username: string | null;
-  email: string;
+  email?: string;  // Made optional with ?
   avatar_url: string | null;
   created_at: string;
 }

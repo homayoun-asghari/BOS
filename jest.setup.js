@@ -1,3 +1,6 @@
+'use client';
+
+import { useSearchParams as useNextSearchParams } from 'next/navigation';
 // Add custom jest matchers for DOM testing
 import '@testing-library/jest-dom';
 

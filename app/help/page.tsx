@@ -1,10 +1,11 @@
 'use client';
 
+import { Suspense } from 'react';
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import './page-styles.css';
 
-export default function HelpPage() {
+function HelpPageContent() {
   return (
     <div className="min-h-screen bg-background pt-8 pb-16 overflow-y-auto" style={{ height: '100vh', overflowY: 'auto' }}>
       <div className="container max-w-3xl mx-auto px-4">
@@ -21,12 +22,12 @@ export default function HelpPage() {
           <section className="mb-10">
             <h2>Getting Started</h2>
             <p>
-              Welcome to BOS Help Center. Here you'll find resources to help you navigate and get the most out of our platform.
+              Welcome to BOS Help Center. Here you&apos;ll find resources to help you navigate and get the most out of our platform.
             </p>
             <h3>Creating Your Account</h3>
             <p>
-              To start using BOS, you'll need to create an account. Click on the Sign Up button on our homepage and follow the instructions. 
-              You'll need to verify your email before you can access all features.
+              To start using BOS, you&apos;ll need to create an account. Click on the Sign Up button on our homepage and follow the instructions. 
+              You&apos;ll need to verify your email before you can access all features.
             </p>
             <h3>Setting Up Your Profile</h3>
             <p>
@@ -44,7 +45,7 @@ export default function HelpPage() {
             <ol>
               <li>Navigate to your profile page</li>
               <li>Click on the Roadmaps tab</li>
-              <li>Click on "Create New Roadmap"</li>
+              <li>Click on &quot;Create New Roadmap&quot;</li>
               <li>Fill in the required information</li>
               <li>Add milestones and tasks to structure your journey</li>
               <li>Choose whether you want to make your roadmap public or private</li>
@@ -65,9 +66,9 @@ export default function HelpPage() {
             <h3>Finding Similar Users</h3>
             <p>
               Our similarity matching engine will suggest users who are on similar paths. 
-              You can find these recommendations in the "Roadmates" tab.
+              You can find these recommendations in the &quot;Roadmates&quot; tab.
             </p>
-            <h3>Messaging</h3>
+            <h3>What&#39;s New</h3>
             <p>
               To start a conversation with another user, visit their profile and click on the message icon. 
               You can access all your conversations from the messages section.
@@ -86,20 +87,28 @@ export default function HelpPage() {
             <ul>
               <li>Who can see your roadmaps</li>
               <li>Who can see your posts</li>
-              <li>Who can send you messages</li>
-              <li>Whether your profile appears in search results</li>
+              <li>You can now create and share roadmaps with your friends and followers.</li>
+              <li>New and improved profile page with better stats and insights.</li>
             </ul>
           </section>
           
           <section>
-            <h2>Need More Help?</h2>
+            <p>Need more help? Contact our support team at support@bosapp.com</p>
             <p>
-              If you can't find the answers you're looking for, please <Link href="/contact" className="text-primary hover:underline">contact our support team</Link>. 
-              We're here to help you make the most of your BOS experience.
+              If you can&#39;t find the answers you&#39;re looking for, please <Link href="/contact" className="text-primary hover:underline">contact our support team</Link>. 
+              We&#39;re here to help you make the most of your BOS experience.
             </p>
           </section>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function HelpPage() {
+  return (
+    <Suspense fallback={<div>Loading help content...</div>}>
+      <HelpPageContent />
+    </Suspense>
   );
 }

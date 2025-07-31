@@ -1,3 +1,6 @@
+// Import console override first
+import '../utils/console';
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -9,6 +12,9 @@ import { AuthProvider } from '@/components/auth/AuthProvider';
 import { ProfileProvider } from '@/context/profile-context';
 import { RefreshProvider } from '@/contexts/RefreshContext';
 import { RightPanelProvider } from "@/components/right-panel";
+import ConsoleSilencer from "@/components/utils/ConsoleSilencer";
+import { SearchParamsProvider } from "@/components/utils/SearchParamsProvider";
+import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,6 +53,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <ConsoleSilencer />
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
         <script
@@ -73,25 +80,29 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-        <div className="flex flex-col h-full">
-        <ThemeProvider>
-          <AuthProvider>
-            <ProfileProvider>
-              <RefreshProvider>
-                <MobileRightPanelProvider>
-                  <RightPanelProvider>
-                    <LayoutWrapper>
-                      {children}
-                    </LayoutWrapper>
-                  </RightPanelProvider>
-                </MobileRightPanelProvider>
-              </RefreshProvider>
-            </ProfileProvider>
-            <Toaster position="top-right" richColors />
-          </AuthProvider>
-        </ThemeProvider>
-        </div>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+          <SearchParamsProvider>
+            <div className="flex flex-col h-full">
+              <ThemeProvider>
+                <AuthProvider>
+                  <ProfileProvider>
+                    <RefreshProvider>
+                      <MobileRightPanelProvider>
+                        <RightPanelProvider>
+                          <LayoutWrapper>
+                            {children}
+                          </LayoutWrapper>
+                        </RightPanelProvider>
+                      </MobileRightPanelProvider>
+                    </RefreshProvider>
+                  </ProfileProvider>
+                </AuthProvider>
+                <Toaster position="top-center" />
+              </ThemeProvider>
+            </div>
+          </SearchParamsProvider>
+        </Suspense>
       </body>
     </html>
   );
