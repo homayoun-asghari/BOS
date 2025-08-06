@@ -67,6 +67,7 @@ export function TextDisplay({
         currentRoadmap={currentRoadmap}
         currentMilestone={currentMilestone}
         currentTask={currentTask}
+        className="z-10"
       />
       
       <div className="absolute inset-0 flex flex-col p-4">

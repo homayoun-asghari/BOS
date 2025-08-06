@@ -88,9 +88,11 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={avatarUrl} alt={displayName} />
-          <AvatarFallback>{avatarFallback}</AvatarFallback>
+        <Avatar className="h-10 w-10 border-2 border-background/50 shadow-sm">
+          <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+          <AvatarFallback className="bg-foreground/5 text-foreground/80 text-sm font-medium">
+            {avatarFallback}
+          </AvatarFallback>
         </Avatar>
         <div className="flex-1">
           <h2 className="font-semibold">{displayName}</h2>

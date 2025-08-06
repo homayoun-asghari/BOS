@@ -98,9 +98,11 @@ export function ConversationItem({
         className
       )}
     >
-      <Avatar className="h-10 w-10">
-        <AvatarImage src={avatarUrl} alt={displayName} />
-        <AvatarFallback>{avatarFallback}</AvatarFallback>
+      <Avatar className="h-10 w-10 border border-background/50 shadow-sm">
+        <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+        <AvatarFallback className="bg-foreground/5 text-foreground/80 text-sm font-medium">
+          {avatarFallback}
+        </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">

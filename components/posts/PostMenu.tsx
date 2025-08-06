@@ -59,7 +59,7 @@ export function PostMenu({ postId, mediaUrls, isOwner, onDeleted }: PostMenuProp
         <DropdownMenuTrigger className="p-2 rounded-full bg-black/30 hover:bg-black/40 text-white focus:outline-none">
           <MoreVertical className="w-5 h-5" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" >
           <DropdownMenuItem 
             onClick={() => setShowDeleteDialog(true)} 
             className="flex items-center gap-2"

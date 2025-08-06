@@ -87,6 +87,7 @@ export function ImageDisplay({
               id: currentTask.id,
               title: currentTask.title
             } : null}
+            className="z-10"
           />
 
           {/* Like and Share Buttons */}

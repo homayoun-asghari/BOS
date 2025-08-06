@@ -91,6 +91,7 @@ export function VideoDisplay({
             currentRoadmap={currentRoadmap}
             currentMilestone={currentMilestone}
             currentTask={currentTask}
+            className="z-10"
           />
 
           {/* Play/Pause Button Overlay */}

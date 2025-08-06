@@ -72,9 +72,9 @@ export function MessageItem({ message, isCurrentUser, className }: MessageItemPr
   return (
     <div className={cn('flex w-full', className)}>
       <div className="flex items-start gap-2 max-w-[85%]">
-        <Avatar className="h-8 w-8 flex-shrink-0 mt-1">
-          <AvatarImage src={user.avatar_url || ''} alt={user.display_name || user.username} />
-          <AvatarFallback className="text-xs">
+        <Avatar className="h-8 w-8 flex-shrink-0 mt-0.5 border border-background/50 shadow-sm">
+          <AvatarImage src={user.avatar_url || ''} alt={user.display_name || user.username} className="object-cover" />
+          <AvatarFallback className="bg-foreground/5 text-foreground/80 text-xs font-medium">
             {(() => {
               const name = user.display_name || user.username;
               const nameParts = name.trim().split(/\s+/);

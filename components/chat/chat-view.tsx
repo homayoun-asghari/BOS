@@ -130,18 +130,18 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
   // Show chat view if a conversation is selected, otherwise show conversation list
   if (activeConversation) {
     return (
-      <div className={cn('flex flex-col h-full bg-background', className)}>
+      <div className={cn('flex flex-col h-full w-full bg-background', className)}>
         <ChatHeader 
           conversation={currentConversation}
           currentUserId={user?.id || ''}
           onBack={() => setActiveConversation(null)}
-          className="flex-shrink-0 border-b border-border"
+          className="w-full flex-shrink-0 border-b border-border"
         />
         
         {/* Messages Container - Takes remaining space and allows scrolling */}
-        <div className="flex-1 overflow-y-auto p-4 pb-24" style={{ display: 'flex', flexDirection: 'column-reverse' }}>
-          <div className="max-w-3xl mx-auto w-full">
-            <div className="space-y-4">
+        <div className="flex-1 w-full overflow-y-auto p-4 pb-24" style={{ display: 'flex', flexDirection: 'column-reverse' }}>
+          <div className="w-full max-w-full">
+            <div className="w-full space-y-4">
               {messages.map((message) => (
                 <MessageItem
                   key={message.id}
@@ -156,7 +156,7 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
 
         {/* Message Input - Fixed at bottom with safe area for mobile */}
         <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border z-50">
-          <div className="max-w-3xl mx-auto w-full">
+          <div className="w-full px-4">
             <MessageInput
               value={newMessage}
               onChange={setNewMessage}
@@ -177,13 +177,13 @@ export function ChatView({ className, onInputFocusChange, onActiveConversationCh
 
   // Show conversation list when no conversation is selected
   return (
-    <div className={cn('flex flex-col h-full', className)}>
+    <div className={cn('flex flex-col h-full w-full', className)}>
       <ConversationList
         conversations={conversations}
         currentUserId={user?.id || ''}
         activeConversation={null}
         onSelectConversation={setActiveConversation}
-        className="flex-1"
+        className="flex-1 w-full"
       />
     </div>
   );

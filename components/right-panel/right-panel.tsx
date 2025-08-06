@@ -446,8 +446,7 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       
       {/* Content Area - Allow vertical scrolling with proper spacing */}
       <div className={cn(
-         `${selectedUser || (currentView === 'messages' && isChatActive) ? '' : 'flex-1'} flex flex-col h-full overflow-y-auto relative`,
-        
+        "flex flex-col h-full w-full overflow-hidden relative"
       )} style={{
         // Ensure smooth scrolling on iOS
         WebkitOverflowScrolling: 'touch',
@@ -455,15 +454,13 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
         // Includes safe area insets for mobile browsers
         paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 2rem))'
       }}>
-
-
-        {/* Dropdown Menu removed - no longer needed with search as a tab */}
-        
-        {/* Search has been moved to a regular tab */}
-        
         {/* Main Content */}
-        <div className="h-full overflow-hidden">
-          {!isCollapsed && renderView()}
+        <div className="flex-1 overflow-hidden w-full">
+          {!isCollapsed && (
+            <div className="h-full w-full">
+              {renderView()}
+            </div>
+          )}
         </div>
       </div>
       
