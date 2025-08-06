@@ -1,5 +1,4 @@
 
-```
 BOS
 ├─ app
 │  ├─ LayoutWrapper.tsx
@@ -451,5 +450,3 @@ BOS
    ├─ secureFileUrl.ts
    ├─ storageDebug.ts
    └─ tiptap-utils.ts
-
-```
