@@ -72,16 +72,16 @@ export function ShareButton({
         try {
           document.execCommand('copy');
           setCopied(true);
-        } catch (_) {
+        } catch {
           alert(`Please copy this URL manually: ${shareUrl}`);
         }
       });
-    } catch (_) {
+    } catch {
       // Another fallback in case clipboard API is not available
       try {
         document.execCommand('copy');
         setCopied(true);
-      } catch (_) {
+      } catch {
         alert(`Please copy this URL manually: ${shareUrl}`);
       }
     }

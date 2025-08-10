@@ -28,6 +28,7 @@ interface JournalEntry {
   title: string;
   content: JournalContent;
   day_index: number;
+  updated_at?: string; // Matches Supabase timestamp field
 }
 
 export default function JournalPage() {

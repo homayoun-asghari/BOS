@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 
 interface ImagePostProps {
   preview: string | null;
-  onFileChange: (file: File) => void;
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement> | File) => void;
   category?: 'roadmap' | 'milestone' | 'task';
 }
 
@@ -20,11 +20,14 @@ export function ImagePost({ preview: initialPreview, onFileChange }: Omit<ImageP
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement> | File) => {
     let file: File | null = null;
+    let isEvent = false;
     
     if (e instanceof File) {
       file = e;
+      isEvent = false;
     } else {
       file = e.target.files?.[0] || null;
+      isEvent = true;
     }
     
     if (!file) return;
@@ -32,14 +35,19 @@ export function ImagePost({ preview: initialPreview, onFileChange }: Omit<ImageP
     const previewUrl = URL.createObjectURL(file);
     setPreview(previewUrl);
     
-    // Create a mock event object that matches what the parent component expects
-    const mockEvent = {
-      target: {
-        files: [file]
-      }
-    } as unknown as React.ChangeEvent<HTMLInputElement>;
-    
-    onFileChange(mockEvent);
+    // Call onFileChange with the appropriate argument based on input type
+    if (isEvent) {
+      // If it was an event, pass it through directly
+      onFileChange(e as React.ChangeEvent<HTMLInputElement>);
+    } else {
+      // If it was a File, create a mock event for backward compatibility
+      const mockEvent = {
+        target: { files: [file] },
+        preventDefault: () => {},
+        stopPropagation: () => {}
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      onFileChange(mockEvent);
+    }
   };
 
   const startCamera = async () => {
@@ -185,7 +193,7 @@ export function ImagePost({ preview: initialPreview, onFileChange }: Omit<ImageP
             fill
             crossOrigin="anonymous"
             className="object-contain"
-            onError={(e) => console.error("Preview load failed:", preview)}
+            onError={() => console.error("Preview load failed:", preview)}
             onLoad={() => console.log("Image preview loaded")}
           />
           <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/70 to-transparent p-2 text-center text-white text-sm">

@@ -1,12 +1,9 @@
 "use client";
 
 import React, { useRef } from 'react';
-import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { TimelineOverlay } from "./TimelineOverlay";
 import { PostDisplayProps } from "./PostDisplayProps";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import Link from 'next/link';
 import { LikeButton } from '../LikeButton';
 import { ShareButton } from '../ShareButton';
 
@@ -17,7 +14,6 @@ interface TextDisplayProps extends PostDisplayProps {
 export function TextDisplay({
   id,
   content,
-  timestamp,
   user,
   currentRoadmap,
   currentMilestone,
@@ -25,30 +21,9 @@ export function TextDisplay({
   likes,
   isLiked,
   onLike,
-  onUnlike,
   className
 }: TextDisplayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  const handleLike = async () => {
-    try {
-      if (onLike) await onLike();
-      return true;
-    } catch (error) {
-      console.error('Error liking post:', error);
-      return false;
-    }
-  };
-
-  const handleUnlike = async () => {
-    try {
-      if (onUnlike) await onUnlike();
-      return true;
-    } catch (error) {
-      console.error('Error unliking post:', error);
-      return false;
-    }
-  };
 
   return (
     <div
@@ -63,7 +38,11 @@ export function TextDisplay({
       }}
     >
       <TimelineOverlay
-        user={user}
+        user={{
+          name: user.name || user.username, // Fallback to username if name is not provided
+          username: user.username,
+          avatarUrl: user.avatarUrl
+        }}
         currentRoadmap={currentRoadmap}
         currentMilestone={currentMilestone}
         currentTask={currentTask}
@@ -83,8 +62,16 @@ export function TextDisplay({
           <LikeButton 
             initialLikes={likes}
             initialLiked={isLiked ?? false}
-            onLike={handleLike}
-            onUnlike={handleUnlike}
+            onLike={async () => {
+              if (onLike) {
+                await onLike();
+              }
+              return { 
+                action: isLiked ? 'unliked' : 'liked',
+                likeCount: isLiked ? likes - 1 : likes + 1
+              };
+            }}
+            className=""
           />
           <ShareButton 
             postId={id} 

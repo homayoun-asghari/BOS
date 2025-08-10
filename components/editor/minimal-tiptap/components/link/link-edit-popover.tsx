@@ -13,7 +13,12 @@ import { ToolbarButton } from "../toolbar-button"
 import { LinkEditBlock } from "./link-edit-block"
 import { useNoteLinks } from "@/hooks/useNoteLinks"
 import { toast } from "sonner"
-import type { Link as TiptapLinkOptions } from '@tiptap/extension-link';
+type LinkAttributes = {
+  href: string;
+  target?: string;
+  'data-link-type'?: 'internal' | 'external';
+  'data-note-id'?: string;
+};
 
 interface LinkEditPopoverProps extends VariantProps<typeof toggleVariants> {
   editor: Editor
@@ -46,10 +51,15 @@ const LinkEditPopover = ({ editor, size, variant, noteId: propNoteId }: LinkEdit
 
       try {
         const isInternalLink = url.startsWith('/notes/') || !!targetNoteId;
-        const linkText = displayText || (isInternalLink ? url.split('/').pop()?.replace(/-/g, ' ') : url);
+        const selectedText = editor.state.doc.textBetween(
+          editor.state.selection.from,
+          editor.state.selection.to,
+          " "
+        );
+        const linkText = selectedText || displayText || (isInternalLink ? url.split('/').pop()?.replace(/-/g, ' ') : url);
         
         // First update the editor content
-        if (editor.state.selection.empty === false) {
+        if (!editor.state.selection.empty) {
           editor
             .chain()
             .focus()
@@ -64,7 +74,7 @@ const LinkEditPopover = ({ editor, size, variant, noteId: propNoteId }: LinkEdit
               } : {
                 'data-link-type': 'external'
               })
-            } as TiptapLinkOptions['HTMLAttributes'])
+            } as LinkAttributes)
             .run();
         } else {
           // Handle case where there's no text selected (insert new text with link)
@@ -102,24 +112,24 @@ const LinkEditPopover = ({ editor, size, variant, noteId: propNoteId }: LinkEdit
             throw new Error('Invalid note URL or ID');
           }
           
-          // Save to database in the background
+          // Save to database in the background with the selected text as link_text
           createLink({
             noteId,
             linkType: 'internal',
             targetNoteId: pathPart,
-            linkText: linkText || '',
+            linkText: selectedText || linkText || '',
           }).catch(() => {
             toast.warning("Link Created", {
               description: "The link was created but there was an issue saving it to your notebook.",
             });
           });
         } else {
-          // Save external link to database in the background
+          // Save external link to database in the background with the selected text as link_text
           createLink({
             noteId,
             linkType: 'external',
             url,
-            linkText: linkText || '',
+            linkText: selectedText || linkText || '',
           }).catch(() => {
             toast.warning("Link Created", {
               description: "The link was created but there was an issue saving it to your notebook.",
@@ -132,7 +142,7 @@ const LinkEditPopover = ({ editor, size, variant, noteId: propNoteId }: LinkEdit
         });
         
         setOpen(false);
-      } catch (error) {
+      } catch {
         toast.error("Error", {
           description: "We couldn't create the link. Please try again.",
         });

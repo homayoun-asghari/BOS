@@ -6,24 +6,13 @@ interface TextPostProps {
   text: string;
   onChange: (text: string) => void;
   isMaxLength: boolean;
-  category: 'roadmap' | 'milestone' | 'task';
-  user: { name: string; avatarUrl?: string; username: string };
-  timestamp: string | Date;
-  currentRoadmap?: { id: string; title: string } | null;
-  currentMilestone?: { id: string; title: string } | null;
-  currentTask?: { id: string; title: string } | null;
 }
 
 export function TextPost({
   text,
   onChange,
-  isMaxLength,
-  user,
-  timestamp,
-  currentRoadmap = null,
-  currentMilestone = null,
-  currentTask = null
-}: Omit<TextPostProps, 'category'>) {
+  isMaxLength
+}: Pick<TextPostProps, 'text' | 'onChange' | 'isMaxLength'>) {
   const [fontSize, setFontSize] = useState(48);
   const [isMaxHeight, setIsMaxHeight] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -92,7 +81,7 @@ export function TextPost({
   useEffect(() => {
     if (!textareaRef.current) return;
 
-    const { size, isMaxLength: tooLong } = calculateFontSize(text);
+    const { size } = calculateFontSize(text);
     setFontSize(size);
 
     textareaRef.current.style.height = 'auto';
@@ -131,24 +120,29 @@ export function TextPost({
   };
 
   return (
-    <div
-      ref={wrapperRef}
-      className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto rounded-2xl bg-background overflow-hidden"
-    >
-      <div className="w-full h-full flex items-center justify-center p-4">
-        <div className="relative w-full h-full">
+    <div className="relative w-full h-full max-h-[90vh] aspect-[9/16] mx-auto rounded-2xl bg-background overflow-hidden">
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div 
+          ref={wrapperRef}
+          className="relative w-full h-full flex items-center justify-center"
+        >
           <textarea
             ref={textareaRef}
             value={text}
             onChange={handleChange}
-            className="w-full h-full bg-transparent border-none outline-none resize-none text-center font-medium text-foreground/90"
+            className="w-full bg-transparent border-none outline-none resize-none text-center font-medium text-foreground/90"
             style={{
               fontSize: `${fontSize}px`,
               lineHeight: '1.2',
               padding: '0 2rem',
               overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis'
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+              textAlign: 'center',
+              height: 'auto',
+              minHeight: '1.2em',
+              maxHeight: '100%',
+              width: '100%'
             }}
             placeholder="Type..."
           />

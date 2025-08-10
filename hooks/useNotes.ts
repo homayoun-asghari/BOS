@@ -261,16 +261,26 @@ const useNotes = () => {
       setIsLoading(true);
       const now = new Date().toISOString();
       
-      // Prepare update payload with only defined fields
-      const updatePayload: Partial<NoteFormData> = {
-        ...noteData,
+      // Only include fields that exist in the database schema
+      const updatePayload: {
+        title?: string;
+        content?: Record<string, unknown> | string;
+        is_pinned?: boolean;
+        updated_at: string;
+        user_id: string;
+      } = {
+        title: noteData.title,
+        content: noteData.content,
+        is_pinned: noteData.is_pinned,
         updated_at: now,
-        user_id: currentUser.id // Ensure we're setting the correct user_id
+        user_id: currentUser.id
       };
       
       // If content is updated, update the title if not explicitly set
       if (noteData.content && !noteData.title) {
-        const content = noteData.content || '';
+        const content = typeof noteData.content === 'string' 
+          ? noteData.content 
+          : JSON.stringify(noteData.content);
         updatePayload.title = content.split('\n')[0]?.trim().substring(0, 50) || 'Untitled Note';
       }
 

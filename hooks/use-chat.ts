@@ -52,6 +52,7 @@ export function useChat(): UseChatReturn {
   const subscriptionRef = useRef<(() => void) | null>(null);
   const initialMount = useRef(true);
 
+
   // Get current conversation details
   const currentConversation = useMemo<Conversation | null>(() => {
     console.log('[useChat] Finding current conversation:', { 
@@ -78,6 +79,57 @@ export function useChat(): UseChatReturn {
     });
   }, [activeConversation, currentConversation, conversations]);
 
+  // Fetch messages for a conversation
+  const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
+    if (isLoadingMessages) return [];
+    
+    console.log('Fetching messages for conversation:', conversationId);
+    setIsLoadingMessages(true);
+    setError(null);
+    
+    try {
+      const conversationMessages = await chatService.getMessages(conversationId);
+      setMessages(conversationMessages);
+      return conversationMessages;
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+      setError(err instanceof Error ? err : new Error('Failed to load messages'));
+      return [];
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  }, [isLoadingMessages]);
+
+  // Set active conversation with proper state management and message loading
+  const setActiveConversation = useCallback((conversationId: string | null) => {
+    console.log('[useChat] setActiveConversation called with:', conversationId);
+    
+    // Only update if the conversation is actually changing
+    if (conversationId === activeConversation) {
+      console.log('[useChat] Conversation already active, skipping update');
+      return;
+    }
+    
+    // Update the active conversation state
+    _setActiveConversation(conversationId);
+    
+    // Clear messages when changing conversations
+    console.log('[useChat] Clearing messages for conversation change');
+    setMessages([]);
+    
+    // If we have a conversation ID, load its messages
+    if (conversationId) {
+      console.log('[useChat] Loading messages for conversation:', conversationId);
+      fetchMessages(conversationId).then(messages => {
+        console.log(`[useChat] Successfully loaded ${messages.length} messages for conversation ${conversationId}`);
+      }).catch(error => {
+        console.error(`[useChat] Failed to load messages for conversation ${conversationId}:`, error);
+      });
+    } else {
+      console.log('[useChat] No conversation ID provided, messages cleared');
+    }
+  }, [activeConversation, fetchMessages]);
+
   // Fetch user's conversations
   const fetchConversations = useCallback(async (): Promise<Conversation[]> => {
     if (!userId) return [];
@@ -90,14 +142,12 @@ export function useChat(): UseChatReturn {
       const userConversations = await chatService.getConversations(userId);
       setConversations(userConversations);
       
-      // Activate pending conversation if stored
-      if (typeof window !== 'undefined') {
-        const pendingId = localStorage.getItem('pendingConversationId');
-        if (pendingId) {
-          const exists = userConversations.some(c => c.id === pendingId);
-          if (exists) {
-            setActiveConversation(pendingId);
-          }
+      // If there's a pending conversation ID in localStorage, set it as active
+      const pendingConversationId = localStorage.getItem('pendingConversationId');
+      if (pendingConversationId) {
+        const exists = userConversations.some(conv => conv.id === pendingConversationId);
+        if (exists) {
+          _setActiveConversation(pendingConversationId);
           localStorage.removeItem('pendingConversationId');
         }
       }
@@ -128,28 +178,9 @@ export function useChat(): UseChatReturn {
       }
       fetchConversations();
     }
-  }, [userId]); // Removed fetchConversations and isLoading from deps
+  }, [userId, fetchConversations]); // Added fetchConversations to dependencies
 
-  // Fetch messages for a conversation
-  const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
-    if (isLoadingMessages) return [];
-    
-    console.log('Fetching messages for conversation:', conversationId);
-    setIsLoadingMessages(true);
-    setError(null);
-    
-    try {
-      const conversationMessages = await chatService.getMessages(conversationId);
-      setMessages(conversationMessages);
-      return conversationMessages;
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-      setError(err instanceof Error ? err : new Error('Failed to load messages'));
-      return [];
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  }, [isLoadingMessages]);
+
 
   // Send a message handler
   const handleSendMessage = useCallback(async (content: string, mediaUrls: string[] = []): Promise<ChatMessage | null> => {
@@ -341,35 +372,7 @@ export function useChat(): UseChatReturn {
     };
   }, [activeConversation, currentConversation?.id, fetchMessages]);
 
-  // Set active conversation with proper state management and message loading
-  const setActiveConversation = useCallback((conversationId: string | null) => {
-    console.log('[useChat] setActiveConversation called with:', conversationId);
-    
-    // Only update if the conversation is actually changing
-    if (conversationId === activeConversation) {
-      console.log('[useChat] Conversation already active, skipping update');
-      return;
-    }
-    
-    // Update the active conversation state
-    _setActiveConversation(conversationId);
-    
-    // Clear messages when changing conversations
-    console.log('[useChat] Clearing messages for conversation change');
-    setMessages([]);
-    
-    // If we have a conversation ID, load its messages
-    if (conversationId) {
-      console.log('[useChat] Loading messages for conversation:', conversationId);
-      fetchMessages(conversationId).then(messages => {
-        console.log(`[useChat] Successfully loaded ${messages.length} messages for conversation ${conversationId}`);
-      }).catch(error => {
-        console.error(`[useChat] Failed to load messages for conversation ${conversationId}:`, error);
-      });
-    } else {
-      console.log('[useChat] No conversation ID provided, messages cleared');
-    }
-  }, [activeConversation, fetchMessages]);
+
 
   // Search for users
   const searchUsers = useCallback(async (query: string) => {
@@ -433,7 +436,7 @@ export function useChat(): UseChatReturn {
       setError(error as Error);
       return null;
     }
-  }, [userId]);
+  }, [userId, setActiveConversation]);
 
   return {
     conversations,

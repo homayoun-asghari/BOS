@@ -1,6 +1,4 @@
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
-import { InlineTagView } from '../InlineTagView';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -44,7 +42,23 @@ export const InlineTag = Node.create({
     return ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'inline-tag' }), `#${HTMLAttributes.tag}`];
   },
   addNodeView() {
-    return ReactNodeViewRenderer(InlineTagView);
+    return ({ node }) => {
+      const tag = node.attrs.tag || '';
+      const container = document.createElement('span');
+      container.className = 'inline-tag';
+      container.textContent = `#${tag}`;
+      container.setAttribute('data-tag', tag);
+      return {
+        dom: container,
+        update: (updatedNode) => {
+          if (updatedNode.attrs.tag !== tag) {
+            container.textContent = `#${updatedNode.attrs.tag || ''}`;
+            container.setAttribute('data-tag', updatedNode.attrs.tag || '');
+          }
+          return true;
+        }
+      };
+    };
   },
   addCommands() {
     return {

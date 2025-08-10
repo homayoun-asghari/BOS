@@ -4,11 +4,33 @@ import type { EditorView } from "@tiptap/pm/view"
 import { getMarkRange } from "@tiptap/react"
 import { Plugin, TextSelection } from "@tiptap/pm/state"
 
-declare module '@tiptap/core' {
+// Extend the Commands interface to include link commands
+declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     link: {
-      setLink: (attributes: { href: string; target?: string; rel?: string; class?: string }) => ReturnType
-      toggleLink: (attributes: { href: string; target?: string; rel?: string; class?: string }) => ReturnType
+      /**
+       * Set a link mark
+       */
+      setLink: (attributes: {
+        href: string
+        target?: string | null
+        rel?: string | null
+        class?: string | null
+      }) => ReturnType
+      
+      /**
+       * Toggle a link mark
+       */
+      toggleLink: (attributes: {
+        href: string
+        target?: string | null
+        rel?: string | null
+        class?: string | null
+      }) => ReturnType
+      
+      /**
+       * Unset a link mark
+       */
       unsetLink: () => ReturnType
     }
   }

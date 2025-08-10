@@ -115,7 +115,7 @@ export const uploadPostMedia = async (file: File | null | undefined, type: 'imag
     );
     
     // Direct upload to public bucket
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(fileName, file, {
         cacheControl: '31536000', // 1 year cache
@@ -148,13 +148,14 @@ export const uploadPostMedia = async (file: File | null | undefined, type: 'imag
       type
     };
     
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorObj = error as { code?: string; message?: string };
     console.error('Error in uploadPostMedia:', {
       error,
-      fileName,
       bucket: BUCKET_NAME,
       userId: user.id,
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: errorObj?.message || 'Unknown error',
+      ...(errorObj?.code ? { code: errorObj.code } : {})
     });
     
     // Provide user-friendly error message
@@ -202,11 +203,11 @@ export const deletePostMedia = async (path: string): Promise<void> => {
     console.log('Storage deletion response:', { data, error });
     
     if (error) {
+      const errorObj = error as { code?: string; message: string };
       console.error('Error deleting media file:', {
         error,
-        code: error.code,
-        message: error.message,
-        details: error.details
+        message: errorObj.message,
+        ...(errorObj.code ? { code: errorObj.code } : {})
       });
       throw new Error(`Failed to delete file: ${error.message}`);
     }
@@ -255,7 +256,7 @@ export const uploadRoadmapCover = async (file: File): Promise<{ url: string; pat
   
   try {
     // Upload the file to the storage bucket
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(fileName, file, {
         cacheControl: '31536000', // 1 year cache
@@ -305,78 +306,7 @@ export const uploadRoadmapCover = async (file: File): Promise<{ url: string; pat
   }
 };
 
-/**
- * Extracts the file path from a Supabase storage URL
- * @param urlOrPath The full URL or path of the file in Supabase storage
- * @returns The file path relative to the bucket, or the original input if it's already a path
- */
-const extractFilePath = (urlOrPath: string): string => {
-  // If it's already a path (doesn't start with http), return as is
-  if (!urlOrPath.startsWith('http')) {
-    return urlOrPath;
-  }
-  
-  console.log('Extracting path from URL:', urlOrPath);
-  
-  try {
-    const url = new URL(urlOrPath);
-    const pathParts = url.pathname.split('/');
-    
-    // Handle both formats:
-    // 1. /storage/v1/object/public/roadmap-covers/...
-    // 2. /storage/v1/object/sign/roadmap-covers/...
-    const objectIndex = pathParts.indexOf('object');
-    if (objectIndex > -1 && pathParts.length > objectIndex + 2) {
-      // The path should be everything after 'object/public/...' or 'object/sign/...'
-      const pathAfterObject = pathParts.slice(objectIndex + 1).join('/');
-      // Remove any query parameters
-      const cleanPath = pathAfterObject.split('?')[0];
-      console.log('Extracted path:', cleanPath);
-      return cleanPath;
-    }
-    
-    // If we have a path that looks like /roadmap-covers/...
-    const bucketIndex = pathParts.findIndex(part => part.includes('roadmap-covers'));
-    if (bucketIndex > -1) {
-      const cleanPath = pathParts.slice(bucketIndex).join('/');
-      console.log('Extracted path (direct bucket):', cleanPath);
-      return cleanPath;
-    }
-  } catch (e) {
-    console.error('Error parsing URL:', e);
-  }
-  
-  console.warn('Could not extract path from URL, returning as-is:', urlOrPath);
-  return urlOrPath;
-};
 
-/**
- * Extracts the file path from a Supabase storage URL
- * @param url - The full public URL of the file in Supabase storage
- * @returns The file path relative to the bucket
- */
-const extractFilePathFromUrl = (url: string): string | null => {
-  try {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/');
-    
-    // Find the index of 'storage' in the path
-    const storageIndex = pathParts.findIndex(part => part === 'storage');
-    if (storageIndex === -1) return null;
-    
-    // The path should be after 'object/public/'
-    const publicIndex = pathParts.indexOf('public', storageIndex);
-    if (publicIndex === -1) return null;
-    
-    // Get the path after 'public/'
-    const filePath = pathParts.slice(publicIndex + 1).join('/');
-    console.log('Extracted file path:', filePath);
-    return filePath || null;
-  } catch (e) {
-    console.error('Error parsing URL:', e);
-    return null;
-  }
-};
 
 /**
  * Deletes a roadmap cover image from the public storage bucket

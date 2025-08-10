@@ -6,7 +6,7 @@ type Tag = {
   name: string;
 };
 
-interface KnowledgeGraphNode {
+export interface KnowledgeGraphNode {
   id: string;
   label: string;
   title?: string;

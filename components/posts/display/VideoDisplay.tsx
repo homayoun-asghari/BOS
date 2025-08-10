@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { TimelineOverlay } from "./TimelineOverlay";
@@ -18,13 +17,11 @@ export function VideoDisplay({
   id,
   user,
   videoUrl,
-  timestamp,
   currentRoadmap,
   currentMilestone,
   currentTask,
   likes,
   onLike,
-  onUnlike,
   isLiked,
   className,
 }: VideoDisplayProps) {
@@ -32,25 +29,7 @@ export function VideoDisplay({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   
-  const handleLike = async () => {
-    try {
-      if (onLike) await onLike();
-      return true;
-    } catch (error) {
-      console.error('Error liking post:', error);
-      return false;
-    }
-  };
-
-  const handleUnlike = async () => {
-    try {
-      if (onUnlike) await onUnlike();
-      return true;
-    } catch (error) {
-      console.error('Error unliking post:', error);
-      return false;
-    }
-  };
+  // Like/Unlike handlers are passed directly to LikeButton
 
   useEffect(() => {
     const video = videoRef.current;
@@ -87,7 +66,11 @@ export function VideoDisplay({
 
           {/* Timeline Overlay */}
           <TimelineOverlay
-            user={user}
+            user={{
+              name: user.name || user.username, // Fallback to username if name is not provided
+              username: user.username,
+              avatarUrl: user.avatarUrl
+            }}
             currentRoadmap={currentRoadmap}
             currentMilestone={currentMilestone}
             currentTask={currentTask}
@@ -124,8 +107,16 @@ export function VideoDisplay({
             <LikeButton 
               initialLikes={likes}
               initialLiked={!!isLiked}
-              onLike={handleLike}
-              onUnlike={handleUnlike}
+              onLike={async () => {
+                if (onLike) {
+                  await onLike();
+                }
+                return { 
+                  action: isLiked ? 'unliked' : 'liked',
+                  likeCount: isLiked ? likes - 1 : likes + 1
+                };
+              }}
+              className=""
             />
             <ShareButton 
               postId={id} 

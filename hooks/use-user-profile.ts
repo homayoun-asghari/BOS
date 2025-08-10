@@ -5,9 +5,10 @@ import { Post, Roadmap, Note } from '../types/post';
 interface UserProfile {
   id: string;
   username: string | null;
-  email: string;
+  email?: string;
   avatar_url: string | null;
   created_at: string;
+  display_name?: string | null;
 }
 
 interface UserStats {
@@ -53,7 +54,7 @@ export function useUserProfile(username: string) {
         console.log('Fetching profile data for username:', username);
         
         // 1. Fetch basic profile
-        const profileData = await profileService.getUserProfile(username);
+        const profileData: UserProfile | null = await profileService.getUserProfile(username);
         console.log('Profile data received:', { hasData: !!profileData, username });
         
         if (!profileData) {

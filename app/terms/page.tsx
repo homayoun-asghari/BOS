@@ -22,15 +22,15 @@ export default function TermsPage() {
           
           <h2>1. Introduction</h2>
           <p>
-            Welcome to BOS. These Terms of Service ("Terms") govern your use of our website, applications, and services (collectively, the "Service"). 
+            Welcome to BOS. These Terms of Service (&quot;Terms&quot;) govern your use of our website, applications, and services (collectively, the &quot;Service&quot;). 
             By accessing or using the Service, you agree to be bound by these Terms.
           </p>
           
           <h2>2. Definitions</h2>
           <p>
-            "Service" refers to the BOS platform, including all content, features, and functionality offered.
-            "User", "you", and "your" refers to the individual or entity using our Service.
-            "Content" includes text, images, videos, audio, and other materials shared or accessed through the Service.
+            &quot;Service&quot; refers to the BOS platform, including all content, features, and functionality offered.
+            &quot;User&quot;, &quot;you&quot;, and &quot;your&quot; refers to the individual or entity using our Service.
+            &quot;Content&quot; includes text, images, videos, audio, and other materials shared or accessed through the Service.
           </p>
           
           <h2>3. Account Registration</h2>
@@ -45,7 +45,7 @@ export default function TermsPage() {
             <li>Use the Service for any illegal purpose or in violation of any laws</li>
             <li>Post or transmit harmful, inappropriate, or illegal content</li>
             <li>Impersonate others or misrepresent your affiliation with any person or entity</li>
-            <li>Attempt to gain unauthorized access to the Service or other users' accounts</li>
+            <li>Attempt to gain unauthorized access to the Service or other users&apos; accounts</li>
             <li>Interfere with or disrupt the Service or servers or networks connected to the Service</li>
             <li>Collect or store personal data about other users without their consent</li>
             <li>Use the Service in a manner that may create a conflict of interest</li>
@@ -76,7 +76,7 @@ export default function TermsPage() {
           
           <h2>9. Disclaimer of Warranties</h2>
           <p>
-            The Service is provided "as is" and "as available" without warranties of any kind, either express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement, or course of performance.
+            The Service is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any kind, either express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement, or course of performance.
           </p>
           
           <h2>10. Limitation of Liability</h2>

@@ -20,7 +20,6 @@ export function Navbar({
   isCodeAccordionOpen,
   onCodeAccordionChange,
   onOpenSettings,
-  onOpenHelp,
   fullWidth = false,
 }: NavbarProps) {
   const handleUserMenuOpenChange = (open: boolean) => {
@@ -51,7 +50,6 @@ export function Navbar({
                 loading={userLoading}
                 onOpenChange={handleUserMenuOpenChange}
                 onOpenSettings={onOpenSettings}
-                onOpenHelp={onOpenHelp}
               />
             </div>
           </div>

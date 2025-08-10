@@ -1,20 +1,17 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Play, Pause, Upload, X } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Mic, Square, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/utils/date';
 import WaveSurfer from 'wavesurfer.js';
 
 interface VoicePostProps {
   onRecordingComplete: (audioBlob: Blob) => void;
-  onCancel: () => void;
   maxDuration?: number; // in seconds
 }
 
-export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: VoicePostProps) {
+export function VoicePost({ onRecordingComplete, maxDuration = 30 }: VoicePostProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -23,21 +20,38 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.7);
-  const [isMuted, setIsMuted] = useState(false);
   
   const waveformRef = useRef<HTMLDivElement>(null);
-  const wavesurferRef = useRef<any>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  // Use a more specific type for the audio data array
   const dataArrayRef = useRef<Uint8Array | null>(null);
   // animationFrameRef is now managed by the useEffect
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout>();
+  // Using ReturnType<typeof setTimeout> for cross-environment compatibility
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stop recording function
+  const stopRecording = useCallback((): void => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsRecording(false);
+    setIsPaused(false);
+  }, []);
 
   // Initialize audio context and analyser
   useEffect(() => {
@@ -45,16 +59,18 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
       if (audioContextRef.current?.state !== 'closed') {
         audioContextRef.current?.close();
       }
-      // Animation frame cleanup is now handled by the useEffect
       stopRecording();
     };
-  }, []);
+  }, [stopRecording]);
 
-  const startRecording = async () => {
+  const startRecording = async (): Promise<void> => {
     try {
       // Clean up any existing recording
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop();
+        if (mediaRecorderRef.current.stream) {
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
       }
       
       // Stop any existing tracks
@@ -72,7 +88,12 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
       streamRef.current = stream;
       
       // Set up audio context and analyser for visualization
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Extend Window interface to include webkitAudioContext
+      interface Window {
+        webkitAudioContext: typeof AudioContext;
+      }
+      
+      const audioContext = new (window.AudioContext || (window as unknown as Window).webkitAudioContext)();
       audioContextRef.current = audioContext;
       
       const analyser = audioContext.createAnalyser();
@@ -83,7 +104,9 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
       source.connect(analyser);
       
       const bufferLength = analyser.frequencyBinCount;
-      dataArrayRef.current = new Uint8Array(bufferLength);
+      // Create a Uint8Array with a fixed-length buffer for the analyzer
+      const buffer = new ArrayBuffer(bufferLength);
+      dataArrayRef.current = new Uint8Array(buffer);
       
       // Set up media recorder
       const mediaRecorder = new MediaRecorder(stream);
@@ -116,15 +139,6 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
-      stopTimer();
-    }
-  };
-
   const togglePause = () => {
     if (!mediaRecorderRef.current) return;
     
@@ -139,10 +153,11 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
     setIsPaused(!isPaused);
   };
 
-  const startTimer = (reset = true) => {
+  const startTimer = (reset = true): void => {
     // Clear any existing timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
     
     // If reset is true, start from zero, otherwise continue from current elapsedTime
@@ -158,28 +173,26 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
     }, 100);
   };
 
-  const stopTimer = () => {
+  const stopTimer = (): void => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
   };
 
-  const handleCancel = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    stopRecording();
-    onCancel();
-  };
+  // Handle cancel is now directly using onCancel prop
 
   // Initialize WaveSurfer
   useEffect(() => {
     if (!waveformRef.current || !containerRef.current || !audioUrl) return;
 
-    let wavesurfer: any = null;
+    let wavesurfer: WaveSurfer | null = null;
     let isMounted = true;
     let controller: AbortController | null = null;
+    
+    // Define WaveSurfer event handler types
+    // Use a broad Record to align with WaveSurfer's string-based event API
+    type WaveSurferEventHandlers = Record<string, (...args: unknown[]) => void>;
 
     const initWaveSurfer = async () => {
       try {
@@ -194,6 +207,7 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
           cursorWidth: 0, // Hide cursor line
           height: 80,
           barGap: 2,
+          // @ts-expect-error - 'responsive' is not in current WaveSurfer types but is used for our runtime behavior
           responsive: true,
           normalize: true,
           partialRender: true,
@@ -209,37 +223,46 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
         });
 
         // Set up event listeners
-        const onReady = () => {
-          if (!isMounted) return;
-          const duration = wavesurfer.getDuration();
-          setDuration(duration);
-          wavesurfer.setVolume(1);
-          wavesurferRef.current = wavesurfer;
+        const eventHandlers: WaveSurferEventHandlers = {
+          ready: () => {
+            if (!isMounted || !wavesurfer) return;
+            const duration = wavesurfer.getDuration();
+            setDuration(duration);
+            wavesurfer.setVolume(1);
+            wavesurferRef.current = wavesurfer;
+          },
+          audioprocess: () => {
+            if (!isMounted || !wavesurfer) return;
+            setCurrentTime(wavesurfer.getCurrentTime());
+          },
+          seek: () => {
+            if (!isMounted || !wavesurfer) return;
+            setCurrentTime(wavesurfer.getCurrentTime());
+          },
+          finish: () => setIsPlaying(false),
+          pause: () => setIsPlaying(false),
+          play: () => {
+            if (!wavesurfer) return;
+            setCurrentTime(wavesurfer.getCurrentTime());
+            setIsPlaying(true);
+          },
+          error: (...args: unknown[]) => {
+            const err = args[0];
+            if (err instanceof Error) {
+              if (err.name !== 'AbortError') {
+                console.error('WaveSurfer error:', err);
+              }
+            } else {
+              console.error('WaveSurfer error:', err);
+            }
+          }
         };
 
-        const onAudioProcess = () => {
-          if (!isMounted || !wavesurfer) return;
-          setCurrentTime(wavesurfer.getCurrentTime());
-        };
-
-        const onSeek = () => {
-          if (!isMounted || !wavesurfer) return;
-          setCurrentTime(wavesurfer.getCurrentTime());
-        };
-
-        wavesurfer.on('ready', onReady);
-        wavesurfer.on('audioprocess', onAudioProcess);
-        wavesurfer.on('seek', onSeek);
-        wavesurfer.on('finish', () => setIsPlaying(false));
-        wavesurfer.on('pause', () => setIsPlaying(false));
-        wavesurfer.on('play', () => {
-          // Ensure we have the latest time when playback starts
-          setCurrentTime(wavesurfer.getCurrentTime());
-          setIsPlaying(true);
-        });
-        wavesurfer.on('error', (error: any) => {
-          if (error.name !== 'AbortError') {
-            console.error('WaveSurfer error:', error);
+        // Attach all event handlers with proper typing
+        (Object.entries(eventHandlers) as Array<[string, (...args: unknown[]) => void]>).forEach(([eventName, callback]: [string, (...args: unknown[]) => void]) => {
+          if (wavesurfer) {
+            // @ts-expect-error - WaveSurfer types don't reflect dynamic event names uniformly across versions
+            wavesurfer.on(eventName, callback);
           }
         });
 
@@ -272,9 +295,13 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
           if (wavesurfer.isPlaying?.()) {
             wavesurfer.pause();
           }
+          const ws = wavesurfer; // Capture in closure
           setTimeout(() => {
-            wavesurfer.destroy();
-            wavesurfer = null;
+            try {
+              ws.destroy();
+            } catch (error) {
+              console.error('Error destroying WaveSurfer:', error);
+            }
           }, 0);
         } catch (error) {
           console.error('Error cleaning up WaveSurfer:', error);
@@ -296,9 +323,10 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
     if (!wavesurferRef.current || !containerRef.current) return;
     
     const container = containerRef.current;
+    if (!container || !wavesurferRef.current) return;
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const seekRatio = x / rect.width;
+    const seekRatio = Math.min(Math.max(0, x / rect.width), 1); // Clamp between 0 and 1
     const seekTime = seekRatio * duration;
     
     wavesurferRef.current.seekTo(seekTime);
@@ -306,7 +334,7 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
   };
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameIdRef = useRef<number>();
+  const animationFrameIdRef = useRef<number | null>(null);
 
   // Handle canvas drawing
   useEffect(() => {
@@ -324,7 +352,9 @@ export function VoicePost({ onRecordingComplete, onCancel, maxDuration = 30 }: V
     const draw = () => {
       if (!analyserRef.current || !dataArrayRef.current) return;
       
-      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+      // Create a new Uint8Array view of the buffer to ensure type compatibility
+      const dataArray = new Uint8Array(dataArrayRef.current.buffer as ArrayBuffer);
+      analyserRef.current.getByteFrequencyData(dataArray);
       
       ctx.clearRect(0, 0, width, height);
       

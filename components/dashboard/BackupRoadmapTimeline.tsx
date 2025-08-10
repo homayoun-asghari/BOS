@@ -47,7 +47,10 @@ export function BackupRoadmapTimeline({
 
   // Sync local state when prop changes
   useEffect(() => {
-    setMilestonesState(milestones.map(m => ({ ...m, tasks: [...(m.tasks || [])] })));
+    setMilestonesState(milestones.map(m => ({
+      ...m, 
+      tasks: [...(m.tasks || [])].sort((a, b) => a.order_index - b.order_index)
+    })));
   }, [milestones]);
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
   const [pulsingTaskId, setPulsingTaskId] = useState<string | null>(null);
@@ -61,7 +64,8 @@ export function BackupRoadmapTimeline({
     ));
   };
   const persistTasksOrder = async (updatedMilestones: MilestoneType[]) => {
-    const taskUpdates: Promise<any>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const taskUpdates: any[] = [];
     updatedMilestones.forEach(m => {
       m.tasks.forEach(t => {
         taskUpdates.push(
@@ -73,11 +77,14 @@ export function BackupRoadmapTimeline({
   };
 
   const handleMilestoneDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    // Set effectAllowed to ensure consistent behavior across browsers
+    e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('type', 'milestone');
     e.dataTransfer.setData('mIndex', index.toString());
   };
 
-  const handleMilestoneDrop = (e: React.DragEvent<HTMLLIElement>, dropIndex: number) => {
+  const handleMilestoneDrop = (e: React.DragEvent<HTMLElement>, dropIndex: number) => {
+    e.stopPropagation(); // Prevent event bubbling
     e.preventDefault();
     const type = e.dataTransfer.getData('type');
     if (type !== 'milestone') return;
@@ -98,19 +105,25 @@ export function BackupRoadmapTimeline({
     milestoneId: string,
     taskIndex: number
   ) => {
+    // Set effectAllowed to ensure consistent behavior across browsers
+    e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('type', 'task');
     e.dataTransfer.setData('milestoneId', milestoneId);
     e.dataTransfer.setData('tIndex', taskIndex.toString());
   };
 
   const handleTaskDrop = (
-    e: React.DragEvent<HTMLDivElement>,
+    e: React.DragEvent<HTMLElement>,
     milestoneId: string,
     dropTaskIndex: number | null // null means add to end
   ) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Ensure we have the correct drop type
     const type = e.dataTransfer.getData('type');
     if (type !== 'task') return;
+    
     const fromMilestoneId = e.dataTransfer.getData('milestoneId');
     const dragIndex = parseInt(e.dataTransfer.getData('tIndex'));
 
@@ -294,9 +307,14 @@ export function BackupRoadmapTimeline({
         {milestonesState
           .sort((a, b) => a.order_index - b.order_index)
           .map((milestone, idx) => {
-            // Sort tasks for this milestone by due date and then by priority
+            // Sort tasks first by order_index (for drag and drop) and then by date/priority if same order
             const sortedTasks = milestone.tasks ? [...milestone.tasks].sort((a, b) => {
-              // First, sort by due date
+              // First and foremost, respect order_index for drag and drop
+              if (a.order_index !== b.order_index) {
+                return a.order_index - b.order_index;
+              }
+              
+              // If same order_index, fall back to sorting by date
               if (a.due_date && b.due_date) {
                 const dateDiff = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
                 if (dateDiff !== 0) return dateDiff;
@@ -315,9 +333,32 @@ export function BackupRoadmapTimeline({
             }) : [];
             
             return (
-              <li key={`milestone-${milestone.id}`} className="ml-4"
-                  onDragOver={isEditable ? (e)=>e.preventDefault() : undefined}
-                  onDrop={isEditable ? (e)=>handleMilestoneDrop(e, idx) : undefined}
+              <li 
+                  key={`milestone-${milestone.id}`} 
+                  className={`ml-4 ${isEditable ? 'milestone-droppable' : ''}`}
+                  onDragOver={isEditable ? (e)=>{
+                    e.preventDefault();
+                    // Visual indication for valid drop targets
+                    e.dataTransfer.dropEffect = 'move';
+                    // Check if this is a milestone being dragged
+                    if (e.dataTransfer.types.includes('text/plain') && 
+                        e.dataTransfer.getData('type') === 'milestone') {
+                      e.currentTarget.classList.add('bg-gray-50', 'dark:bg-gray-800', 'rounded-md');
+                    }
+                  } : undefined}
+                  onDragLeave={isEditable ? (e)=>{
+                    e.currentTarget.classList.remove('bg-gray-50', 'dark:bg-gray-800');
+                  } : undefined}
+                  onDrop={isEditable ? (e)=>{
+                    e.currentTarget.classList.remove('bg-gray-50', 'dark:bg-gray-800');
+                    const type = e.dataTransfer.getData('type');
+                    if (type === 'milestone') {
+                      handleMilestoneDrop(e, idx);
+                    } else if (type === 'task') {
+                      // When dropping a task on a milestone container, add it to the beginning
+                      handleTaskDrop(e, milestone.id, 0);
+                    }
+                  } : undefined}
                 >
                 <div className="absolute -left-2 -translate-y-1/2">
                   <Diamond className="w-4 h-4 text-primary dark:text-primary-400" />
@@ -330,6 +371,7 @@ export function BackupRoadmapTimeline({
                         draggable={isEditable}
                         onDragStart={isEditable ? (e)=>handleMilestoneDragStart(e, idx) : undefined}
                         onClick={() => toggleMilestone(milestone.id)}
+                        style={isEditable ? {cursor: 'grab'} : undefined}
                       >
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary dark:group-hover:text-primary-400 transition-colors">
                           {milestone.title}
@@ -373,18 +415,34 @@ export function BackupRoadmapTimeline({
                 </div>
                 
                 {/* Tasks for this milestone */}
-                {expandedMilestones[milestone.id] && sortedTasks.length > 0 && (
-                  <div className="mt-2 ml-4 space-y-2">
+                {expandedMilestones[milestone.id] && (
+                  <div className="mt-2 ml-4 space-y-2"
+                    onDragOver={isEditable ? (e)=>{
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    } : undefined}
+                    onDrop={isEditable ? (e)=>{
+                      const type = e.dataTransfer.getData('type');
+                      if (type === 'task') {
+                        // When dropping a task on the task container, add it to the end
+                        handleTaskDrop(e, milestone.id, null);
+                      }
+                    } : undefined}
+                  >
                     {sortedTasks.map((task, taskIdx) => (
                       <div 
                         key={`task-${task.id}`}
-                        onDragOver={isEditable ? (e)=>e.preventDefault() : undefined}
+                        onDragOver={isEditable ? (e)=>{
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        } : undefined}
                         onDrop={isEditable ? (e)=>handleTaskDrop(e, milestone.id, taskIdx) : undefined}
                         draggable={isEditable}
                         onDragStart={isEditable ? (e)=>handleTaskDragStart(e, milestone.id, taskIdx) : undefined}
                         className={cn(
                           "relative pl-6 transition-all duration-1000 ease-in-out py-2",
-                          pulsingTaskId === task.id && isPulsing && "opacity-70"
+                          pulsingTaskId === task.id && isPulsing && "opacity-70",
+                          isEditable && "cursor-grab hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
                         )}
                       >
                         <div className="absolute -left-[2.36rem] top-1/2 w-3 h-3 bg-gray-300 rounded-full -translate-y-1/2 border-2 border-white dark:border-gray-800"></div>
@@ -418,7 +476,26 @@ export function BackupRoadmapTimeline({
                       </div>
                     ))}
                     {/* drop zone at end */}
-                    <div className="h-2" onDragOver={isEditable ? (e)=>e.preventDefault() : undefined} onDrop={(e)=>handleTaskDrop(e, milestone.id, null)} />
+                    <div 
+                      className="h-8 border-2 border-transparent hover:border-dashed hover:border-gray-300 dark:hover:border-gray-600 rounded-md transition-colors" 
+                      onDragOver={isEditable ? (e)=>{
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        e.currentTarget.classList.add('border-dashed', 'border-gray-300', 'dark:border-gray-600');
+                      } : undefined} 
+                      onDragLeave={isEditable ? (e)=>{
+                        e.currentTarget.classList.remove('border-dashed', 'border-gray-300', 'dark:border-gray-600');
+                      } : undefined}
+                      onDrop={isEditable ? (e)=>{
+                        e.currentTarget.classList.remove('border-dashed', 'border-gray-300', 'dark:border-gray-600');
+                        handleTaskDrop(e, milestone.id, null);
+                      } : undefined} 
+                    />
+                    {!sortedTasks.length && (
+                      <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                        Drop tasks here
+                      </div>
+                    )}
                   </div>
                 )}
               </li>

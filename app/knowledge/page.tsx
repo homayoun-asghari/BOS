@@ -116,16 +116,6 @@ export default function KnowledgePage() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    // Extract tags from query
-    const tagMatches = query.match(/#(\w[\w\s]*)/g);
-    if (tagMatches) {
-      const newTags = tagMatches.map(tag => normalizeTag(tag));
-      setTags(newTags);
-    }
-  };
-
   // Search filter for NoteList
   const searchFilter = {
     search: searchQuery,
@@ -133,9 +123,9 @@ export default function KnowledgePage() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex-1 min-h-0 p-4 w-full overflow-hidden">
-        <div className="flex flex-col h-full space-y-4">
+    <div className="flex flex-col h-[calc(100vh-4rem)] w-full">
+      <div className="flex-1 min-h-0 w-full overflow-hidden">
+        <div className="flex flex-col h-full p-4 space-y-4">
           {/* Search and View Toggle */}
           <div className="flex items-center justify-between w-full gap-2">
             <div className="flex items-center gap-2">
@@ -234,17 +224,15 @@ export default function KnowledgePage() {
             </Tabs>
           </div>
 
-          <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'graph')} className="w-full flex-1 flex flex-col">
-            <TabsContent value="graph" className="mt-0 p-0 flex-1">
-              <div className="h-full w-full relative" style={{ minHeight: '500px' }}>
-                <div className="absolute inset-0">
-                  <KnowledgeGraph 
-                    search={searchQuery}
-                    tags={tags}
-                    height="100%"
-                    className="h-full w-full"
-                  />
-                </div>
+          <Tabs value={view} className="w-full h-[calc(100%-3.5rem)] flex flex-col">
+            <TabsContent value="graph" className="mt-0 p-0 flex-1 h-full">
+              <div className="h-full w-full">
+                <KnowledgeGraph 
+                  search={searchQuery}
+                  tags={tags}
+                  height="100%"
+                  className="h-full w-full"
+                />
               </div>
             </TabsContent>
             

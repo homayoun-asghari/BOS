@@ -6,21 +6,14 @@ import { NoteGraphView, NoteGraphModel } from 'note-graph';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { fetchKnowledgeGraphData } from '@/lib/supabase/services/knowledgeGraph';
+import { fetchKnowledgeGraphData, type KnowledgeGraphNode } from '@/lib/supabase/services/knowledgeGraph';
 
 // Simple loading skeleton component
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`bg-muted animate-pulse rounded-md ${className}`} />
 );
 
-type Note = {
-  id: string;
-  title: string;
-  linkTo: string[];
-  referencedBy: string[];
-  tags?: Array<{ id: string; name: string }>;
-  content_search?: string;
-};
+// Type alias for backward compatibility
 
 interface KnowledgeGraphProps {
   height?: number | string;
@@ -42,9 +35,9 @@ export default function KnowledgeGraph({
   const graphViewRef = useRef<NoteGraphView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [graphData, setGraphData] = useState<Note[]>([]);
+  const [graphData, setGraphData] = useState<KnowledgeGraphNode[]>([]);
   
-  // Handle node click
+  // Handle node click - wrapped in useCallback to prevent recreation on every render
   const handleNodeClick = useCallback((nodeId: string) => {
     router.push(`/notes/${nodeId}`);
   }, [router]);
@@ -60,26 +53,26 @@ export default function KnowledgeGraph({
     const matchedNoteIds = new Set<string>();
     
     // Get all notes that match the search/tags
-    const matchedNotes = graphData.filter(note => {
+    const matchedNotes = graphData.filter((note: KnowledgeGraphNode) => {
       let matches = true;
       
       // Filter by tags
       if (tags?.length) {
-        const noteTagNames = (note.tags || []).map(t => t.name.toLowerCase());
-        const searchTags = tags.map(t => t.trim().toLowerCase());
+        const noteTagNames = (note.tags || []).map((t: { name: string }) => t.name.toLowerCase());
+        const searchTags = tags.map((t: string) => t.trim().toLowerCase());
         console.log('Filtering by tags:', { 
           noteId: note.id, 
           noteTags: noteTagNames, 
           searchTags,
-          matchesAll: searchTags.every(tag => noteTagNames.includes(tag))
+          matchesAll: searchTags.every((tag: string) => noteTagNames.includes(tag))
         });
-        matches = searchTags.every(tag => noteTagNames.includes(tag));
+        matches = searchTags.every((tag: string) => noteTagNames.includes(tag));
       }
       
       // Filter by search text
       if (matches && search) {
         const searchText = search.toLowerCase();
-        const titleMatch = note.title.toLowerCase().includes(searchText);
+        const titleMatch = note.title?.toLowerCase().includes(searchText) || false;
         const contentMatch = note.content_search?.toLowerCase().includes(searchText) || false;
         matches = titleMatch || contentMatch;
       }
@@ -95,14 +88,14 @@ export default function KnowledgeGraph({
     const linkedNoteIds = new Set<string>();
     
     // For each matched note, find all linked notes
-    matchedNotes.forEach(note => {
-      note.linkTo?.forEach(linkedId => {
+    matchedNotes.forEach((note: KnowledgeGraphNode) => {
+      note.linkTo?.forEach((linkedId: string) => {
         if (!matchedNoteIds.has(linkedId)) {
           linkedNoteIds.add(linkedId);
         }
       });
       
-      note.referencedBy?.forEach(linkedId => {
+      note.referencedBy?.forEach((linkedId: string) => {
         if (!matchedNoteIds.has(linkedId)) {
           linkedNoteIds.add(linkedId);
         }
@@ -117,13 +110,13 @@ export default function KnowledgeGraph({
     
     const notes = allNotesToShow.map(note => ({
       id: note.id,
-      title: note.title,
+      title: note.title || 'Untitled',
       linkTo: note.linkTo || [],
       referencedBy: note.referencedBy || [],
       // Add custom properties for styling
-      isIndex: note.title.toLowerCase().includes('index'),
-      isInbox: note.title.toLowerCase() === 'inbox',
-      isTodo: note.title.toLowerCase() === 'todo',
+      isIndex: note.title?.toLowerCase().includes('index') || false,
+      isInbox: note.title?.toLowerCase() === 'inbox',
+      isTodo: note.title?.toLowerCase() === 'todo',
       // Add search match status for highlighting
       isSearchMatch: matchedNoteIds.has(note.id)
     }));
@@ -174,87 +167,9 @@ export default function KnowledgeGraph({
     };
   }, [theme]);
 
-  // Create and initialize the graph model
-  useEffect(() => {
-    if (!graphViewRef.current || !containerRef.current) return;
 
-    const graphModel = new NoteGraphModel();
-    
-    // Create a Set of existing node IDs for quick lookup
-    const existingNodeIds = new Set(graphNotes.map(note => note.id));
-    
-    // Set up initial nodes and links
-    graphNotes.forEach(note => {
-      graphModel.addNode(note.id, {
-        label: note.title,
-        color: 'hsl(0, 0%, 90%)',
-        size: 15,
-        labelColor: 'hsl(0, 0%, 10%)'
-      });
-      
-      // Only add links where both source and target nodes exist in the filtered set
-      note.linkTo.forEach(targetId => {
-        if (existingNodeIds.has(targetId)) {
-          graphModel.addLink(note.id, targetId);
-        }
-      });
-    });
 
-    // Highlight nodes that match the search
-    graphNotes.forEach(note => {
-      if (note.isSearchMatch) {
-        // Highlight matching nodes
-        graphModel.updateNode(note.id, {
-          color: 'hsl(210, 70%, 60%)',
-          size: 20,
-          labelColor: 'hsl(0, 0%, 100%)'
-        });
-      }
-    });
-
-    // Configure layout and physics
-    graphModel.configure({
-      layout: {
-        gravity: 0.1,
-        repulsion: 100,
-        damping: 0.9,
-        stiffness: 0.1,
-        nodeOverlap: 1.5,
-        linkOverlap: 0.5,
-        bounds: {
-          left: 0,
-          top: 0,
-          right: containerRef.current.clientWidth,
-          bottom: containerRef.current.clientHeight
-        }
-      },
-      physics: {
-        enabled: true,
-        springLength: 100,
-        springStiffness: 0.001,
-        damping: 0.01,
-        gravity: -0.01
-      }
-    });
-
-    // Set up the graph view
-    graphViewRef.current = new NoteGraphView({
-      container: containerRef.current,
-      model: graphModel,
-      style: graphStyle
-    });
-
-    // Handle node click
-    graphViewRef.current.onInteraction('nodeClick', ({ node }) => {
-      handleNodeClick(node.id);
-    });
-
-    return () => {
-      graphViewRef.current?.dispose();
-    };
-  }, [graphNotes, search, graphStyle]);
-
-  // Load data on initial mount
+  // Load data when user.id changes
   useEffect(() => {
     let isMounted = true;
     
@@ -287,7 +202,7 @@ export default function KnowledgeGraph({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user?.id]); // Add user.id as a dependency
 
   useEffect(() => {
     if (isLoading || error || !containerRef.current || graphNotes.length === 0) {
@@ -376,11 +291,14 @@ export default function KnowledgeGraph({
   }
 
   return (
-    <div className={`relative w-full h-full ${className}`}>
+    <div className={`relative w-full h-[calc(100vh-4rem)] ${className}`}>
       <div 
         ref={containerRef} 
         className="absolute inset-0"
-        style={{ height: typeof height === 'number' ? `${height}px` : height }}
+        style={{ 
+          height: '80%',
+          minHeight: '400px' // Ensure minimum height for very small screens
+        }}
       />
     </div>
   );

@@ -13,10 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  ClipboardCopyIcon,
+  // ClipboardCopyIcon,
   DotsHorizontalIcon,
-  DownloadIcon,
-  Link2Icon,
+  // DownloadIcon,
+  // Link2Icon,
   SizeIcon,
 } from "@radix-ui/react-icons"
 
@@ -94,22 +94,23 @@ const ActionItems: Array<{
     icon: <SizeIcon className="size-4" />,
     tooltip: "View image",
   },
-  {
-    key: "onDownload",
-    icon: <DownloadIcon className="size-4" />,
-    tooltip: "Download image",
-  },
-  {
-    key: "onCopy",
-    icon: <ClipboardCopyIcon className="size-4" />,
-    tooltip: "Copy image to clipboard",
-  },
-  {
-    key: "onCopyLink",
-    icon: <Link2Icon className="size-4" />,
-    tooltip: "Copy image link",
-    isLink: true,
-  },
+  // Commented out download and copy actions as per user request
+  // {
+  //   key: "onDownload",
+  //   icon: <DownloadIcon className="size-4" />,
+  //   tooltip: "Download image",
+  // },
+  // {
+  //   key: "onCopy",
+  //   icon: <ClipboardCopyIcon className="size-4" />,
+  //   tooltip: "Copy image to clipboard",
+  // },
+  // {
+  //   key: "onCopyLink",
+  //   icon: <Link2Icon className="size-4" />,
+  //   tooltip: "Copy image link",
+  //   isLink: true,
+  // },
 ]
 
 export const ImageActions: React.FC<ImageActionsProps> = React.memo(

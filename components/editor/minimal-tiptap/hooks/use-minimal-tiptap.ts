@@ -393,7 +393,11 @@ export const useMinimalTiptapEditor = ({
   ...props
 }: UseMinimalTiptapEditorProps) => {
   const throttledSetValue = useThrottle(
-    (value: TiptapContent) => onUpdate?.(value),
+    (content: unknown) => {
+      if (onUpdate && content) {
+        onUpdate(content as TiptapContent);
+      }
+    },
     throttleDelay
   )
 
@@ -405,12 +409,12 @@ export const useMinimalTiptapEditor = ({
         
         if (content) {
           // Ensure we're not double-wrapping the content
-          if (output === 'json') {
-            throttledSetValue(content);
-          } else {
-            const outputContent = getOutput(editor, output) as TiptapContent;
-            throttledSetValue(outputContent);
-          }
+          const valueToSend = output === 'json' 
+            ? content 
+            : getOutput(editor, output);
+          
+          // Call the throttled function
+          throttledSetValue(valueToSend);
         }
       } catch {
         // Handle any errors silently

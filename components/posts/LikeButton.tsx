@@ -9,14 +9,12 @@ interface LikeButtonProps {
   initialLiked: boolean;
   onLike: () => Promise<{ action: 'liked' | 'unliked', likeCount?: number }>;
   className?: string;
-  onUnlike?: () => Promise<void>; // Add this line to fix the TypeScript error
 }
 
 export function LikeButton({
   initialLikes,
   initialLiked,
   onLike,
-  onUnlike,
   className,
 }: LikeButtonProps) {
   const [isLiked, setIsLiked] = useState(initialLiked);

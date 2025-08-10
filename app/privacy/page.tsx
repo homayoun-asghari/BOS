@@ -104,7 +104,7 @@ export default function PrivacyPage() {
             When you sign up for our platform, you are required to accept our terms and conditions. The date of acceptance and version of the terms are recorded to ensure proper record-keeping and compliance.
           </p>
           
-          <h2>8. Children's Privacy</h2>
+          <h2>8. Children&apos;s Privacy</h2>
           <p>
             Our platform is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us immediately.
           </p>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
           
           <h2>10. Changes to This Privacy Policy</h2>
           <p>
-            We may update this Privacy Policy from time to time. The updated version will be indicated by an updated "Last Updated" date. We encourage you to review this Privacy Policy frequently to stay informed about how we are protecting your information.
+            We may update this Privacy Policy from time to time. The updated version will be indicated by an updated &quot;Last Updated&quot; date. We encourage you to review this Privacy Policy frequently to stay informed about how we are protecting your information.
           </p>
           
           <h2>11. Contact Us</h2>

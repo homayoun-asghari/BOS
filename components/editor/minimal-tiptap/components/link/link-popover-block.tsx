@@ -20,18 +20,28 @@ export const LinkPopoverBlock: React.FC<LinkPopoverBlockProps> = ({
 }) => {
   const [copyTitle, setCopyTitle] = React.useState<string>("Copy")
 
+  const resolveUrl = React.useCallback((rawUrl: string): string => {
+    // If it's an internal link (relative path), build the absolute URL
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      const normalizedPath = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
+      return `${window.location.origin}${normalizedPath}`
+    }
+    return rawUrl
+  }, [])
+
   const handleCopy = React.useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
+      const toCopy = resolveUrl(url)
       navigator.clipboard
-        .writeText(url)
+        .writeText(toCopy)
         .then(() => {
           setCopyTitle("Copied!")
           setTimeout(() => setCopyTitle("Copy"), 1000)
         })
         .catch(console.error)
     },
-    [url]
+    [url, resolveUrl]
   )
 
 
@@ -50,7 +60,7 @@ export const LinkPopoverBlock: React.FC<LinkPopoverBlockProps> = ({
           tooltip="Open link in new tab" 
           onClick={(e) => {
             e.preventDefault()
-            window.open(url, '_blank', 'noopener,noreferrer')
+            window.open(resolveUrl(url), '_blank', 'noopener,noreferrer')
           }}
         >
           <ExternalLinkIcon className="size-4" />

@@ -4,8 +4,10 @@ import { useEffect } from 'react';
 
 type ConsoleMethods = 'log' | 'warn' | 'info' | 'debug' | 'error';
 
+type ConsoleMethod = (...args: unknown[]) => void;
+
 interface ConsoleStorage {
-  [key: string]: any;
+  [key: string]: ConsoleMethod;
 }
 
 export default function ConsoleSilencer() {

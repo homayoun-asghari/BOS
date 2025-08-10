@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { useRefresh } from '@/contexts/RefreshContext';
@@ -41,7 +41,7 @@ export function StatsSection() {
   };
   
   // Function to fetch total notes count
-  const fetchTotalNotes = async () => {
+  const fetchTotalNotes = useCallback(async () => {
     if (!user?.id) return 0;
     
     try {
@@ -56,10 +56,10 @@ export function StatsSection() {
       console.error('Error fetching total notes:', error);
       return 0;
     }
-  };
+  }, [user?.id]);
   
   // Function to fetch users in similar path
-  const fetchSimilarPathUsers = async () => {
+  const fetchSimilarPathUsers = useCallback(async () => {
     if (!user?.id) return { similar: 0, completed: 0 };
     
     try {
@@ -105,7 +105,7 @@ export function StatsSection() {
       if (similarUsers && similarUsers.length > 0) {
         // Get user IDs of similar users (filter out any null/undefined)
         const userIds = similarUsers
-          .map((u: any) => u?.user_id)
+          .map((u: { user_id?: string }) => u?.user_id)
           .filter(Boolean);
         
         console.log('Found similar user IDs:', userIds);
@@ -143,10 +143,10 @@ export function StatsSection() {
       console.error('Error in fetchSimilarPathUsers:', error);
       return { similar: 0, completed: 0 };
     }
-  };
+  }, [user?.id]);
   
   // Function to fetch and update all stats
-  const fetchAllStats = async () => {
+  const fetchAllStats = useCallback(async () => {
     if (!user?.id) return;
     
     try {
@@ -182,12 +182,12 @@ export function StatsSection() {
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
-  };
+  }, [user?.id, fetchTotalNotes, fetchSimilarPathUsers]);
   
   // Listen for specific stat update events
   useEffect(() => {
     const handleTaskUpdate = (e: CustomEvent) => {
-      const { completed, taskId } = e.detail;
+      const { completed } = e.detail;
       // Update tasks count
       updateStat('completed_tasks', 
         completed 
@@ -203,31 +203,36 @@ export function StatsSection() {
       }
     };
     
-    // @ts-ignore - CustomEvent type needs to be handled
+    // @ts-expect-error - CustomEvent type needs to be handled
     window.addEventListener('taskStatusChange', handleTaskUpdate);
     
     return () => {
-      // @ts-ignore
+      // @ts-expect-error - CustomEvent type needs to be handled
       window.removeEventListener('taskStatusChange', handleTaskUpdate);
     };
   }, [stats.completed_tasks, stats.completed_milestones]);
   
+  // Memoize fetchAllStats to prevent infinite loops
+  const memoizedFetchAllStats = useCallback(() => {
+    fetchAllStats();
+  }, [fetchAllStats]);
+
   // Initial fetch and refresh on user/refreshKey change
   useEffect(() => {
-    fetchAllStats();
-  }, [user?.id, refreshKey]);
+    memoizedFetchAllStats();
+  }, [memoizedFetchAllStats, refreshKey]);
   
   // Listen for refresh events
   useEffect(() => {
     const handleRefresh = () => {
-      fetchAllStats();
+      memoizedFetchAllStats();
     };
     
     window.addEventListener('refreshStats', handleRefresh);
     return () => {
       window.removeEventListener('refreshStats', handleRefresh);
     };
-  }, [user?.id]);
+  }, [memoizedFetchAllStats]);
 
   return (
     <div className="p-4 space-y-4">

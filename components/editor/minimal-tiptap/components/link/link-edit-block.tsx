@@ -92,7 +92,7 @@ export const LinkEditBlock = React.forwardRef<HTMLDivElement, LinkEditorProps>(
               <div className="space-y-1">
                 <Label>Search Note</Label>
                 <NoteSearch
-                  value={text}
+                  value=""
                   onChange={(newText) => {
                     setText(newText)
                     // Don't update URL on text change to avoid overwriting the ID
@@ -101,7 +101,7 @@ export const LinkEditBlock = React.forwardRef<HTMLDivElement, LinkEditorProps>(
                     }
                   }}
                   onSelect={(note) => {
-                    setText(note.title)
+                    // Don't set the text here - keep it empty for search
                     // Always use the note ID for the URL to ensure proper linking
                     setUrl(`/notes/${note.id}`)
                   }}
@@ -114,6 +114,7 @@ export const LinkEditBlock = React.forwardRef<HTMLDivElement, LinkEditorProps>(
               </div>
             </TabsContent>
 
+            {/* Display Text input commented out per user request
             <div className="space-y-1">
               <Label htmlFor="display-text">Display Text (optional)</Label>
               <Input
@@ -124,6 +125,7 @@ export const LinkEditBlock = React.forwardRef<HTMLDivElement, LinkEditorProps>(
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
+            */}
 
             <div className="flex justify-end space-x-2 pt-2">
               <Button type="submit" disabled={isLoading}>

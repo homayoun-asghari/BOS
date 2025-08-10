@@ -56,7 +56,8 @@ export function RoadmapHeader({
   onCompleteConfirm,
   onShutdownConfirm,
   showCompletionPrompt = false,
-  onCompletionDismiss,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onCompletionDismiss: _onCompletionDismiss, // Unused but part of the props interface
 }: RoadmapHeaderProps) {
   console.log('RoadmapHeader - roadmap:', roadmap);
   console.log('RoadmapHeader - cover_image_url:', roadmap.cover_image_url);
@@ -85,7 +86,10 @@ export function RoadmapHeader({
   
   const fullImageUrl = getFullImageUrl(roadmap.cover_image_url);
   const hasCoverImage = !!fullImageUrl;
+  // These are used for future functionality
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const isCompleted = roadmap.status === 'completed';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isCompleting, setIsCompleting] = useState(false);
   
   // Format date for display
@@ -184,6 +188,7 @@ export function RoadmapHeader({
         {/* Cover Image */}
       {hasCoverImage && fullImageUrl && (
         <div className="absolute inset-0 w-full h-full overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
             src={fullImageUrl}
             alt="Roadmap cover"

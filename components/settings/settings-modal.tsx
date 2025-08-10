@@ -19,26 +19,10 @@ import { useTheme } from 'next-themes';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-
-interface UserData {
-  id: string;
-  email?: string;
-  user_metadata?: {
-    full_name?: string;
-    name?: string;
-    display_name?: string;
-    avatar_url?: string;
-  };
-  full_name?: string;
-  name?: string;
-  display_name?: string;
-  avatar_url?: string;
-}
-
 interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: UserData | null;
+  // user prop removed since we're using useAuth() internally
 }
 
 type SettingsTab = 'general' | 'notifications' | 'account' | 'security';
@@ -292,19 +276,20 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   useEffect(() => {
     if (user) {
       // Get the user's display name from all possible locations
+      // Match the exact fallback order from the old version
       const displayName = user.user_metadata?.display_name || 
                         user.user_metadata?.full_name || 
                         user.user_metadata?.name || 
-                        user.display_name ||
-                        user.full_name || 
-                        user.name ||
+                        (user as { display_name?: string }).display_name ||
+                        (user as { full_name?: string }).full_name || 
+                        (user as { name?: string }).name ||
                         '';
       
       setFormData(prev => ({
         ...prev,
         name: displayName,
         email: user.email || '',
-        avatarUrl: user.user_metadata?.avatar_url || user.avatar_url || '',
+        avatarUrl: user.user_metadata?.avatar_url || (user as { avatar_url?: string }).avatar_url || '',
         deleteAvatar: false,
         avatarFile: null,
       }));

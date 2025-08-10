@@ -52,7 +52,6 @@ export function RoadmapVisualization({
   onCompleteConfirm,
   onShutdownConfirm,
   onCompletionDismiss,
-  showCompletionPrompt = false,
   showActions = true,
   isEditable = true,
   onTaskStatusChange,
@@ -60,7 +59,6 @@ export function RoadmapVisualization({
   // State management
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
 
   // Early return if no roadmap data
   if (!roadmap) {
@@ -88,37 +86,24 @@ export function RoadmapVisualization({
     }
   };
 
-  // Handle roadmap completion confirmation
-  const handleCompleteConfirm = async () => {
-    if (!onCompleteConfirm) return false;
-    
-    setIsCompleting(true);
-    try {
-      const success = await onCompleteConfirm();
-      return success;
-    } catch (error) {
-      console.error('Error confirming completion:', error);
-      toast.error('Failed to mark roadmap as completed');
-      return false;
-    } finally {
-      setIsCompleting(false);
-    }
-  };
 
-  // Calculate progress based on completed milestones
+  // Calculate progress and completion status
   const calculateProgress = () => {
-    if (!roadmap?.milestones?.length) return 0;
+    if (!roadmap?.milestones?.length) return { progress: 0, allMilestonesCompleted: false };
     
     const totalMilestones = roadmap.milestones.length;
     const completedMilestones = roadmap.milestones.filter(milestone => {
       const tasks = milestone.tasks || [];
       return tasks.length > 0 && tasks.every(task => task.status === 'done');
-    }).length;
+    });
     
-    return totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
+    return {
+      progress: totalMilestones > 0 ? Math.round((completedMilestones.length / totalMilestones) * 100) : 0,
+      allMilestonesCompleted: completedMilestones.length === totalMilestones && totalMilestones > 0
+    };
   };
   
-  const currentProgress = calculateProgress();
+  const { progress: currentProgress, allMilestonesCompleted } = calculateProgress();
   
   // Calculate milestone completion for display
   const totalMilestones = roadmap?.milestones?.length || 0;
@@ -160,8 +145,7 @@ export function RoadmapVisualization({
             isDeleteDialogOpen={isDeleteDialogOpen}
             isEditable={isEditable}
             isDeleting={isDeleting}
-            isCompleting={isCompleting}
-            showCompletionPrompt={showCompletionPrompt}
+            showCompletionPrompt={allMilestonesCompleted}
             onEditClick={onEditClick}
             onDeleteClick={onDeleteClick}
             onDeleteConfirm={handleDeleteRoadmap}
@@ -207,10 +191,14 @@ export function RoadmapVisualization({
                   isDeleteDialogOpen={isDeleteDialogOpen}
                   isEditable={false}
                   isDeleting={isDeleting}
+                  showCompletionPrompt={allMilestonesCompleted}
                   onEditClick={onEditClick}
                   onDeleteClick={onDeleteClick}
                   onDeleteConfirm={handleDeleteRoadmap}
                   onDeleteCancel={onDeleteCancel}
+                  onCompleteConfirm={onCompleteConfirm}
+                  onShutdownConfirm={onShutdownConfirm}
+                  onCompletionDismiss={onCompletionDismiss}
                   showActions={false}
                 />
               </div>
@@ -236,7 +224,10 @@ export function RoadmapVisualization({
             ...roadmap,
             start_date: roadmap.start_date || new Date().toISOString(),
             end_date: roadmap.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            milestones: roadmap.milestones || []
+            milestones: roadmap.milestones || [],
+            is_public: roadmap.is_public || false,
+            // @ts-expect-error - status is used by the modal but not in the type
+            status: roadmap.status || 'draft'
           }}
           key={roadmap.id}
         />

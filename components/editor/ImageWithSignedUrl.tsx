@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { getSignedUrl } from '@/lib/supabase/storage';
 import { Loader2 } from 'lucide-react';
 
+type SignedUrlResult = string | null;
+
 interface ImageWithSignedUrlProps {
   storagePath: string;
   alt?: string;
@@ -21,7 +23,7 @@ export function ImageWithSignedUrl({
   className = '',
   ...props 
 }: ImageWithSignedUrlProps) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<SignedUrlResult>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -40,13 +42,13 @@ export function ImageWithSignedUrl({
           ? storagePath.substring('notes-attachments/'.length)
           : storagePath;
 
-        // Get a signed URL that's valid for 1 hour
-        const url = await getSignedUrl(path, 3600);
+        // Get a signed URL that's valid for 1 hour (3600 seconds)
+        const result = await getSignedUrl(path, 3600);
         
-        if (!url) throw new Error('Failed to generate signed URL');
+        if (!result?.signedUrl) throw new Error('Failed to generate signed URL');
         
         if (isMounted) {
-          setSignedUrl(url);
+          setSignedUrl(result.signedUrl);
           
           // Set up refresh 10 minutes before expiration (50 minutes from now)
           refreshTimer = setTimeout(loadImage, 50 * 60 * 1000);

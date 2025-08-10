@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { roadmapVectorService } from '@/lib/roadmap/roadmap-vector-service';
@@ -81,11 +81,16 @@ async function processMilestoneTasks(milestone: Milestone) {
   const tasksToInsert = [];
   
   for (const [index, subtask] of milestone.subtasks.entries()) {
+    // Ensure dueDate is properly handled whether it's a Date object or string
+    const dueDate = subtask.dueDate ? 
+      (subtask.dueDate instanceof Date ? formatDateForDB(subtask.dueDate) : subtask.dueDate) : 
+      null;
+      
     const taskData = {
       title: subtask.title || 'Untitled Task',
       status: subtask.completed ? 'done' : 'todo',
       priority: subtask.priority || 'medium',
-      due_date: subtask.dueDate ? formatDateForDB(subtask.dueDate) : null,
+      due_date: dueDate,
       order_index: index,
       updated_at: new Date().toISOString()
     };
@@ -315,6 +320,25 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     }
   }, []);
 
+  // Get validation error message
+  const getValidationError = useCallback((currentGoal: string | undefined): string | null => {
+    if (!currentGoal || !currentGoal.trim()) return 'Goal is required';
+    if (!goalStartDate) return 'Start date is required';
+    if (!goalEndDate) return 'End date is required';
+    if (goalStartDate && goalEndDate && goalStartDate >= goalEndDate) return 'End date must be after start date';
+    if (milestones.length === 0) return 'At least one milestone is required';
+    
+    for (const [index, milestone] of milestones.entries()) {
+      if (!milestone?.title?.trim()) return `Milestone ${index + 1} is missing a title`;
+      
+      for (const [taskIndex, task] of (milestone.subtasks || []).entries()) {
+        if (!task?.title?.trim()) return `Milestone ${index + 1}, Task ${taskIndex + 1} is missing a title`;
+      }
+    }
+    
+    return null;
+  }, [goalStartDate, goalEndDate, milestones]);
+
   // Check if form is valid
   const isFormValid = useMemo(() => {
     if (!goal.trim()) return false;
@@ -333,26 +357,10 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     
     return true;
   }, [goal, goalStartDate, goalEndDate, milestones]);
-  
-  // Get validation error message
-  const getValidationError = useCallback(() => {
-    if (!goal.trim()) return 'Please enter a goal';
-    if (!goalStartDate) return 'Please select a start date';
-    if (!goalEndDate) return 'Please select an end date';
-    if (milestones.length === 0) return 'Please add at least one milestone';
-    
-    for (const [index, milestone] of milestones.entries()) {
-      if (!milestone.title.trim()) return `Milestone ${index + 1} is missing a title`;
-      
-      for (const [taskIndex, task] of milestone.subtasks.entries()) {
-        if (!task.title.trim()) return `Milestone ${index + 1}, Task ${taskIndex + 1} is missing a title`;
-      }
-    }
-    
-    return null;
-  }, [goal, goalStartDate, goalEndDate, milestones]);
 
-  const handleSave = useCallback(async () => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!user?.id) {
       toast.error('You must be logged in to save a roadmap');
       return;
@@ -360,15 +368,17 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     
     setIsSaving(true);
     
-    const error = getValidationError();
+    const error = getValidationError(goal);
     if (error) {
       toast.error(error);
+      setIsSaving(false);
       return;
     }
 
     try {
       // Track if we need to clean up the old cover image
       let oldCoverImagePath: string | null = null;
+// ... (rest of the code remains the same)
       
       // If we're updating an existing roadmap and it has a cover image
       if (roadmap?.id && roadmap.cover_image_url) {
@@ -403,11 +413,11 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
       let finalRoadmapId = roadmap?.id;
 
       if (roadmap?.id) {
-        // Prepare the update data
+        // Prepare the update data with null checks for dates
         const updateData = {
           final_goal: goal,
-          start_date: formatDateForDB(goalStartDate),
-          end_date: formatDateForDB(goalEndDate),
+          start_date: goalStartDate ? formatDateForDB(goalStartDate) : null,
+          end_date: goalEndDate ? formatDateForDB(goalEndDate) : null,
           updated_at: new Date().toISOString(),
           cover_image_url: roadmap.cover_image_url || null,
           is_public: isPublic
@@ -500,8 +510,8 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             user_id: user.id,
             title: 'My Roadmap',
             final_goal: goal,
-            start_date: formatDateForDB(goalStartDate),
-            end_date: formatDateForDB(goalEndDate),
+            start_date: goalStartDate ? formatDateForDB(goalStartDate) : null,
+            end_date: goalEndDate ? formatDateForDB(goalEndDate) : null,
             cover_image_url: coverImage?.url || null,
             status: 'in_progress',
             is_public: isPublic
@@ -542,9 +552,9 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
               .insert({
                 milestone_id: milestoneId,
                 title: task.title || 'Untitled Task',
-                description: task.description || '',
-                due_date: task.due_date ? formatDateForDB(new Date(task.due_date)) : null,
-                status: task.status || 'todo',
+                description: '',
+                due_date: task.dueDate ? formatDateForDB(new Date(task.dueDate)) : null,
+                status: task.completed ? 'done' : 'todo',
                 priority: task.priority || 'medium',
                 order_index: i
               });
@@ -620,15 +630,17 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
     pendingCoverRemoval,
     roadmap?.cover_image_url,
     isPublic,
-    getRoadmapForVector
+    getRoadmapForVector,
+    getValidationError
   ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="pb-2">What Do YOU Want?</DialogTitle>
-        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <DialogHeader>
+            <DialogTitle className="pb-2">What Do YOU Want?</DialogTitle>
+          </DialogHeader>
         
         {/* Cover Image Upload */}
         <div className="mb-6">
@@ -710,20 +722,21 @@ export function RoadmapModal({ open, onOpenChange, roadmap, onSave }: RoadmapMod
             </Button>
             <div className="relative group">
               <Button 
-                onClick={handleSave} 
-                disabled={!isFormValid}
+                type="submit"
+                disabled={!isFormValid || isSaving}
                 className={`w-full sm:w-auto ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Save Roadmap
+                {isSaving ? 'Saving...' : 'Save Roadmap'}
               </Button>
               {!isFormValid && (
                 <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  {getValidationError()}
+                  {getValidationError(goal)}
                 </div>
               )}
             </div>
           </div>
         </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

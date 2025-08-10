@@ -22,7 +22,7 @@ export default function ContactPage() {
         
         <div className="prose dark:prose-invert max-w-none mb-10">
           <p>
-            We're here to help! If you have questions, feedback, or need assistance with BOS, 
+            We&apos;re here to help! If you have questions, feedback, or need assistance with BOS, 
             please use the form below or reach out to us directly using the contact information provided.
           </p>
         </div>

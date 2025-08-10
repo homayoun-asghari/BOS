@@ -4,10 +4,10 @@ const nextConfig = {
     reactCompiler: true,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     domains: ['ndvulkwhacsgvunvjtze.supabase.co'],

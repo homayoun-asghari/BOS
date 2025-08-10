@@ -1,7 +1,6 @@
 'use client';
 
 import { useRightPanel as useRightPanelContext } from '@/components/right-panel';
-import { RightPanelView } from '@/components/right-panel/types/right-panel.types';
 
 export function useRightPanel() {
   const {

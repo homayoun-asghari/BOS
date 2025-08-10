@@ -20,6 +20,26 @@ interface BaseUserItem {
   parentId?: string;
 }
 
+interface RoadmapData {
+  id: string;
+  final_goal?: string;
+  milestones?: MilestoneData[];
+  [key: string]: unknown;
+}
+
+interface MilestoneData {
+  id: string;
+  title: string;
+  tasks?: TaskData[];
+  [key: string]: unknown;
+}
+
+interface TaskData {
+  id: string;
+  title: string;
+  [key: string]: unknown;
+}
+
 interface RoadmapItem extends BaseUserItem {
   type: 'roadmap';
 }
@@ -45,7 +65,7 @@ interface CreatePostModalProps {
 }
 
 export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 'onSubmit'>) {
-  const [publicRoadmap, setPublicRoadmap] = useState<Record<string, any> | null>(null);
+  const [publicRoadmap, setPublicRoadmap] = useState<RoadmapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { createPost, isCreating } = usePosts();
   const { user: currentUser } = useAuth();
@@ -57,8 +77,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
-  // isUploading tracks the status of the upload process
-  const [isUploading, setIsUploading] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null!); // Using non-null assertion
@@ -83,7 +101,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     setSelectedItems({
       roadmap: publicRoadmap ? {
         id: publicRoadmap.id,
-        title: publicRoadmap.title || 'My Roadmap',
+        title: publicRoadmap.final_goal || 'My Roadmap',
         type: 'roadmap' as const
       } : null,
       milestone: publicRoadmap?.milestones?.[0] ? {
@@ -194,7 +212,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       items.push(roadmapItem);
       
       // Add milestones and tasks
-      publicRoadmap.milestones?.forEach((milestone: Record<string, any>) => {
+      publicRoadmap.milestones?.forEach((milestone: MilestoneData) => {
         const milestoneItem: MilestoneItem = {
           id: milestone.id,
           title: milestone.title,
@@ -205,7 +223,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
         items.push(milestoneItem);
         
         // Add tasks for this milestone
-        milestone.tasks?.forEach((task: Record<string, any>) => {
+        milestone.tasks?.forEach((task: TaskData) => {
           const taskItem: TaskItem = {
             id: task.id,
             title: task.title,
@@ -220,29 +238,37 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     return items;
   }, [publicRoadmap]);
   
-  // Update selected roadmap when public roadmap data changes
+  // Set initial selected items when publicRoadmap changes
   useEffect(() => {
-    console.log('Public roadmap changed:', publicRoadmap);
-    console.log('Current selected items:', selectedItems);
-    
-    if (publicRoadmap && !selectedItems.roadmap) {
-      console.log('Setting initial selected items with public roadmap');
-      setSelectedItems(prev => ({
-        ...prev,
-        roadmap: {
+    if (publicRoadmap) {
+      setSelectedItems(prev => {
+        // Don't update if the values haven't changed
+        const newRoadmap = publicRoadmap.id ? {
           id: publicRoadmap.id,
           title: publicRoadmap.final_goal || 'My Roadmap',
           type: 'roadmap' as const
-        },
-        milestone: publicRoadmap.milestones?.[0] ? {
+        } : null;
+        
+        const newMilestone = publicRoadmap.milestones?.[0] ? {
           id: publicRoadmap.milestones[0].id,
-          title: publicRoadmap.milestones[0].title,
+          title: publicRoadmap.milestones[0].title || 'Milestone',
           type: 'milestone' as const,
           parentId: publicRoadmap.id
-        } : null
-      }));
+        } : null;
+        
+        // Only update if something actually changed
+        if (JSON.stringify(prev.roadmap) !== JSON.stringify(newRoadmap) ||
+            JSON.stringify(prev.milestone) !== JSON.stringify(newMilestone)) {
+          return {
+            ...prev,
+            roadmap: newRoadmap,
+            milestone: newMilestone
+          };
+        }
+        return prev;
+      });
     }
-  }, [publicRoadmap]);
+  }, [publicRoadmap, setSelectedItems]);
   
   // Cleanup media stream on unmount
   useEffect((): (() => void) => {
@@ -330,7 +356,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       try {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          const capabilities = videoTrack.getCapabilities();
           const settings = videoTrack.getSettings();
           
           // Try to get as close as possible to 9:16
@@ -458,12 +483,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     return !!selectedItems.roadmap && !!selectedItems.milestone;
   }, [selectedItems]);
 
-  const getCategory = useCallback((): 'roadmap' | 'milestone' | 'task' => {
-    // Return the most specific selected item type
-    if (selectedItems.task) return 'task';
-    if (selectedItems.milestone) return 'milestone';
-    return 'roadmap';
-  }, [selectedItems]);
 
   // Function to actually start the media recording
   const startMediaRecording = () => {
@@ -480,8 +499,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     if (!type) return;
     
     try {
-      setIsUploading(true);
-      
       // Upload media file if present
       let mediaUrl: { url: string; path: string; type: 'image' | 'video' | 'voice' } | null = null;
       if (type !== 'text' && mediaFile) {
@@ -531,8 +548,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     } catch (error) {
       console.error('Error creating post:', error);
       toast.error('Failed to create post. Please try again.');
-    } finally {
-      setIsUploading(false);
     }
   }, [type, text, mediaFile, selectedItems, createPost, onClose, mediaStream]);
 
@@ -549,13 +564,30 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     setMediaFile(null);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Handle video files from VideoPost component
+  const handleVideoChange = (file: File) => {
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please provide a valid video file');
+      return;
+    }
+    setMediaFile(file);
+    setPreview(URL.createObjectURL(file));
+  };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement> | File) => {
+    let file: File | null = null;
+    
+    if (e instanceof File) {
+      file = e;
+    } else if (e?.target?.files?.[0]) {
+      file = e.target.files[0];
+    }
+    
+    if (!file || !type) return;
+    
     if (type === 'image') {
       if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file');
+        toast.error('Please provide a valid image file');
         return;
       }
       setMediaFile(file);
@@ -577,24 +609,9 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
       setPreview(URL.createObjectURL(file));
     }
   };
-  
-  // Handle video files from VideoPost component
-  const handleVideoChange = (file: File) => {
-    if (!file.type.startsWith('video/')) {
-      toast.error('Please provide a valid video file');
-      return;
-    }
-    setMediaFile(file);
-    setPreview(URL.createObjectURL(file));
-  };
 
   const renderPostForm = () => {
     if (!type || !currentUser) return null;
-    
-    const userDisplayName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User';
-    const userAvatar = currentUser.user_metadata?.avatar_url || '';
-    
-    const currentDate = new Date().toISOString();
     
     switch (type) {
       case 'text':
@@ -603,25 +620,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
             text={text}
             onChange={setText}
             isMaxLength={text.length >= 500}
-            category={getCategory()}
-            user={{
-              name: userDisplayName,
-              avatarUrl: userAvatar,
-              username: currentUser.email?.split('@')[0] || 'user'
-            }}
-            timestamp={currentDate}
-            currentRoadmap={{
-              id: selectedItems.roadmap?.id || '',
-              title: selectedItems.roadmap?.title || 'No Roadmap Selected'
-            }}
-            currentMilestone={{
-              id: selectedItems.milestone?.id || '',
-              title: selectedItems.milestone?.title || 'No Milestone Selected'
-            }}
-            currentTask={{
-              id: selectedItems.task?.id || '',
-              title: selectedItems.task?.title || 'No Task Selected'
-            }}
           />
         );
       case 'image':
@@ -629,7 +627,6 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
           <ImagePost 
             preview={preview}
             onFileChange={handleFileChange}
-            category={getCategory()}
           />
         );
       case 'video':
@@ -646,13 +643,22 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
         );
       case 'voice':
         return (
-          <VoicePost 
-            onRecordingComplete={(blob) => {
-              const audioFile = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
-              setMediaFile(audioFile);
-            }}
-            onCancel={() => setType(null)}
-          />
+          <div className="relative w-full h-full">
+            <VoicePost 
+              onRecordingComplete={(blob) => {
+                const audioFile = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
+                setMediaFile(audioFile);
+              }}
+            />
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="absolute top-2 right-2"
+              onClick={() => setType(null)}
+            >
+              Cancel
+            </Button>
+          </div>
         );
       default:
         return null;
@@ -815,7 +821,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                     <div className="max-h-60 overflow-y-auto py-1">
                       {userItems.length === 0 ? (
                         <div className="px-4 py-2 text-sm text-muted-foreground">
-                          You don't have any public roadmap yet
+                          You don&apos;t have any public roadmap yet
                         </div>
                       ) : (
                         ['roadmap', 'milestone', 'task'].map((itemType) => {

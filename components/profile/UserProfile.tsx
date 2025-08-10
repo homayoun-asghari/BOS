@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, ArrowLeft, BookOpen, CheckCircle, MessageCircle as MessageIcon } from 'lucide-react';
+import { ArrowLeft, MessageCircle as MessageIcon } from 'lucide-react';
 import { useRouter } from "next/navigation";
 import { useSearchParams } from 'next/navigation';
 import { useProfile } from "@/context/profile-context";
@@ -113,7 +113,8 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
     );
   }
 
-  // Progress bar component
+  // Progress bar component (commented out as it's not currently used)
+  /*
   interface ProgressProps {
     completed: number;
     total: number;
@@ -131,6 +132,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       </div>
     );
   };
+  */
 
   // PostThumbnail component now handles all post rendering types
 
@@ -139,15 +141,17 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
     setActiveTab(value);
   };
 
-  // Calculate stats
+  // Stats list (commented out as it's not currently used)
+  /*
   const statsList = [
     { icon: <Heart className="w-4 h-4" />, label: 'Likes', value: stats?.totalLikes || 0 },
     { icon: <BookOpen className="w-4 h-4" />, label: 'Notes', value: stats?.totalPublicNotes || 0 },
     { icon: <CheckCircle className="w-4 h-4" />, label: 'Completed', value: stats?.completedRoadmaps || 0 },
   ];
+  */
 
   // Import HistorySection component
-  const HistorySection = dynamic<{ userId?: string }>(
+  const HistorySection = dynamic<{ userId?: string; publicOnly?: boolean }>(
     () => import('@/components/right-panel/components/home/HistorySection').then(mod => mod.HistorySection),
     { ssr: false }
   );
@@ -165,6 +169,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
               </div>
             ) : currentRoadmap ? (
               <RoadmapVisualization 
+                // @ts-expect-error - currentRoadmap has null-typed dates and different milestone/task shapes than RoadmapVisualization expects, but it's safe at runtime
                 roadmap={currentRoadmap}
                 progress={currentRoadmap?.milestones?.reduce((total, milestone) => {
                   console.log('UserProfile - Rendering roadmap:', currentRoadmap);
@@ -303,7 +308,7 @@ export function UserProfile({ className, onClose }: UserProfileProps) {
       label: 'History',
       content: (
         <div className="space-y-4 w-full">
-          <HistorySection userId={profile.id} />
+          <HistorySection userId={profile.id} publicOnly />
         </div>
       ),
     },

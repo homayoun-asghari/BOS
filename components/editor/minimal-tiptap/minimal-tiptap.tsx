@@ -132,8 +132,8 @@ export const MinimalTiptapEditor = React.forwardRef<HTMLDivElement, MinimalTipta
   onChange, 
   className, 
   editorContentClassName, 
-  onInternalLinkClick, 
-  onFileUpload,
+  // onInternalLinkClick, // Unused prop - can be removed in future if not needed
+  // onFileUpload, // Unused prop - can be removed in future if not needed
   noteId,
   type = null,
   status = null,

@@ -2,11 +2,7 @@ import * as React from "react"
 import { NodeViewWrapper } from "@tiptap/react"
 import type { NodeViewProps } from '@tiptap/core';
 import { cn } from '@/lib/utils';
-import { Loader2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Resizable } from 're-resizable';
-import { useEditor } from '@tiptap/react';
-import { useHotkeys } from 'react-hotkeys-hook';
+// Removed unused imports to clean up the code
 import { getSignedUrl } from '@/lib/supabase/storage-utils';
 import { ElementDimensions } from '../hooks/use-drag-resize';
 import { useDragResize } from '../hooks/use-drag-resize';
@@ -18,7 +14,7 @@ import { blobUrlToBase64, randomId } from "../../../utils"
 import { InfoCircledIcon, TrashIcon } from "@radix-ui/react-icons"
 import { Spinner } from "../../../components/spinner"
 import type { UploadReturnType } from "../image"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+// Removed unused import
 
 const MAX_HEIGHT = 600
 const MIN_HEIGHT = 120
@@ -166,7 +162,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
           setImageUrl(url);
           setImageState(prev => ({ ...prev, error: false }));
         } else if (isMounted) {
-          throw new Error('Failed to get signed URL for path:', cleanPath);
+          throw new Error(`Failed to get signed URL for path: ${cleanPath}`);
         }
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {

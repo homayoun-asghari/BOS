@@ -98,36 +98,9 @@ export default function NoteCard({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!onDelete) return;
-    
-    try {
-      await onDelete(id);
-      // Prevent any navigation after delete
-      return false;
-    } catch (error) {
-      console.error('Failed to delete note:', error);
-    }
-  };
+
 
   const handleNavigate = () => {
-    if (onNavigate) {
-      // Preserve current view state in URL
-      const params = new URLSearchParams(window.location.search);
-      const view = params.get('view') || 'list';
-      
-      // Pass the current view state to the note page
-      onNavigate(id);
-    }
-  };
-
-  const handleOutsideClick = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('[data-dropdown-menu]') || target.closest('[data-dropdown-menu-trigger]')) {
-      return;
-    }
     onNavigate?.(id);
   };
 
@@ -275,7 +248,7 @@ function extractExcerpt(content: unknown): string {
       }
       
       // Handle paragraph or heading nodes
-      if ('type' in content && ['paragraph', 'heading'].includes(content.type)) {
+      if ('type' in content && typeof content.type === 'string' && ['paragraph', 'heading'].includes(content.type)) {
         if ('content' in content && Array.isArray(content.content)) {
           return extractExcerpt(content.content);
         }

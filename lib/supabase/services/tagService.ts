@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase/client';
-import { getCurrentUser } from '@/lib/supabase/auth';
 
 interface Tag {
   id: string;

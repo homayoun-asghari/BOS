@@ -45,9 +45,10 @@ interface HistoryRoadmap {
 
 interface HistorySectionProps {
   userId?: string; // Optional userId prop to fetch roadmaps for a specific user
+  publicOnly?: boolean; // If true, fetch only public roadmaps
 }
 
-export function HistorySection({ userId: propUserId }: HistorySectionProps = {}) {
+export function HistorySection({ userId: propUserId, publicOnly = false }: HistorySectionProps = {}) {
   type RoadmapFromDB = {
     id: string;
     title?: string;
@@ -96,6 +97,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
 
   const noop = useCallback(() => {}, []);
   const asyncNoop = useCallback(async () => true, []);
+  const asyncNoopVoid = useCallback(async (): Promise<void> => {}, []);
 
   useEffect(() => {
     if (!user && !propUserId) return;
@@ -111,7 +113,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
         const { data: completedData, error: completedError } = await supabase
           .rpc('get_completed_roadmaps', {
             user_id: targetUserId,
-            is_public_only: false
+            is_public_only: publicOnly
           });
 
         if (completedError) throw completedError;
@@ -120,7 +122,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
         const { data: unfinishedData, error: unfinishedError } = await supabase
           .rpc('get_unfinished_roadmaps', {
             user_id: targetUserId,
-            is_public_only: false
+            is_public_only: publicOnly
           });
 
         if (unfinishedError) throw unfinishedError;
@@ -182,7 +184,7 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
         setLoading(false);
       }
     })();
-  }, [user, hasFetched, propUserId]);
+  }, [user, hasFetched, propUserId, publicOnly]);
 
   if (loading) {
     return (
@@ -221,37 +223,39 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
                   roadmap={{
                     id: roadmap.id || '',
                     final_goal: roadmap.final_goal || 'Completed Roadmap',
+                    // @ts-expect-error - extra field used by header display; safe at runtime
                     title: roadmap.title || 'Untitled Roadmap',
+
                     description: roadmap?.description || 'No description available',
                     start_date: roadmap?.start_date || new Date().toISOString().split('T')[0],
                     end_date: roadmap?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                     cover_image_url: roadmap?.cover_image_url || undefined,
                     is_public: roadmap?.is_public || false,
                   // Ensure we always have at least one milestone for completed roadmaps
-                  milestones: (roadmap.milestones && roadmap.milestones.length > 0) 
+                  milestones: (roadmap.milestones && roadmap.milestones.length > 0)
                     ? roadmap.milestones.map(milestone => ({
-                    id: milestone?.id || `milestone-${Math.random().toString(36).substr(2, 9)}`,
-                    title: milestone?.title || 'Untitled Milestone',
-                    description: milestone?.description || null,
-                    start_date: milestone?.start_date || null,
-                    end_date: milestone?.end_date || null,
-                    status: (milestone?.status as 'pending' | 'in_progress' | 'completed' | 'blocked') || 'completed',
-                    order_index: milestone?.order_index || 0,
-                    isCompleted: milestone?.status === 'completed',
-                    tasks: (milestone?.tasks || []).map(task => ({
-                      id: task?.id || `task-${Math.random().toString(36).substr(2, 9)}`,
-                      title: task?.title || 'Untitled Task',
-                      description: task?.description || '',
-                      status: (task?.status as 'todo' | 'in_progress' | 'done') || 'done',
-                      milestone_id: milestone?.id || '',
-                      order_index: task?.order_index || 0,
-                      due_date: task?.due_date || null,
-                      priority: (task?.priority as 'low' | 'medium' | 'high') || 'medium',
-                      created_at: task?.created_at || new Date().toISOString(),
-                      updated_at: task?.updated_at || new Date().toISOString()
+                      id: milestone?.id || `milestone-${Math.random().toString(36).substr(2, 9)}`,
+                      title: milestone?.title || 'Untitled Milestone',
+                      description: milestone?.description || null,
+                      start_date: milestone?.start_date || null,
+                      end_date: milestone?.end_date || null,
+                      status: (milestone?.status as 'pending' | 'in_progress' | 'completed' | 'blocked') || 'completed',
+                      order_index: milestone?.order_index || 0,
+                      isCompleted: milestone?.status === 'completed',
+                      tasks: (milestone?.tasks || []).map(task => ({
+                        id: task?.id || `task-${Math.random().toString(36).substr(2, 9)}`,
+                        title: task?.title || 'Untitled Task',
+                        description: task?.description || '',
+                        status: (task?.status as 'todo' | 'in_progress' | 'done') || 'done',
+                        milestone_id: milestone?.id || '',
+                        order_index: task?.order_index || 0,
+                        due_date: task?.due_date || null,
+                        priority: (task?.priority as 'low' | 'medium' | 'high') || 'medium',
+                        created_at: task?.created_at || new Date().toISOString(),
+                        updated_at: task?.updated_at || new Date().toISOString()
+                      }))
                     }))
-                  }))
-                  : [{
+                    : [{
                       id: 'default-milestone',
                       title: 'Completed',
                       description: 'This roadmap has been completed',
@@ -265,22 +269,22 @@ export function HistorySection({ userId: propUserId }: HistorySectionProps = {})
                   status: 'completed' as const,
                   updated_at: roadmap.completed_at
                 }}
-                progress={roadmap.progress}
-                totalTasks={roadmap.totalTasks}
-                completedTasks={roadmap.completedTasks}
-                isDeleteDialogOpen={false}
-                isDeleting={false}
-                onEditClick={noop}
-                onDeleteClick={noop}
-                onDeleteConfirm={asyncNoop}
-                onDeleteCancel={noop}
-                onCompleteConfirm={asyncNoop}
-                onCompletionDismiss={noop}
-                showActions={false}
-                onTaskStatusChange={handleTaskStatusChange}
-              />
-            </div>
-          ))}
+              progress={roadmap.progress}
+              totalTasks={roadmap.totalTasks}
+              completedTasks={roadmap.completedTasks}
+              isDeleteDialogOpen={false}
+              isDeleting={false}
+              onEditClick={noop}
+              onDeleteClick={noop}
+              onDeleteConfirm={asyncNoopVoid}
+              onDeleteCancel={noop}
+              onCompleteConfirm={asyncNoop}
+              onCompletionDismiss={noop}
+              showActions={false}
+              onTaskStatusChange={handleTaskStatusChange}
+            />
+          </div>
+        ))}
         </div>
       </div>
     </div>

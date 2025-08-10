@@ -34,7 +34,6 @@ function DashboardContent() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
-  const [hasCompletedRoadmaps, setHasCompletedRoadmaps] = useState(false);
   
   const calculateProgress = (roadmap: Roadmap | undefined) => {
     if (!roadmap?.milestones?.length) return 0;
@@ -139,8 +138,7 @@ function DashboardContent() {
         
       if (error) throw error;
       
-      // Update the hasCompletedRoadmaps state to true since we just completed a roadmap
-      setHasCompletedRoadmaps(true);
+
       
       // Clear the current roadmap to trigger the empty state
       setRoadmap(undefined);
@@ -174,7 +172,7 @@ function DashboardContent() {
       
       if (data) {
         // Refresh the roadmap data
-        await fetchRoadmap(roadmap.id);
+        await fetchRoadmap();
         // Trigger stats refresh
         triggerRefresh();
         toast.success('Roadmap marked as unfinished');
@@ -313,7 +311,7 @@ function DashboardContent() {
       const hasCompleted = completedRoadmaps.length > 0;
       console.log('Has completed roadmaps:', hasCompleted);
       
-      setHasCompletedRoadmaps(hasCompleted);
+
       return hasCompleted;
       
     } catch (error) {

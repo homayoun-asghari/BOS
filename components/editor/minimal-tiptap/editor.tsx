@@ -12,11 +12,11 @@ import { SectionThree } from "./components/section/three"
 import { SectionFour } from "./components/section/four"
 import { SectionFive } from "./components/section/five"
 import { LinkBubbleMenu } from "./components/bubble-menu/link-bubble-menu"
-import { useMinimalTiptapEditor } from "./hooks/use-minimal-tiptap"
+import { useMinimalTiptapEditor, type TiptapContent } from "./hooks/use-minimal-tiptap"
 import { MeasuredContainer } from "./components/measured-container"
 
 export interface MinimalTiptapProps
-  extends Omit<UseMinimalTiptapEditorProps, "onUpdate"> {
+  extends Omit<UseMinimalTiptapEditorProps, "onUpdate" | 'value'> {
   value?: Content
   onChange?: (value: Content) => void
   className?: string
@@ -71,9 +71,12 @@ export const MinimalTiptapEditor = React.forwardRef<
   MinimalTiptapProps
 >(({ value, onChange, className, editorContentClassName, ...props }, ref) => {
   const editor = useMinimalTiptapEditor({
-    value,
-    onUpdate: onChange,
     ...props,
+    value: value as unknown as TiptapContent, // Safe cast between compatible types
+    onUpdate: onChange ? (content: TiptapContent) => {
+      // Convert back to Content type for the onChange handler
+      onChange(content as unknown as Content);
+    } : undefined,
   })
 
   if (!editor) {

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useRef as useReactRef } from 'react';
-import { useNoteForm, NoteFormValues } from '@/hooks/useNoteForm';
+import { useNoteForm } from '@/hooks/useNoteForm';
+import type { NoteFormValues } from '@/types/note-form';
 import { NewTipTapEditor as TipTapEditor, TipTapEditorRef } from '../editor/NewTipTapEditor';
 import { saveAttachment } from '@/lib/supabase/attachments';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -44,7 +45,6 @@ export default function NoteForm({
   
   const { 
     values, 
-    isSaving, 
     saveError, 
     handleChange,
     saveNote,
@@ -152,7 +152,7 @@ export default function NoteForm({
             try {
               const attachmentPromises = pendingAttachmentsRef.current.map(attachment => 
                 saveAttachment({
-                  noteId: savedNote.id,
+                  noteId: String(savedNote.id), // Ensure noteId is a string
                   userId: user.id,
                   fileName: attachment.fileName,
                   fileType: attachment.fileType,
@@ -240,7 +240,7 @@ export default function NoteForm({
       
       setTimeout(releaseLock, 500);
     }
-  }, [onSave, saveNote, setSaveError, setIsSaving, processPendingLinks, user?.id, currentNoteId]);
+  }, [onSave, saveNote, setSaveError, setIsSaving, processPendingLinks, user?.id, currentNoteId, setUploadError, setIsUploading]);
 
   // Function to add a pending attachment
   const addPendingAttachment = useCallback((attachment: {
@@ -290,7 +290,7 @@ export default function NoteForm({
         });
       }, debounceMs);
     }
-  }, [autoSave, debounceMs, onContentChange, saveNoteData]);
+  }, [autoSave, debounceMs, onContentChange, saveNoteData, values.title]);
   
 
 
@@ -417,12 +417,42 @@ export default function NoteForm({
     }
   }, [currentNoteId, user?.id, addPendingAttachment]);
 
+  // Show upload status in the UI
+  const renderUploadStatus = () => {
+    if (isUploading) {
+      return (
+        <div className="text-sm text-muted-foreground p-2 bg-muted/50 rounded-md mb-2">
+          Uploading files...
+        </div>
+      );
+    }
+    
+    if (uploadError) {
+      return (
+        <div className="text-sm text-destructive p-2 bg-destructive/10 rounded-md mb-2">
+          {uploadError}
+        </div>
+      );
+    }
+    
+    if (saveError) {
+      return (
+        <div className="text-sm text-destructive p-2 bg-destructive/10 rounded-md mb-2">
+          {saveError}
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-background">
       <div className="flex-1 w-full">
+        {renderUploadStatus()}
         <TipTapEditor
           ref={editorRef}
-          value={content}
+          value={typeof content === 'string' ? content : JSON.stringify(content)}
           onChange={handleEditorChange}
           onFileUpload={handleFileUpload}
           onInternalLinkClick={(noteId) => {

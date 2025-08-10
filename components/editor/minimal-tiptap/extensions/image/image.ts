@@ -33,6 +33,7 @@ export type UploadReturnType =
 interface CustomImageOptions
   extends ImageOptions,
     Omit<FileValidationOptions, "allowBase64"> {
+  allowBase64: boolean
   uploadFn?: (file: File, editor: Editor) => Promise<UploadReturnType>
   onImageRemoved?: (props: Attrs) => void
   onActionSuccess?: (props: ImageActionProps) => void
@@ -152,8 +153,22 @@ const copyImage = async (
   try {
     const res = await fetch(src)
     const blob = await res.blob()
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
-    options.onActionSuccess?.({ ...props, action: "copyImage" })
+    if (
+      typeof window !== "undefined" &&
+      "ClipboardItem" in window &&
+      navigator.clipboard &&
+      "write" in navigator.clipboard
+    ) {
+      const ClipboardItemCtor = (window as unknown as { ClipboardItem: new (items: Record<string, Blob>) => unknown }).ClipboardItem
+      await (navigator.clipboard as unknown as { write: (items: unknown[]) => Promise<void> }).write([
+        new ClipboardItemCtor({ [blob.type]: blob })
+      ])
+      options.onActionSuccess?.({ ...props, action: "copyImage" })
+    } else {
+      // Fallback: copy the link if image copying isn't supported
+      await navigator.clipboard.writeText(src)
+      options.onActionSuccess?.({ ...props, action: "copyLink" })
+    }
   } catch (error) {
     handleError(error, { ...props, action: "copyImage" }, options.onActionError)
   }
@@ -180,6 +195,7 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
       ...this.parent?.(),
       allowedMimeTypes: [],
       maxFileSize: 0,
+      allowBase64: false,
       uploadFn: undefined,
       onToggle: undefined,
       downloadImage: undefined,
@@ -237,13 +253,15 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
   addCommands() {
     return {
       setImage:
-        (options) =>
+        (options: Attrs) =>
         ({ commands }) => {
           // Ensure we have the required attributes
+          const opt = options as unknown as Record<string, unknown>
+          const src = typeof opt.src === 'string' ? opt.src : undefined
           const attrs = {
             ...options,
-            'data-storage-path': options['data-storage-path'] || options.src,
-            'data-upload-complete': options['data-upload-complete'] || 'true'
+            'data-storage-path': (opt['data-storage-path'] as string) || src,
+            'data-upload-complete': (opt['data-upload-complete'] as string) || 'true'
           };
           
           return commands.insertContent({
@@ -252,7 +270,29 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
           })
         },
       setImages:
-        (attrs) =>
+        (
+          attrs:
+            | {
+                src: string | File
+                alt?: string
+                title?: string
+                id?: string | number
+                width?: string | number | null
+                height?: string | number | null
+                'data-storage-path'?: string
+                'data-upload-complete'?: boolean | 'true' | 'false'
+              }[]
+            | {
+                src: string | File
+                alt?: string
+                title?: string
+                id?: string | number
+                width?: string | number | null
+                height?: string | number | null
+                'data-storage-path'?: string
+                'data-upload-complete'?: boolean | 'true' | 'false'
+              }
+        ) =>
         ({ commands }) => {
           const [validImages, errors] = filterFiles(Array.isArray(attrs) ? attrs : [attrs], {
             allowedMimeTypes: this.options.allowedMimeTypes,
@@ -268,15 +308,18 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
             return commands.insertContent(
               validImages.map((image) => {
                 const isFile = image.src instanceof File;
-                const src = isFile ? URL.createObjectURL(image.src) : image.src;
+                const src = isFile
+                  ? URL.createObjectURL(image.src as File)
+                  : (image.src as string);
                 
                 // Check if we have a storage path (for existing images)
-                const storagePath = image['data-storage-path'] || 
+                const storagePath = (image as { 'data-storage-path'?: string })['data-storage-path'] || 
                                   (typeof image.src === 'string' ? image.src : null);
                 
                 // Determine if upload is complete
-                const uploadComplete = image['data-upload-complete'] !== false && 
-                                     image['data-upload-complete'] !== 'false';
+                const uploadComplete =
+                  (image as { 'data-upload-complete'?: boolean | 'true' | 'false' })['data-upload-complete'] !== false &&
+                  (image as { 'data-upload-complete'?: boolean | 'true' | 'false' })['data-upload-complete'] !== 'false';
                 
                 return {
                   type: this.type.name,
@@ -285,8 +328,8 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
                     src: storagePath || src, // Prefer storage path if available
                     alt: image.alt || '',
                     title: image.title || '',
-                    width: image.width || null,
-                    height: image.height || null,
+                    width: (image as { width?: string | number | null }).width ?? null,
+                    height: (image as { height?: string | number | null }).height ?? null,
                     'data-storage-path': storagePath,
                     'data-upload-complete': uploadComplete ? 'true' : 'false',
                   },
@@ -365,8 +408,9 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
           if (node.type.name === "image") {
             const attrs = node.attrs
 
-            if (attrs.src.startsWith("blob:")) {
-              URL.revokeObjectURL(attrs.src)
+            const srcAttr = (attrs as { src?: string }).src
+            if (typeof srcAttr === "string" && srcAttr.startsWith("blob:")) {
+              URL.revokeObjectURL(srcAttr)
             }
 
             this.options.onImageRemoved?.(attrs)
@@ -376,13 +420,4 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
     })
   },
 
-  addNodeView() {
-    return ReactNodeViewRenderer(ImageViewBlock, {
-      className: "relative w-full h-full",
-      attrs: {
-        'data-storage-path': { default: null },
-        'data-upload-complete': { default: 'false' }
-      }
-    })
-  },
 })

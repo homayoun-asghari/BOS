@@ -456,7 +456,7 @@ export const cleanupOrphanedAttachments = async (
             
             try {
               // First try to delete with the exact path
-              const { data, error: storageError } = await supabase.storage
+              const { error: storageError } = await supabase.storage
                 .from('notes-attachments')
                 .remove([storagePath]);
               

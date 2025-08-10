@@ -51,8 +51,8 @@ export function CoverImageUpload({
         }
 
         // Upload the image directly
-        const { url, path } = await uploadRoadmapCover(file);
-        onCoverImageChange({ url, path });
+        const { url } = await uploadRoadmapCover(file);
+        onCoverImageChange({ url, path: '' });
         onPendingRemovalChange?.(false);
         toast.success('Cover image uploaded successfully');
       } catch (error) {
@@ -83,6 +83,7 @@ export function CoverImageUpload({
     <div className={className}>
       {coverImage ? (
         <div className="relative group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={coverImage.url}
             alt="Cover"

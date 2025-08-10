@@ -65,8 +65,17 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  // Exclude home, terms, privacy, help, contact, and about pages from the main layout
-  if (isHome || pathname === '/terms' || pathname === '/privacy' || pathname === '/help' || pathname === '/contact' || pathname === '/about') {
+  // Exclude home, terms, privacy, help, contact, about, and not-found pages from the main layout
+  if (isHome || 
+      pathname === '/terms' || 
+      pathname === '/privacy' || 
+      pathname === '/help' || 
+      pathname === '/contact' || 
+      pathname === '/about' ||
+      pathname === '/404' ||
+      pathname === '/not-found' ||
+      (typeof window !== 'undefined' && 
+       document.documentElement.getAttribute('data-page-type') === 'not-found')) {
     return <>{children}</>;
   }
 
@@ -126,8 +135,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         {/* Settings Modal */}
         <SettingsModal 
           open={isSettingsOpen} 
-          onOpenChange={setIsSettingsOpen} 
-          user={user} 
+          onOpenChange={setIsSettingsOpen}
         />
         
         {/* Help Modal */}

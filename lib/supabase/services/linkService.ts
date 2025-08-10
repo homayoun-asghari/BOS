@@ -7,7 +7,8 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const supabase = createBrowserClient<Database>(supabaseUrl, supabaseKey);
 
-export type LinkType = Database['public']['Enums']['link_type'];
+// Manual type definition since the database type isn't being generated correctly
+export type LinkType = 'internal' | 'external';
 
 export interface CreateLinkParams {
   noteId: string;

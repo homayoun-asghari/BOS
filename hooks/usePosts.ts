@@ -59,7 +59,7 @@ export function usePosts(userId?: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [targetUserId]);
+  }, [targetUserId, isPublicProfile]);  // isPublicProfile already includes user?.id
 
   // Fetch feed posts
   const fetchFeedPosts = useCallback(async () => {

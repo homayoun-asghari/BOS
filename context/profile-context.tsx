@@ -9,6 +9,7 @@ import { Post, Roadmap, Note } from '@/types/post';
 interface UserProfile {
   id: string;
   username: string | null;
+  display_name?: string | null;
   email?: string;  // Made optional with ?
   avatar_url: string | null;
   created_at: string;

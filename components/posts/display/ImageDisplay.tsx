@@ -1,11 +1,9 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
 import { TimelineOverlay } from "./TimelineOverlay";
 import { cn } from "@/lib/utils";
 import { LikeButton } from '../LikeButton';
 import { ShareButton } from '../ShareButton';
-
 import { PostDisplayProps } from './PostDisplayProps';
 
 interface ImageDisplayProps extends Omit<PostDisplayProps, 'content'> {
@@ -16,38 +14,15 @@ export function ImageDisplay({
   id,
   user,
   imageUrl,
-  timestamp,
   currentRoadmap,
   currentMilestone,
   currentTask,
   likes,
   onLike,
-  onUnlike,
   isLiked,
   className,
 }: ImageDisplayProps) {
-  const formattedTime = formatDistanceToNow(new Date(timestamp), {
-    addSuffix: true,
-  });
-  const handleLike = async () => {
-    try {
-      if (onLike) await onLike();
-      return true;
-    } catch (error) {
-      console.error('Error liking post:', error);
-      return false;
-    }
-  };
-
-  const handleUnlike = async () => {
-    try {
-      if (onUnlike) await onUnlike();
-      return true;
-    } catch (error) {
-      console.error('Error unliking post:', error);
-      return false;
-    }
-  };
+  // Like/Unlike handlers are passed directly to LikeButton
 
   return (
     <div
@@ -62,6 +37,7 @@ export function ImageDisplay({
       <div className="absolute inset-0 flex flex-col">
         {/* Image */}
         <div className="relative flex-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
             src={imageUrl} 
             alt="Post" 
@@ -71,7 +47,7 @@ export function ImageDisplay({
           {/* Timeline Overlay */}
           <TimelineOverlay
             user={{
-              name: user.name,
+              name: user.name || user.username, // Fallback to username if name is not provided
               username: user.username,
               avatarUrl: user.avatarUrl
             }}
@@ -95,8 +71,16 @@ export function ImageDisplay({
             <LikeButton 
               initialLikes={likes}
               initialLiked={!!isLiked}
-              onLike={handleLike}
-              onUnlike={handleUnlike}
+              onLike={async () => {
+                if (onLike) {
+                  await onLike();
+                }
+                return { 
+                  action: isLiked ? 'unliked' : 'liked',
+                  likeCount: isLiked ? likes - 1 : likes + 1
+                };
+              }}
+              className=""
             />
             <ShareButton 
               postId={id} 

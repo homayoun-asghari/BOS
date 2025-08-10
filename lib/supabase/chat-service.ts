@@ -1,34 +1,6 @@
 import { Conversation, ChatMessage } from '@/types/chat';
 import { supabase } from '@/lib/supabase/client';
 
-// Define the expected shape of the room data from the RPC call
-interface RoomData {
-  id: string;
-  name: string | null;
-  is_group: boolean;
-  created_at: string;
-  updated_at: string;
-  participants: Array<{
-    id: string;
-    username: string;
-    display_name?: string;
-    avatar_url: string | null;
-  }>;
-  last_message?: {
-    id: string;
-    content: string;
-    created_at: string;
-    user_id: string;
-    user: {
-      id: string;
-      username: string;
-      display_name?: string | null;
-      avatar_url: string | null;
-    };
-  };
-  unread_count: number;
-}
-
 // Type for message with user data from the database
 
 // Type for message with user data from the database
@@ -392,13 +364,21 @@ const chatService = {
             // Default to 0 if we can't get the unread count
           }
 
+          // Ensure participants have the correct type with optional display_name
+          const typedParticipants = participants.map(p => ({
+            id: p.id,
+            username: p.username,
+            display_name: p.display_name ?? undefined, // Convert null to undefined
+            avatar_url: p.avatar_url
+          }));
+
           const conversation: Conversation = {
             id: room.id,
             name: room.name,
             is_group: room.is_group,
             created_at: room.created_at,
             updated_at: room.updated_at,
-            participants: participants,
+            participants: typedParticipants,
             unread_count: unreadCount
           };
           
@@ -624,12 +604,11 @@ const chatService = {
           content: room.last_message.content,
           created_at: room.last_message.created_at,
           user_id: room.last_message.sender_id,
-          user: {
-            id: room.last_message.sender_id,
-            username: room.last_message.sender_username || 'Unknown',
-            display_name: room.last_message.sender_display_name || undefined,
-            avatar_url: room.last_message.sender_avatar_url || null
-          }
+          // The Conversation type expects these properties directly on last_message
+          ...(room.last_message.sender_id && { user_id: room.last_message.sender_id }),
+          ...(room.last_message.sender_username && { username: room.last_message.sender_username }),
+          ...(room.last_message.sender_display_name && { display_name: room.last_message.sender_display_name }),
+          ...(room.last_message.sender_avatar_url && { avatar_url: room.last_message.sender_avatar_url })
         } : undefined,
         unread_count: 0
       };
@@ -681,12 +660,17 @@ const chatService = {
               media_urls: string[] | null;
             };
             
-            // Fetch the sender's profile
+            // Fetch the sender's profile with all required fields
             const { data: senderProfile, error } = await supabase
               .from('profiles')
-              .select('id, username, avatar_url')
+              .select('id, username, avatar_url, display_name')
               .eq('id', newMessage.sender_id)
-              .single();
+              .single<{
+                id: string;
+                username: string;
+                avatar_url: string | null;
+                display_name: string | null;
+              }>();
             
             if (error) {
               console.error('[subscribeToNewMessages] Error fetching sender profile:', error);
@@ -708,8 +692,8 @@ const chatService = {
               user: {
                 id: senderProfile.id,
                 username: senderProfile.username || 'Unknown',
-                display_name: senderProfile.display_name || undefined,
-                avatar_url: senderProfile.avatar_url || null
+                ...(senderProfile.display_name && { display_name: senderProfile.display_name }),
+                avatar_url: senderProfile.avatar_url
               }
             };
             

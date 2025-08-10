@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import type React from 'react';
 import { Play, Pause } from 'lucide-react';
 import { LikeButton } from '../LikeButton';
 import { ShareButton } from '../ShareButton';
@@ -9,6 +10,21 @@ import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/utils/date';
 import WaveSurfer from 'wavesurfer.js';
 import { TimelineOverlay } from './TimelineOverlay';
+
+// Minimal runtime shape we rely on from WaveSurfer.
+type WaveSurferInstance = {
+  on: (event: string, handler: (...args: unknown[]) => void) => void;
+  unAll: () => void;
+  isPlaying: () => boolean;
+  pause: () => void;
+  playPause: () => void;
+  destroy: () => void;
+  load: (...args: unknown[]) => Promise<void> | void;
+  getDuration: () => number;
+  getCurrentTime: () => number;
+  setVolume: (volume: number) => void;
+  seekTo: (time: number) => void;
+};
 
 import { PostDisplayProps } from './PostDisplayProps';
 
@@ -20,9 +36,9 @@ export function VoiceDisplay({
   id,
   audioUrl,
   user,
-  currentRoadmap = null,
-  currentMilestone = null,
-  currentTask = null,
+  currentRoadmap,
+  currentMilestone,
+  currentTask,
   likes = 0,
   isLiked = false,
   onLike,
@@ -31,18 +47,24 @@ export function VoiceDisplay({
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(0.7);
-  const [isMuted, setIsMuted] = useState(false);
   
   const waveformRef = useRef<HTMLDivElement>(null);
-  const wavesurferRef = useRef<any>(null);
+  const wavesurferRef = useRef<WaveSurferInstance | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Bridge onLike prop (Promise<void>) to LikeButton's expected return type
+  const handleLikeProxy = async (): Promise<{ action: 'liked' | 'unliked'; likeCount?: number }> => {
+    if (onLike) {
+      await onLike();
+    }
+    return { action: isLiked ? 'unliked' : 'liked' };
+  };
   
   // Initialize WaveSurfer
   useEffect(() => {
     if (!waveformRef.current || !containerRef.current) return;
 
-    let wavesurfer: any = null;
+    let wavesurfer: WaveSurferInstance | null = null;
     let isMounted = true;
     let controller: AbortController | null = null;
 
@@ -51,14 +73,13 @@ export function VoiceDisplay({
         // Create WaveSurfer instance with transparent background
         wavesurfer = WaveSurfer.create({
           container: waveformRef.current!,
-          waveColor: 'rgba(239, 68, 68, 0.8)', // Slightly transparent red
-          progressColor: 'rgba(185, 28, 28, 0.9)', // Slightly darker red for progress
-          cursorColor: 'rgba(185, 28, 28, 0.7)', // Slightly transparent cursor
+          // Colors are defined below (final values) to avoid duplicates
           barWidth: 2,
           barRadius: 3,
           cursorWidth: 1,
           height: 80,
           barGap: 2,
+          // @ts-expect-error - 'responsive' is used at runtime but missing in some WaveSurfer type defs
           responsive: true,
           normalize: true,
           partialRender: true,
@@ -67,27 +88,37 @@ export function VoiceDisplay({
           cursorColor: 'transparent',
           progressColor: 'rgba(239, 68, 68, 0.7)',
           waveColor: 'rgba(239, 68, 68, 0.4)'
-        });
+        }) as unknown as WaveSurferInstance;
 
         // Create a new AbortController for this load
         controller = new AbortController();
         const { signal } = controller;
 
+        // Load audio
+        const response = await fetch(audioUrl, { signal });
+        if (!response.ok) throw new Error('Failed to load audio');
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        if (wavesurfer) {
+          wavesurfer.load(url);
+        }
+
         // Set up event listeners
         const onReady = () => {
-          if (!isMounted) return;
+          if (!isMounted || !wavesurfer) return;
           setDuration(wavesurfer.getDuration());
           wavesurfer.setVolume(1); // Set to full volume by default
           wavesurferRef.current = wavesurfer;
         };
 
         const onAudioProcess = () => {
-          if (!isMounted) return;
+          if (!isMounted || !wavesurfer) return;
           setCurrentTime(wavesurfer.getCurrentTime());
         };
 
         const onSeek = () => {
-          if (!isMounted) return;
+          if (!isMounted || !wavesurfer) return;
           setCurrentTime(wavesurfer.getCurrentTime());
         };
 
@@ -97,9 +128,14 @@ export function VoiceDisplay({
         wavesurfer.on('finish', () => setIsPlaying(false));
         wavesurfer.on('pause', () => setIsPlaying(false));
         wavesurfer.on('play', () => setIsPlaying(true));
-        wavesurfer.on('error', (error: any) => {
-          if (error.name !== 'AbortError') {
-            console.error('WaveSurfer error:', error);
+        wavesurfer.on('error', (...args: unknown[]) => {
+          const err = args[0];
+          if (err instanceof Error) {
+            if (err.name !== 'AbortError') {
+              console.error('WaveSurfer error:', err);
+            }
+          } else {
+            console.error('WaveSurfer error:', err);
           }
         });
 
@@ -132,14 +168,16 @@ export function VoiceDisplay({
           wavesurfer.unAll();
           
           // Stop any playing audio
-          if (wavesurfer.isPlaying()) {
+          if (wavesurfer?.isPlaying?.()) {
             wavesurfer.pause();
           }
           
           // Destroy the instance
           setTimeout(() => {
-            wavesurfer.destroy();
-            wavesurfer = null;
+            if (wavesurfer) {
+              wavesurfer.destroy();
+              wavesurfer = null;
+            }
           }, 0);
         } catch (error) {
           console.error('Error cleaning up WaveSurfer:', error);
@@ -172,10 +210,15 @@ export function VoiceDisplay({
   };
 
   return (
-    <div className={cn("relative w-full aspect-[9/16] bg-black/5 rounded-lg overflow-hidden flex flex-col group", className)}>
+    <div className={cn("relative w-full aspect-[9/16] bg-black/5 dark:bg-white/5 rounded-lg overflow-hidden flex flex-col group", className)}>
       {/* Timeline Overlay */}
       <TimelineOverlay 
-        user={user}
+        user={{
+          name: user.name || 'User',
+          username: user.username,
+          avatarUrl: user.avatarUrl,
+          display_name: user.display_name
+        }}
         currentRoadmap={currentRoadmap}
         currentMilestone={currentMilestone}
         currentTask={currentTask}
@@ -187,7 +230,7 @@ export function VoiceDisplay({
         <LikeButton
           initialLikes={likes}
           initialLiked={isLiked}
-          onLike={onLike || (async () => ({ action: isLiked ? 'unliked' : 'liked' }))}
+          onLike={handleLikeProxy}
         />
         <ShareButton
           postId={id}

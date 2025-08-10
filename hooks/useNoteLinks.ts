@@ -32,14 +32,14 @@ export const useNoteLinks = () => {
       const error = err as Error;
       console.error('Error creating link:', error);
       setError(error);
-      toast.error('Error creating link', {
+      toast('Error creating link', {
         description: error.message || 'An error occurred while creating the link.',
       });
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const updateLink = useCallback(async (params: UpdateLinkParams) => {
     setIsLoading(true);
@@ -55,14 +55,14 @@ export const useNoteLinks = () => {
       const error = err as Error;
       console.error('Error updating link:', error);
       setError(error);
-      toast.error('Error updating link', {
+      toast('Error updating link', {
         description: error.message || 'An error occurred while updating the link.',
       });
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const deleteLink = useCallback(async (linkId: string) => {
     setIsLoading(true);
@@ -78,14 +78,14 @@ export const useNoteLinks = () => {
       const error = err as Error;
       console.error('Error deleting link:', error);
       setError(error);
-      toast.error('Error deleting link', {
+      toast('Error deleting link', {
         description: error.message || 'An error occurred while deleting the link.',
       });
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const getNoteLinks = useCallback(async (noteId: string) => {
     setIsLoading(true);
@@ -97,14 +97,14 @@ export const useNoteLinks = () => {
       const error = err as Error;
       console.error('Error fetching note links:', error);
       setError(error);
-      toast.error('Error fetching links', {
+      toast('Error fetching links', {
         description: error.message || 'An error occurred while fetching links.',
       });
       return [];
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const getBacklinks = useCallback(async (noteId: string) => {
     setIsLoading(true);

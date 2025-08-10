@@ -42,8 +42,13 @@ export function PostMenu({ postId, mediaUrls, isOwner, onDeleted }: PostMenuProp
 
       toast.success("Post deleted");
       onDeleted?.();
-      // Redirect to Yours tab
-      router.push("/right-panel?tab=yours");
+      
+      // Clean up URL if it contains the post ID
+      if (window.location.search.includes(`?post=${postId}`)) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('post');
+        router.replace(url.toString(), { scroll: false });
+      }
     } catch (error) {
       console.error("Error deleting post:", error);
       toast.error("Failed to delete post");

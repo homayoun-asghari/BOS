@@ -69,9 +69,7 @@ export function MinimalEditorWrapper({
       // Return the public URL to be used in the editor
       return result.url;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Error is handled by the error boundary and onFileUpload callback
-      
       onFileUpload?.(
         '', 
         file.name, 

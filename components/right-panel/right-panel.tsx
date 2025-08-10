@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Post } from "@/components/posts/types/post.types";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/context/profile-context";
 import { UserProfile } from "@/components/profile/UserProfile";
@@ -11,43 +10,9 @@ import { useMobileRightPanel } from "@/context/mobile-right-panel-context";
 
 import { ChatView } from "@/components/chat/chat-view";
 import { Search, X } from "lucide-react";
-import { dummyPosts } from "@/components/posts/dummy-posts";
-import { TextDisplay } from "@/components/posts/display/TextDisplay";
-import { ImageDisplay } from "@/components/posts/display/ImageDisplay";
-import { VideoDisplay } from "@/components/posts/display/VideoDisplay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Home } from "./components/home";
 import { Posts } from "./components/posts";
-
-// Map dummy posts to match our Post type
-const posts: Post[] = dummyPosts.map(post => ({
-  id: post.id,
-  type: post.type as 'text' | 'image' | 'video',
-  content: post.type === 'text' ? post.content || '' : '',
-  imageUrl: post.type === 'image' ? post.imageUrl || '' : '',
-  videoUrl: post.type === 'video' ? post.videoUrl || '' : '',
-  category: post.category || 'general',
-  timestamp: post.timestamp instanceof Date ? post.timestamp : new Date(post.timestamp),
-  likes: post.likes || 0,
-  onLike: () => console.log('Like clicked'),
-  user: {
-    name: post.user.name,
-    username: post.user.username || '',
-    avatarUrl: post.user.avatarUrl || '',
-  },
-  currentRoadmap: {
-    id: post.currentRoadmap.id,
-    title: post.currentRoadmap.title,
-  },
-  currentMilestone: {
-    id: post.currentMilestone.id,
-    title: post.currentMilestone.title,
-  },
-  currentTask: {
-    id: post.currentTask.id,
-    title: post.currentTask.title,
-  }
-}));
 
 type RightPanelViewType = 'messages' | 'posts' | 'stats' | null;
 
@@ -134,7 +99,6 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
     event.preventDefault();
     const query = searchQuery.trim();
     if (!query) {
-      setIsDropdownOpen(false);
       return;
     }
     
@@ -144,10 +108,8 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       console.log('Searching for users with query:', { original: query, normalized: normalizedQuery });
       
       await searchUsers(normalizedQuery);
-      setIsDropdownOpen(true);
     } catch (err) {
       console.error('Error searching users:', err);
-      setIsDropdownOpen(false);
     }
   }, [searchQuery, searchUsers]);
   

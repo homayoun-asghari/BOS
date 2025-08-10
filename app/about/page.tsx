@@ -86,13 +86,13 @@ export default function AboutPage() {
                 <h3 className="text-lg font-medium">Homayoun Asghari</h3>
                 <p className="text-sm text-muted-foreground mb-2">Founder & Lead Developer</p>
                 <div className="flex justify-center space-x-3 mt-2">
-                  <a href="https://linkedin.com/in/homayoun-asghari" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                  <a href="https://www.linkedin.com/in/homayoun-asghari-b9769912a/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                     <Linkedin className="h-5 w-5" />
                   </a>
                   <a href="https://github.com/homayoun-asghari" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                     <Github className="h-5 w-5" />
                   </a>
-                  <a href="mailto:contact@bos.app" className="text-muted-foreground hover:text-primary transition-colors">
+                  <a href="mailto:asghari.homayoun@yahoo.com" className="text-muted-foreground hover:text-primary transition-colors">
                     <Mail className="h-5 w-5" />
                   </a>
                 </div>
@@ -114,7 +114,7 @@ export default function AboutPage() {
           <section>
             <h2>Join Us on This Journey</h2>
             <p>
-              We're just getting started, and we'd love for you to join us. Create your account today and start mapping out your journey, 
+              We&apos;re just getting started, and we&apos;d love for you to join us. Create your account today and start mapping out your journey, 
               connecting with others, and tracking your progress toward your goals.
             </p>
             <div className="flex justify-center mt-8">

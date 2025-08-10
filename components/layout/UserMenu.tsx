@@ -19,20 +19,25 @@ import {
   Settings as SettingsIcon
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import Link from "next/link";
 
 interface UserMenuProps {
   user: {
     email?: string | null;
     user_metadata?: {
       full_name?: string;
+      name?: string;
+      display_name?: string;
       avatar_url?: string;
     };
+    // These properties might exist at runtime
+    full_name?: string;
+    name?: string;
+    display_name?: string;
+    avatar_url?: string;
   } | null;
   loading: boolean;
   onOpenChange?: (open: boolean) => void;
   onOpenSettings: () => void;
-
 }
 
 export function UserMenu({ user, loading, onOpenChange, onOpenSettings }: UserMenuProps) {
@@ -40,10 +45,19 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings }: UserMe
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { signOut } = useAuth();
 
-  const userInitial = user?.email?.[0]?.toUpperCase() || 'U';
-  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  // Get user display name from all possible locations, matching settings modal logic
+  const displayName = user?.user_metadata?.display_name || 
+                    user?.user_metadata?.full_name || 
+                    user?.user_metadata?.name || 
+                    user?.display_name ||
+                    user?.full_name || 
+                    user?.name ||
+                    user?.email?.split('@')[0] ||
+                    'User';
+
+  const userInitial = displayName[0]?.toUpperCase() || 'U';
   const userEmail = user?.email || '';
-  const userAvatar = user?.user_metadata?.avatar_url || '';
+  const userAvatar = user?.user_metadata?.avatar_url || user?.avatar_url || '';
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -66,7 +80,7 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings }: UserMe
             <Avatar className="h-8 w-8 border border-border">
               {userAvatar ? (
                 <>
-                  <AvatarImage src={userAvatar} alt={userName} className="object-cover" />
+                  <AvatarImage src={userAvatar} alt={displayName} className="object-cover" />
                   <AvatarFallback className="bg-background text-foreground">
                     {userInitial}
                   </AvatarFallback>
@@ -86,7 +100,7 @@ export function UserMenu({ user, loading, onOpenChange, onOpenSettings }: UserMe
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  <p className="text-sm font-medium leading-none">{userName}</p>
+                  <p className="text-sm font-medium leading-none">{displayName}</p>
                   {userEmail && (
                     <p className="text-xs leading-none text-muted-foreground flex items-center">
                       <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
