@@ -187,7 +187,7 @@ export function YourPosts({ isPublicProfile = false }: YourPostsProps) {
         id: post.task.id,
         title: post.task.title
       } : undefined,
-      likes: postsLikes[post.id] ?? post.like_count ?? 0,
+      likes: postsLikes[post.id] ?? 0,
       isLiked: likedPosts[post.id] ?? false,
       onLike: () => handleToggleLike(post.id),
       className: isPrivate ? 'opacity-60' : '',

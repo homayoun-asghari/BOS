@@ -75,10 +75,8 @@ export function ImageDisplay({
                 if (onLike) {
                   await onLike();
                 }
-                return { 
-                  action: isLiked ? 'unliked' : 'liked',
-                  likeCount: isLiked ? likes - 1 : likes + 1
-                };
+                // The LikeButton is controlled by props; return value is ignored.
+                return { action: 'liked' as const };
               }}
               className=""
             />

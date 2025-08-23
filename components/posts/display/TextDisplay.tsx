@@ -66,10 +66,8 @@ export function TextDisplay({
               if (onLike) {
                 await onLike();
               }
-              return { 
-                action: isLiked ? 'unliked' : 'liked',
-                likeCount: isLiked ? likes - 1 : likes + 1
-              };
+              // Controlled by parent; return value unused.
+              return { action: 'liked' as const };
             }}
             className=""
           />

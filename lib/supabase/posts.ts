@@ -258,9 +258,12 @@ export const toggleLike = async (postId: string) => {
       throw error;
     }
 
+    // Supabase RPC returning a setof/RETURNS TABLE commonly yields an array
+    const row = Array.isArray(data) ? data[0] : data;
+
     return {
-      action: data?.action || 'error',
-      likeCount: data?.like_count || 0,
+      action: row?.action || 'error',
+      likeCount: typeof row?.like_count === 'number' ? row.like_count : 0,
       success: true
     };
   } catch (error) {
