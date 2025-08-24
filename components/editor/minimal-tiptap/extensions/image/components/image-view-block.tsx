@@ -10,15 +10,31 @@ import { ResizeHandle } from './resize-handle';
 import { Controlled as ControlledZoom } from "react-medium-image-zoom"
 import { ActionButton, ActionWrapper, ImageActions } from "./image-actions"
 import { useImageActions } from "../hooks/use-image-actions"
-import { blobUrlToBase64, randomId } from "../../../utils"
+import { blobUrlToBase64 } from "../../../utils"
 import { InfoCircledIcon, TrashIcon } from "@radix-ui/react-icons"
 import { Spinner } from "../../../components/spinner"
 import type { UploadReturnType } from "../image"
 // Removed unused import
+import { getCachedImageFile, cacheImageFile } from "../../../utils/file-cache"
 
 const MAX_HEIGHT = 600
 const MIN_HEIGHT = 120
 const MIN_WIDTH = 120
+
+// Global, lightweight detection for recent undo to tailor image recovery flow
+let __lastUndoAt = 0
+declare global {
+  interface Window { __imageViewUndoListenerAttached?: boolean }
+}
+if (typeof window !== 'undefined' && !window.__imageViewUndoListenerAttached) {
+  window.__imageViewUndoListenerAttached = true
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    const isUndo = (e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey
+    if (isUndo) {
+      __lastUndoAt = Date.now()
+    }
+  }, { capture: true })
+}
 
 interface ImageState {
   src: string
@@ -31,7 +47,6 @@ interface ImageState {
 
 const normalizeUploadResponse = (res: UploadReturnType) => ({
   src: typeof res === "string" ? res : res.src,
-  id: typeof res === "string" ? randomId() : res.id,
 })
 
 export const ImageViewBlock: React.FC<NodeViewProps> = ({
@@ -39,6 +54,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
   node,
   selected,
   updateAttributes,
+  getPos,
 }) => {
   const {
     src: initialSrc,
@@ -47,6 +63,14 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     fileName,
   } = node.attrs
   const uploadAttemptedRef = React.useRef(false)
+  const editorRef = React.useRef(editor)
+  React.useEffect(() => {
+    editorRef.current = editor
+  }, [editor])
+  const getPosRef = React.useRef(getPos)
+  React.useEffect(() => {
+    getPosRef.current = getPos
+  }, [getPos])
 
   const initSrc = React.useMemo(() => {
     if (typeof initialSrc === "string") {
@@ -64,12 +88,14 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     naturalSize: { width: initialWidth, height: initialHeight },
   });
   const [isLoading, setIsLoading] = React.useState(true);
-  const [retryCount, setRetryCount] = React.useState(0);
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 1;
+  const recoveryAttemptedRef = React.useRef(false);
   
   // Get the storage path from node attributes or fall back to src if not available
   const storagePath = node.attrs['data-storage-path'] || node.attrs.src;
-  const uploadComplete = node.attrs['data-upload-complete'] === 'true';
+  const uploadComplete = node.attrs['data-upload-complete'] === 'true' || node.attrs['data-upload-complete'] === true;
+  const attrId = node.attrs?.id as string | number | undefined;
+  const uploadId = node.attrs?.['data-upload-id'] as string | number | undefined;
   
   // State for the image URL - start with empty to prevent initial load with local path
   const [imageUrl, setImageUrl] = React.useState<string>('');
@@ -79,6 +105,8 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     if (!path) return '';
     // If it's a blob URL, return it as is
     if (path.startsWith('blob:')) return path;
+    // If it's a data URL, return it as is
+    if (path.startsWith('data:')) return path;
     // If it's already a full URL (http/https), return it as is
     if (path.startsWith('http')) return path;
     // If it looks like a local path, return empty string
@@ -115,8 +143,8 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         return;
       }
 
-      // If it's already a full URL, use it directly
-      if (cleanPath.startsWith('http')) {
+      // If it's already a full or data URL, use it directly
+      if (cleanPath.startsWith('http') || cleanPath.startsWith('data:')) {
         if (isMounted) {
           setImageUrl(cleanPath);
           setImageState(prev => ({ ...prev, error: false }));
@@ -124,8 +152,55 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         }
         return;
       }
-      
-
+      // During an immediate undo, prefer cache-first to avoid transient 400s from signing
+      const isRecentUndo = Date.now() - __lastUndoAt < 1200
+      if (isRecentUndo) {
+        const imageExtension = editorRef.current?.options.extensions.find((ext) => ext.name === 'image');
+        const { uploadFn } = (imageExtension?.options ?? {}) as { uploadFn?: (file: File) => Promise<UploadReturnType> };
+        if (uploadFn) {
+          const keys: string[] = [];
+          if (attrId != null) keys.push(String(attrId));
+          if (uploadId != null) keys.push(String(uploadId));
+          if (cleanPath) keys.push(cleanPath);
+          for (const key of keys) {
+            const cached = getCachedImageFile(key);
+            if (!cached) continue;
+            try {
+              const res = await uploadFn(cached);
+              const finalUrl = typeof res === 'string' ? res : res.src;
+              if (!finalUrl) continue;
+              const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+              if (isMounted) {
+                if (isAbs) setImageUrl(finalUrl);
+                setImageState(prev => ({ ...prev, error: false }));
+              }
+              // Non-historic node update
+              editorRef.current?.commands.command(({ tr }) => {
+                const pos = typeof getPosRef.current === 'function' ? getPosRef.current() : null;
+                if (typeof pos === 'number') {
+                  const nodeAt = tr.doc.nodeAt(pos);
+                  tr.setMeta('addToHistory', false);
+                  tr.setNodeMarkup(pos, undefined, {
+                    ...nodeAt?.attrs,
+                    src: finalUrl,
+                    'data-upload-complete': 'true',
+                    'data-storage-path': isAbs ? null : finalUrl,
+                  });
+                  return true;
+                }
+                return false;
+              });
+              if (!isAbs) {
+                void cacheImageFile(finalUrl, cached);
+              }
+              return; // Skip signing on successful recovery
+            } catch {
+              // try next key
+            }
+          }
+        }
+        // If cache-based recovery failed, continue to signing below
+      }
       
       const getSignedImageUrl = async (retry = 0): Promise<string | null> => {
         try {
@@ -138,41 +213,79 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
           const signedUrl = await getSignedUrl(cleanPath, { expiresIn: 3600 });
           
           if (!signedUrl) {
-            throw new Error('Failed to generate signed URL');
+            return null;
           }
           return signedUrl;
           
-        } catch (error) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.error(`[ImageViewBlock] Error getting signed URL (attempt ${retry + 1}):`, error);
-          }
+        } catch {
+          // Reduce noise; will fall back to cache if possible
           if (retry < MAX_RETRIES - 1) {
             // Wait before retrying (exponential backoff)
             const delay = 1000 * Math.pow(2, retry);
             await new Promise(resolve => setTimeout(resolve, delay));
             return getSignedImageUrl(retry + 1);
           }
-          throw error;
+          return null;
         }
       };
       
       try {
-        const url = await getSignedImageUrl(retryCount);
+        const url = await getSignedImageUrl(0);
         if (isMounted && url) {
           setImageUrl(url);
           setImageState(prev => ({ ...prev, error: false }));
         } else if (isMounted) {
-          throw new Error(`Failed to get signed URL for path: ${cleanPath}`);
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.error('Failed to load image after all retries:', error);
-        }
-        setImageState(prev => ({ ...prev, error: true }));
-        if (retryCount < MAX_RETRIES - 1) {
-          setRetryCount(prev => prev + 1);
-        } else {
-          console.error('Max retries reached, giving up');
+          // Signed URL unavailable; attempt recovery by re-uploading from cache
+          const imageExtension = editorRef.current?.options.extensions.find((ext) => ext.name === 'image');
+          const { uploadFn } = (imageExtension?.options ?? {}) as { uploadFn?: (file: File) => Promise<UploadReturnType> };
+          if (uploadFn) {
+            const keys: string[] = [];
+            if (attrId != null) keys.push(String(attrId));
+            if (uploadId != null) keys.push(String(uploadId));
+            if (cleanPath) keys.push(cleanPath);
+            let recovered = false;
+            for (const key of keys) {
+              const cached = getCachedImageFile(key);
+              if (!cached) continue;
+              try {
+                const res = await uploadFn(cached);
+                const finalUrl = typeof res === 'string' ? res : res.src;
+                if (!finalUrl) continue;
+                const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+                if (isAbs) setImageUrl(finalUrl);
+                setImageState(prev => ({ ...prev, error: false }));
+                // Non-historic node update
+                editorRef.current?.commands.command(({ tr }) => {
+                  const pos = typeof getPosRef.current === 'function' ? getPosRef.current() : null;
+                  if (typeof pos === 'number') {
+                    const nodeAt = tr.doc.nodeAt(pos);
+                    tr.setMeta('addToHistory', false);
+                    tr.setNodeMarkup(pos, undefined, {
+                      ...nodeAt?.attrs,
+                      src: finalUrl,
+                      'data-upload-complete': 'true',
+                      'data-storage-path': isAbs ? null : finalUrl,
+                    });
+                    return true;
+                  }
+                  return false;
+                });
+                // Cache under storage path for future undo recovery
+                if (!isAbs) {
+                  void cacheImageFile(finalUrl, cached);
+                }
+                recovered = true;
+                break;
+              } catch {
+                // try next key
+              }
+            }
+            if (!recovered) {
+              setImageState(prev => ({ ...prev, error: true }));
+            }
+          } else {
+            setImageState(prev => ({ ...prev, error: true }));
+          }
         }
       } finally {
         if (isMounted) {
@@ -186,7 +299,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [cleanPath, uploadComplete, retryCount]);
+  }, [cleanPath, uploadComplete, attrId, uploadId]);
 
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [activeResizeHandle, setActiveResizeHandle] = React.useState<
@@ -252,24 +365,101 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         naturalSize: newNaturalSize,
         imageLoaded: true,
       }))
-      updateAttributes({
-        width: img.width || newNaturalSize.width,
-        height: img.height || newNaturalSize.height,
-        alt: img.alt,
-        title: img.title,
+      // Ensure loading overlay disappears once the image is fully loaded
+      setIsLoading(false)
+      // Non-historic auto-attribute update
+      editor.commands.command(({ tr }) => {
+        const pos = typeof getPos === 'function' ? getPos() : null;
+        if (typeof pos === 'number') {
+          const nodeAt = tr.doc.nodeAt(pos);
+          tr.setMeta('addToHistory', false);
+          const nextWidth = img.width || newNaturalSize.width;
+          const nextHeight = img.height || newNaturalSize.height;
+          const cur = nodeAt?.attrs || {};
+          const shouldUpdate =
+            cur.width !== nextWidth ||
+            cur.height !== nextHeight ||
+            cur.alt !== img.alt ||
+            cur.title !== img.title;
+          if (shouldUpdate) {
+            tr.setNodeMarkup(pos, undefined, {
+              ...nodeAt?.attrs,
+              width: nextWidth,
+              height: nextHeight,
+              alt: img.alt,
+              title: img.title,
+            });
+            return true;
+          }
+          return false;
+        }
+        return false;
       })
 
       if (!initialWidth) {
         updateDimensions((state) => ({ ...state, width: newNaturalSize.width }))
       }
     },
-    [initialWidth, updateAttributes, updateDimensions]
+    [initialWidth, editor, getPos, updateDimensions]
   )
 
-  const handleImageError = React.useCallback(() => {
+  const handleImageError = React.useCallback(async () => {
+    // Avoid repeated recoveries
+    if (!recoveryAttemptedRef.current) {
+      recoveryAttemptedRef.current = true;
+      try {
+        const keys: string[] = [];
+        if (attrId != null) keys.push(String(attrId));
+        if (uploadId != null) keys.push(String(uploadId));
+        if (cleanPath) keys.push(cleanPath);
+        const imageExtension = editorRef.current?.options.extensions.find((ext) => ext.name === 'image');
+        const { uploadFn } = (imageExtension?.options ?? {}) as { uploadFn?: (file: File) => Promise<UploadReturnType> };
+        if (uploadFn) {
+          for (const key of keys) {
+            const cached = getCachedImageFile(key);
+            if (!cached) continue;
+            try {
+              setIsLoading(true);
+              const res = await uploadFn(cached);
+              const finalUrl = typeof res === 'string' ? res : res.src;
+              if (!finalUrl) continue;
+              const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+              setImageState((prev) => ({ ...prev, error: false }));
+              if (isAbs) {
+                setImageUrl(finalUrl);
+              }
+              // Update node non-historically
+              editorRef.current?.commands.command(({ tr }) => {
+                const pos = typeof getPosRef.current === 'function' ? getPosRef.current() : null;
+                if (typeof pos === 'number') {
+                  const nodeAt = tr.doc.nodeAt(pos);
+                  tr.setMeta('addToHistory', false);
+                  tr.setNodeMarkup(pos, undefined, {
+                    ...nodeAt?.attrs,
+                    src: finalUrl,
+                    'data-upload-complete': 'true',
+                    'data-storage-path': isAbs ? null : finalUrl,
+                  });
+                  return true;
+                }
+                return false;
+              });
+              // Let onLoad (for absolute URLs) or the signing effect (for storage paths) clear the loader
+              return;
+            } catch {
+              // try next key
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     setImageState((prev) => ({ ...prev, error: true }));
-    console.error('Failed to load image:', imageUrl);
-  }, [imageUrl])
+    // Ensure we don't keep the loading overlay on error
+    setIsLoading(false)
+  }, [cleanPath, attrId, uploadId])
 
   const handleResizeStart = React.useCallback(
     (direction: "left" | "right") =>
@@ -306,7 +496,17 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         try {
           const base64 = await blobUrlToBase64(initSrc)
           setImageState((prev) => ({ ...prev, src: base64 }))
-          updateAttributes({ src: base64 })
+          // Non-historic src update
+          editor.commands.command(({ tr }) => {
+            const pos = typeof getPos === 'function' ? getPos() : null;
+            if (typeof pos === 'number') {
+              const nodeAt = tr.doc.nodeAt(pos);
+              tr.setMeta('addToHistory', false);
+              tr.setNodeMarkup(pos, undefined, { ...nodeAt?.attrs, src: base64, 'data-upload-complete': 'true', 'data-storage-path': null });
+              return true;
+            }
+            return false;
+          })
         } catch {
           setImageState((prev) => ({ ...prev, error: true }))
         }
@@ -321,6 +521,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
 
         const url = await uploadFn(file, editor)
         const normalizedData = normalizeUploadResponse(url)
+        const finalUrl = normalizedData.src
 
         setImageState((prev) => ({
           ...prev,
@@ -328,7 +529,34 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
           isServerUploading: false,
         }))
 
-        updateAttributes(normalizedData)
+        // Cache under storage path for future undo recovery if not absolute
+        {
+          const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+          if (!isAbs) {
+            void cacheImageFile(finalUrl, file);
+          } else {
+            // Set imageUrl immediately for absolute URLs
+            setImageUrl(finalUrl);
+          }
+        }
+
+        // Non-historic node update after upload
+        editor.commands.command(({ tr }) => {
+          const pos = typeof getPos === 'function' ? getPos() : null;
+          if (typeof pos === 'number') {
+            const nodeAt = tr.doc.nodeAt(pos);
+            tr.setMeta('addToHistory', false);
+            const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+            tr.setNodeMarkup(pos, undefined, {
+              ...nodeAt?.attrs,
+              ...normalizedData,
+              'data-upload-complete': 'true',
+              'data-storage-path': isAbs ? null : finalUrl,
+            });
+            return true;
+          }
+          return false;
+        })
       } catch (error) {
         console.error('Error uploading image:', error);
         setImageState(prev => ({
@@ -340,9 +568,9 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     }
 
     handleImage()
-  }, [editor, fileName, initSrc, updateAttributes])
+  }, [editor, fileName, initSrc, updateAttributes, getPos])
 
-  const shouldRenderImage = imageUrl && !imageState.error;
+  const shouldRenderImage = Boolean(imageUrl) && !imageState.error;
 
   return (
     <NodeViewWrapper
@@ -372,13 +600,11 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
         >
           <div className="h-full contain-paint">
             <div className="relative h-full">
-              {(isLoading || imageState.isServerUploading) && !imageState.error && (
+              {(!imageState.imageLoaded && (isLoading || imageState.isServerUploading)) && !imageState.error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-muted/20 rounded-md">
                   <div className="flex flex-col items-center gap-2">
                     <Spinner className="size-7" />
-                    <p className="text-xs text-muted-foreground">
-                      {retryCount > 0 ? `Retrying... (${retryCount}/${MAX_RETRIES})` : 'Loading image...'}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Loading image...</p>
                   </div>
                 </div>
               )}
@@ -387,9 +613,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/20 rounded-md">
                   <InfoCircledIcon className="size-8 text-destructive" />
                   <p className="mt-2 text-sm text-muted-foreground text-center px-2">
-                    {retryCount >= MAX_RETRIES 
-                      ? 'Failed to load image' 
-                      : `Loading failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`}
+                    Failed to load image
                   </p>
                 </div>
               )}
@@ -413,7 +637,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
                     }}
                     width={currentWidth}
                     height={currentHeight}
-                    src={imageUrl}
+                    src={imageUrl || undefined}
                     onError={handleImageError}
                     onLoad={handleImageLoad}
                     alt={node.attrs.alt || ""}

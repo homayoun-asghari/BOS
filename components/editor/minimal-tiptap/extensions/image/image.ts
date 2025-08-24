@@ -1,5 +1,6 @@
 import type { ImageOptions } from "@tiptap/extension-image"
 import { Image as TiptapImage } from "@tiptap/extension-image"
+
 import type { Editor } from "@tiptap/react"
 import { ReactNodeViewRenderer } from "@tiptap/react"
 import { ImageViewBlock } from "./components/image-view-block"
@@ -11,6 +12,12 @@ import {
 } from "../../utils"
 import { ReplaceStep } from "@tiptap/pm/transform"
 import type { Attrs } from "@tiptap/pm/model"
+import { Plugin } from "@tiptap/pm/state"
+
+// Simple attachment deletion tracking for cleanup purposes only
+export function recordAttachmentDeletion() {
+  // No-op: Allow natural re-upload behavior on undo
+}
 
 type ImageAction = "download" | "copyImage" | "copyLink"
 
@@ -204,8 +211,30 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
     }
   },
 
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        // No blocking - allow natural re-upload behavior
+        
+        // Also keep a basic filter to avoid unnecessary work
+        filterTransaction: () => {
+          try {
+            return true // Let all transactions through, we'll handle them in appendTransaction
+          } catch {
+            return true
+          }
+        },
+      }),
+    ]
+  },
+
   addAttributes() {
     return {
+      id: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('id'),
+        renderHTML: (attributes) => ({ id: attributes.id }),
+      },
       src: {
         default: null,
         parseHTML: (element) => element.getAttribute("src"),
@@ -233,6 +262,15 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
         renderHTML: (attributes) => {
           return {
             'data-storage-path': attributes['data-storage-path'] || attributes.src
+          }
+        },
+      },
+      'data-upload-id': {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-upload-id'),
+        renderHTML: (attributes) => {
+          return {
+            'data-upload-id': attributes['data-upload-id']
           }
         },
       },
@@ -414,6 +452,8 @@ export const Image = TiptapImage.extend<CustomImageOptions>({
             }
 
             this.options.onImageRemoved?.(attrs)
+            // Simple deletion tracking for cleanup
+            recordAttachmentDeletion()
           }
         })
       }

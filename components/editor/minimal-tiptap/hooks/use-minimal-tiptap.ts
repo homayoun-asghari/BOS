@@ -26,6 +26,7 @@ import {
 import { Highlight } from "../extensions/highlight/highlight"
 import { cn } from "@/lib/utils"
 import { fileToBase64, getOutput, randomId } from "../utils"
+import { cacheImageFile } from "../utils/file-cache"
 import { useThrottle } from "../hooks/use-throttle"
 import { toast } from "sonner"
 import { Node as ProseMirrorNode } from 'prosemirror-model';
@@ -107,6 +108,8 @@ const createExtensions = ({
           const blobUrl = URL.createObjectURL(image);
           const id = randomId();
           const uploadId = `upload-${id}`;
+          // Cache the file for session persistence and undo across tab switches
+          void cacheImageFile(id, image);
           
           // Notify about the upload start
           onFileUpload?.(blobUrl, image.name, image.type, uploadId, false);
@@ -119,6 +122,12 @@ const createExtensions = ({
                 return;
               }
               
+              // Cache under storage path for future undo recovery if not absolute URL
+              const isAbs = finalUrl.startsWith('http') || finalUrl.startsWith('data:') || finalUrl.startsWith('blob:');
+              if (!isAbs) {
+                void cacheImageFile(finalUrl, image);
+              }
+
               // Update the image source when upload is complete
               editor.commands.command(({ tr }) => {
                 let foundPos: number | null = null;
@@ -134,6 +143,8 @@ const createExtensions = ({
                 if (foundPos !== null) {
                   const node = tr.doc.nodeAt(foundPos);
                   if (node) {
+                    // Mark as non-historic so a single undo removes/restores the image
+                    tr.setMeta('addToHistory', false);
                     tr.setNodeMarkup(tr.mapping.map(foundPos), undefined, {
                       ...node.attrs,
                       src: finalUrl,
@@ -207,6 +218,8 @@ const createExtensions = ({
       files.forEach(async (file) => {
         const uploadId = randomId();
         try {
+          // Cache the file by uploadId for persistence
+          void cacheImageFile(uploadId, file);
           // Show temporary placeholder
           const tempNode = editor.schema.nodes.image.create({
             src: '',
@@ -222,6 +235,10 @@ const createExtensions = ({
           
           // Start upload
           const src = await (uploader ?? fakeuploader)(file);
+          // Cache under storage path for future undo recovery if not absolute
+          if (!(src.startsWith('http') || src.startsWith('data:') || src.startsWith('blob:'))) {
+            void cacheImageFile(src, file);
+          }
           
           // Find and replace the temporary node
           const doc = editor.state.doc;
@@ -237,6 +254,8 @@ const createExtensions = ({
           
           if (foundPos >= 0) {
             const transaction = editor.state.tr;
+            // Non-historic update to avoid extra undo steps
+            transaction.setMeta('addToHistory', false);
             transaction.setNodeMarkup(foundPos, undefined, {
               ...doc.nodeAt(foundPos)?.attrs,
               src,
@@ -265,6 +284,8 @@ const createExtensions = ({
           
           if (foundPos >= 0) {
             const transaction = editor.state.tr;
+            // Non-historic removal of failed temp node
+            transaction.setMeta('addToHistory', false);
             transaction.delete(foundPos, foundPos + 1);
             editor.view.dispatch(transaction);
           }
@@ -279,6 +300,8 @@ const createExtensions = ({
       files.forEach(async (file) => {
         const uploadId = randomId();
         try {
+          // Cache the file by uploadId for persistence
+          void cacheImageFile(uploadId, file);
           // Show temporary placeholder at drop position
           const tempNode = editor.schema.nodes.image.create({
             src: '',
@@ -309,6 +332,8 @@ const createExtensions = ({
           
           if (foundPos >= 0) {
             const transaction = editor.state.tr;
+            // Non-historic update to avoid extra undo steps
+            transaction.setMeta('addToHistory', false);
             transaction.setNodeMarkup(foundPos, undefined, {
               ...doc.nodeAt(foundPos)?.attrs,
               src,
@@ -337,6 +362,8 @@ const createExtensions = ({
           
           if (foundPos >= 0) {
             const transaction = editor.state.tr;
+            // Non-historic removal of failed temp node
+            transaction.setMeta('addToHistory', false);
             transaction.delete(foundPos, foundPos + 1);
             editor.view.dispatch(transaction);
           }

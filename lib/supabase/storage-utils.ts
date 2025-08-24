@@ -28,34 +28,57 @@ export const getSignedUrl = async (
       return null;
     }
 
-    // Normalize the file path by removing any leading 'notes-attachments/' prefix
-    const normalizedPath = filePath.startsWith('notes-attachments/') 
-      ? filePath.replace('notes-attachments/', '') 
-      : filePath;
-
-    // Generate signed URL silently
-    
-    const { data, error } = await supabase.storage
-      .from('notes-attachments')
-      .createSignedUrl(normalizedPath, expiresIn, {
-        download,
-        ...(downloadFilename ? { downloadFilename } : {}),
-      });
-
-    if (error) {
-      console.error('Error from Supabase when generating signed URL:', {
-        error,
-        normalizedPath,
-        originalPath: filePath
-      });
-      throw error;
+    // If an absolute URL or data URI is passed, return it as-is
+    if (filePath.startsWith('http') || filePath.startsWith('data:')) {
+      return filePath;
     }
-    
-    return data.signedUrl;
+
+    const KNOWN_BUCKETS = ['notes-attachments', 'post-media'];
+
+    // Determine candidate buckets and normalized object path
+    const extractBucket = (p: string): { bucket?: string; path: string } => {
+      for (const b of KNOWN_BUCKETS) {
+        if (p.startsWith(`${b}/`)) {
+          return { bucket: b, path: p.slice(b.length + 1) };
+        }
+      }
+      return { path: p };
+    };
+
+    const { bucket: hintedBucket, path: maybePath } = extractBucket(filePath);
+    const candidates = hintedBucket ? [hintedBucket] : KNOWN_BUCKETS;
+    const objectPath = maybePath;
+
+    // Try candidate buckets until one succeeds
+    for (const bucket of candidates) {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, expiresIn, {
+          download,
+          ...(downloadFilename ? { downloadFilename } : {}),
+        });
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+
+      if (error && process.env.NODE_ENV !== 'production') {
+        const anyErr = error as unknown as { statusCode?: number; message?: string; error?: { statusCode?: number } };
+        const status = anyErr?.statusCode ?? anyErr?.error?.statusCode;
+        const msg = (anyErr?.message || '').toLowerCase();
+        const isMissing = status === 400 || status === 404 || msg.includes('not found') || msg.includes('object not found');
+        if (!isMissing) {
+          console.warn('Supabase signed URL error', { error, bucket, objectPath, originalPath: filePath });
+        }
+      }
+      // continue to next bucket on error or missing
+    }
+
+    return null;
     
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Error generating signed URL:', {
+      console.debug('Signed URL generation failed, returning null', {
         error,
         filePath,
         message: error instanceof Error ? error.message : 'Unknown error',

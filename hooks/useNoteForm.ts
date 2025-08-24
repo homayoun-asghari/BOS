@@ -46,6 +46,7 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
   const [saveError, setSaveError] = useState<string | null>(null);
   const { user } = useAuth();
   const { syncNoteLinks } = useNotes();
+
   
   // Using singleton Supabase client
   // Extract plain text title from content (first line only)
@@ -216,11 +217,13 @@ export function useNoteForm(initialValues: Partial<NoteFormValues> = {}): UseNot
         updated_at: now
       }));
 
-      // Clean up orphaned attachments if content exists and we have a saved note ID
+      // Immediate cleanup of orphaned attachments to allow natural re-upload behavior
       if (savedNote.id && content) {
         try {
           const contentString = typeof content === 'string' ? content : JSON.stringify(content);
-          await cleanupNoteAttachments(savedNote.id, contentString);
+          cleanupNoteAttachments(savedNote.id, contentString).catch(err => {
+            console.error('Attachment cleanup error (non-fatal):', err);
+          });
         } catch (cleanupError) {
           console.error('Error cleaning up attachments (non-fatal):', cleanupError);
         }
