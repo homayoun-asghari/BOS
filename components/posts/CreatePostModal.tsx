@@ -77,6 +77,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null!); // Using non-null assertion
@@ -498,6 +499,7 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
   const handleSubmit = useCallback(async () => {
     if (!type) return;
     
+    setIsSubmitting(true);
     try {
       // Upload media file if present
       let mediaUrl: { url: string; path: string; type: 'image' | 'video' | 'voice' } | null = null;
@@ -548,6 +550,8 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
     } catch (error) {
       console.error('Error creating post:', error);
       toast.error('Failed to create post. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   }, [type, text, mediaFile, selectedItems, createPost, onClose, mediaStream]);
 
@@ -879,10 +883,10 @@ export function CreatePostModal({ isOpen, onClose }: Omit<CreatePostModalProps, 
                 <Button 
                   variant="default"
                   onClick={handleSubmit}
-                  disabled={!hasRequiredSelections() || (type === 'text' && !text.trim())}
+                  disabled={isSubmitting || !hasRequiredSelections() || (type === 'text' && !text.trim())}
                   className="px-4"
                 >
-                  Post
+                  {isSubmitting ? 'Posting' : 'Post'}
                 </Button>
               </div>
             </div>

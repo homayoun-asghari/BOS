@@ -16,7 +16,14 @@ export interface ChatMessage {
   user_id: string;
   room_id: string;
   is_read: boolean;
+  deleted_for_all?: boolean;
+  deleted_for_sender?: boolean;
+  deleted_at?: string | null;
   media_urls?: string[];
+  // Computed, per-viewer seen status (not stored in DB)
+  seen_by_user_ids?: string[];
+  seen_by_count?: number;
+  seen_by_all?: boolean;
   user: {
     id: string;
     username: string;

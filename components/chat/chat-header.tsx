@@ -1,10 +1,18 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Conversation } from '@/types/chat';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { useChatContext } from '@/context/chat-context';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 interface ChatHeaderProps {
   conversation: Conversation | null;
@@ -14,6 +22,9 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ conversation, currentUserId, className, onBack }: ChatHeaderProps) {
+  const router = useRouter();
+  const { deleteConversation } = useChatContext();
+  
   console.log('[ChatHeader] Props:', {
     conversation: {
       ...conversation,
@@ -38,6 +49,18 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
     console.log('[ChatHeader] Back button clicked');
     onBack?.();
   };
+
+  const handleDeleteConversation = async () => {
+    if (!conversation) return;
+    const confirmText = conversation.is_group ? 'Leave this group conversation?' : 'Delete this conversation?';
+    if (!window.confirm(confirmText)) return;
+    try {
+      await deleteConversation(conversation.id);
+      onBack?.();
+    } catch (e) {
+      console.error('[ChatHeader] Failed to delete conversation:', e);
+    }
+  };
   if (!conversation) {
     return (
       <div className={cn('p-4', className)}>
@@ -60,53 +83,105 @@ export function ChatHeader({ conversation, currentUserId, className, onBack }: C
     otherParticipant
   });
 
-  const displayName = (conversation.is_group && conversation.name)
-    ? conversation.name
-    : otherParticipant?.display_name || otherParticipant?.username || 'Unknown';
-
-  const avatarUrl = conversation.is_group
-    ? conversation.media_urls?.[0] || undefined
-    : otherParticipant?.avatar_url || undefined;
-    
-  const avatarFallback = displayName
-    .split(' ')
-    .map((n) => n[0] || '')
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
+  const handleProfileClick = () => {
+    if (conversation.is_group || !otherParticipant) return;
+    const currentPath = window.location.pathname;
+    router.push(`${currentPath}?profile=${otherParticipant.username}`);
+  };
 
   return (
-    <div className={cn('p-4', className)}>
+    <div className={cn('flex items-center justify-between p-4 border-b', className)}>
       <div className="flex items-center gap-3">
         {onBack && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 -ml-2 mr-1"
             onClick={handleBack}
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
         )}
-        <Avatar className="h-10 w-10 border-2 border-background/50 shadow-sm">
-          <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
-          <AvatarFallback className="bg-foreground/5 text-foreground/80 text-sm font-medium">
-            {avatarFallback}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <h2 className="font-semibold">{displayName}</h2>
-          {!conversation.is_group && otherParticipant?.username && (
-            <p className="text-sm text-muted-foreground">
-              @{otherParticipant.username}
-            </p>
-          )}
-          {conversation.is_group && (
-            <p className="text-sm text-muted-foreground">
-              {conversation.participants.length} participants
-            </p>
+        <div className="flex items-center gap-3">
+          {!conversation.is_group && otherParticipant ? (
+            <button 
+              onClick={handleProfileClick}
+              className="flex items-center gap-3 rounded-lg p-1 -m-1 hover:bg-muted transition-colors"
+            >
+              <Avatar className="h-10 w-10 border border-background/50 shadow-sm">
+                <AvatarImage
+                  src={otherParticipant.avatar_url || ''}
+                  alt={otherParticipant.display_name || otherParticipant.username || 'User'}
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-foreground/5 text-foreground/80">
+                  {otherParticipant.display_name
+                    ? otherParticipant.display_name
+                        .split(' ')
+                        .filter((_, i, arr) => i === 0 || i === arr.length - 1)
+                        .map(n => n[0])
+                        .join('')
+                        .toUpperCase()
+                    : (otherParticipant.username || 'U').substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="text-left">
+                <h2 className="font-medium">
+                  {otherParticipant.display_name || otherParticipant.username || 'Unknown User'}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  @{otherParticipant.username}
+                </p>
+              </div>
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10 border border-background/50 shadow-sm">
+                <AvatarImage
+                  src={conversation.is_group ? undefined : otherParticipant?.avatar_url || ''}
+                  alt={conversation.is_group ? 'Group' : otherParticipant?.display_name || otherParticipant?.username || 'User'}
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-foreground/5 text-foreground/80">
+                  {conversation.is_group 
+                    ? 'G' 
+                    : otherParticipant?.display_name
+                      ? otherParticipant.display_name
+                          .split(' ')
+                          .filter((_, i, arr) => i === 0 || i === arr.length - 1)
+                          .map(n => n[0])
+                          .join('')
+                          .toUpperCase()
+                      : (otherParticipant?.username || 'U').substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="font-medium">
+                  {conversation.name || 'Group Chat'}
+                </h2>
+              </div>
+            </div>
           )}
         </div>
+        {conversation.is_group && (
+          <p className="text-sm text-muted-foreground">
+            {conversation.participants.length} participants
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" onClick={handleDeleteConversation}>
+              <Trash2 className="h-4 w-4" />
+              Delete conversation
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

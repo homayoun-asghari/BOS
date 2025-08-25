@@ -561,6 +561,29 @@ CREATE TABLE public.chat_messages (
 );
 
 
+-- Track messages hidden/deleted by specific users
+CREATE TABLE public.chat_message_deletions (
+  message_id uuid REFERENCES public.chat_messages(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  deleted_at timestamptz DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+
+-- SELECT: only see your own deletion records
+CREATE POLICY select_chat_message_deletions ON public.chat_message_deletions
+FOR SELECT
+USING (user_id = auth.uid());
+
+-- INSERT: only delete for yourself
+CREATE POLICY insert_chat_message_deletions ON public.chat_message_deletions
+FOR INSERT
+WITH CHECK (user_id = auth.uid());
+
+-- DELETE: only remove your own deletion record
+CREATE POLICY delete_chat_message_deletions ON public.chat_message_deletions
+FOR DELETE
+USING (user_id = auth.uid());
 
 
 

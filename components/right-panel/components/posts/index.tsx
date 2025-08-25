@@ -19,6 +19,7 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
   const searchParams = useSearchParams();
   const { selectedPostId, setSelectedPostId } = useRightPanel();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'roadmates' | 'yours'>('roadmates');
   
   const handleNewPost = () => {
     setIsCreateModalOpen(true);
@@ -54,7 +55,7 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
   // Otherwise show the standard feed tabs
   return (
     <div className="h-full flex flex-col relative">
-      <Tabs defaultValue="roadmates" className="h-full flex flex-col">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'roadmates' | 'yours')} className="h-full flex flex-col">
         <TabsList className="grid w-full grid-cols-2 bg-background/50 backdrop-blur-sm sticky top-0 z-10">
           <TabsTrigger value="roadmates">Roadmates</TabsTrigger>
           <TabsTrigger 
@@ -66,6 +67,7 @@ export function Posts({ isPublicProfile = false }: PostsProps) {
               if (target.closest('.new-post-trigger') || target.classList.contains('new-post-trigger')) {
                 e.preventDefault();
                 e.stopPropagation();
+                setActiveTab('yours');
                 handleNewPost();
               }
             }}

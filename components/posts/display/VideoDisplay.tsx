@@ -28,6 +28,8 @@ export function VideoDisplay({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const hideControlsTimer = useRef<number | null>(null);
   
   // Like/Unlike handlers are passed directly to LikeButton
 
@@ -46,6 +48,27 @@ export function VideoDisplay({
     };
   }, []);
 
+  // Cleanup any pending timers on unmount
+  useEffect(() => {
+    return () => {
+      if (hideControlsTimer.current) {
+        window.clearTimeout(hideControlsTimer.current);
+        hideControlsTimer.current = null;
+      }
+    };
+  }, []);
+
+  const revealControlsTemporarily = () => {
+    if (!isPlaying) return; // When paused, controls are visible anyway
+    setShowControls(true);
+    if (hideControlsTimer.current) {
+      window.clearTimeout(hideControlsTimer.current);
+    }
+    hideControlsTimer.current = window.setTimeout(() => {
+      setShowControls(false);
+    }, 1500);
+  };
+
   return (
     <div className={cn(
       "relative w-full rounded-2xl overflow-hidden bg-black",
@@ -56,7 +79,15 @@ export function VideoDisplay({
     }}>
       <div className="absolute inset-0 flex flex-col">
         {/* Video */}
-        <div className="relative flex-1">
+        <div
+          className="relative flex-1"
+          onMouseEnter={revealControlsTemporarily}
+          onMouseMove={revealControlsTemporarily}
+          onMouseLeave={() => {
+            if (isPlaying) setShowControls(false);
+          }}
+          onTouchStart={revealControlsTemporarily}
+        >
           <video
             ref={videoRef}
             src={videoUrl}
@@ -77,30 +108,43 @@ export function VideoDisplay({
             className="z-10"
           />
 
-          {/* Play/Pause Button Overlay */}
-          <button
-            className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/50 transition-colors duration-300 video-play-button"
-            onClick={() => {
-              const video = videoRef.current;
-              if (video) {
-                if (video.paused) {
-                  video.play();
-                } else {
-                  video.pause();
+          {/* Play/Pause Control Overlay (only center button is clickable) */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {/* Dim background only when paused */}
+            <div
+              className={cn(
+                "absolute inset-0 transition-colors duration-300",
+                isPlaying ? "bg-transparent" : "bg-black/40 hover:bg-black/50"
+              )}
+            />
+            <button
+              className={cn(
+                "relative z-10 rounded-full bg-black/60 hover:bg-black/70",
+                "text-white w-16 h-16 flex items-center justify-center transition-opacity duration-200",
+                // When paused, show button; when playing, show only if user is interacting (hover/touch)
+                !isPlaying || showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const video = videoRef.current;
+                if (video) {
+                  if (video.paused) {
+                    video.play();
+                  } else {
+                    video.pause();
+                  }
                 }
-              }
-            }}
-            style={{
-              opacity: isPlaying ? 0 : 1,
-              transition: 'opacity 0.3s ease-in-out'
-            }}
-          >
-            {isPlaying ? (
-              <Pause className="w-12 h-12 text-white" />
-            ) : (
-              <Play className="w-12 h-12 text-white" />
-            )}
-          </button>
+              }}
+              aria-label={isPlaying ? 'Pause video' : 'Play video'}
+            >
+              {isPlaying ? (
+                <Pause className="w-8 h-8 text-white" />
+              ) : (
+                <Play className="w-8 h-8 text-white" />
+              )}
+            </button>
+          </div>
 
                   {/* Like and Share Buttons */}
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">

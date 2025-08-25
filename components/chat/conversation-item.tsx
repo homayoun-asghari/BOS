@@ -68,6 +68,9 @@ export function ConversationItem({
     .toUpperCase()
     .substring(0, 2);
 
+  const unreadCount = conversation.unread_count || 0;
+  const hasUnread = unreadCount > 0;
+
   const lastMessage = conversation.last_message?.content
     ? conversation.last_message.content.length > 30
       ? `${conversation.last_message.content.substring(0, 30)}...`
@@ -94,7 +97,9 @@ export function ConversationItem({
         'flex items-center gap-3 p-3 w-full text-left rounded-lg transition-colors',
         isActive
           ? 'bg-accent/50'
-          : 'hover:bg-accent/30',
+          : hasUnread
+            ? 'bg-accent/20 hover:bg-accent/30'
+            : 'hover:bg-accent/30',
         className
       )}
     >
@@ -106,18 +111,25 @@ export function ConversationItem({
       </Avatar>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
-          <h3 className="font-medium truncate">{displayName}</h3>
+          <h3 className={cn('truncate', hasUnread ? 'font-semibold' : 'font-medium')}>{displayName}</h3>
         </div>
-        <div className="flex items-center justify-between w-full">
-          <p className="text-sm text-muted-foreground truncate max-w-[85%]">{lastMessage}</p>
-          {conversation.last_message?.created_at && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-              {new Date(conversation.last_message.created_at).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          )}
+        <div className="flex items-center justify-between w-full gap-2">
+          <p className={cn('text-sm truncate max-w-[70%]', hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground')}>{lastMessage}</p>
+          <div className="flex items-center gap-2 shrink-0">
+            {conversation.last_message?.created_at && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {new Date(conversation.last_message.created_at).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+            {hasUnread && !isActive && (
+              <span className="ml-1 inline-flex min-w-5 h-5 px-1 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </button>

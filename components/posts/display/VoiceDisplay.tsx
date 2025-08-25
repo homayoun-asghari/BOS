@@ -190,13 +190,19 @@ export function VoiceDisplay({
   }, [audioUrl]); // Removed volume from dependencies
   
   // Toggle play/pause
-  const togglePlayPause = () => {
+  const togglePlayPause = (e?: React.SyntheticEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     if (!wavesurferRef.current) return;
     wavesurferRef.current.playPause();
   };
 
   // Handle seek
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
     if (!wavesurferRef.current || !containerRef.current) return;
     
     const container = containerRef.current;
@@ -271,7 +277,7 @@ export function VoiceDisplay({
           
           <div className="flex items-center justify-center">
             <Button
-              onClick={togglePlayPause}
+              onClick={(e) => togglePlayPause(e)}
               size="lg"
               className="rounded-full h-16 w-16 p-0 bg-red-600 hover:bg-red-700 text-white"
             >

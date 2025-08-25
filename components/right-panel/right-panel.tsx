@@ -7,6 +7,9 @@ import { UserProfile } from "@/components/profile/UserProfile";
 import { cn } from "@/lib/utils";
 import { useRightPanel } from "./context/right-panel-context";
 import { useMobileRightPanel } from "@/context/mobile-right-panel-context";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { chatService } from "@/lib/supabase/chat-service";
+import { supabase } from "@/lib/supabase/client";
 
 import { ChatView } from "@/components/chat/chat-view";
 import { Search, X } from "lucide-react";
@@ -27,6 +30,21 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
   const { currentView, openPanel, closePanel } = useRightPanel();
   const { showRightPanel, toggleRightPanel } = useMobileRightPanel();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user } = useAuth() as { user: { id: string } | null };
+  const userId = user?.id;
+  const [unreadTotal, setUnreadTotal] = useState(0);
+
+  // Shared loader to compute unread total
+  const loadUnread = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const convs = await chatService.getConversations(userId);
+      const total = convs.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+      setUnreadTotal(total);
+    } catch {
+      // ignore
+    }
+  }, [userId]);
   
   // Toggle collapse state and close any open modals
   const toggleCollapse = useCallback(() => {
@@ -94,6 +112,49 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
       searchInputRef.current.focus();
     }
   }, [currentView]);
+
+  // Poll for unread counts to drive Messages tab badge
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    // immediate and interval
+    loadUnread();
+    const interval = setInterval(() => { if (!cancelled) loadUnread(); }, 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userId, currentView, isChatActive, loadUnread]);
+
+  // Realtime updates: new messages and read-state changes
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`rp-unread-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const m = payload.new as { sender_id?: string | null };
+          if (m?.sender_id === userId) return; // ignore own messages
+          // Recompute to be accurate per-room
+          loadUnread();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter: `user_id=eq.${userId}` },
+        () => {
+          // When user reads messages in any room, update immediately
+          loadUnread();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadUnread]);
 
   const handleSearch = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -388,7 +449,9 @@ export function RightPanel({ className, children }: RightPanelProps = {}) {
               }`}
             >
               <span className={`relative ${currentView === 'messages' ? 'after:content-[""] after:absolute after:left-0 after:-bottom-1 after:w-full after:h-0.5 after:bg-primary' : ''}`}>
-                Messages
+                Messages{unreadTotal > 0 && currentView !== 'messages' && (
+                  <span aria-label="Unread messages" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                )}
               </span>
             </button>
             

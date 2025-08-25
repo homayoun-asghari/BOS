@@ -1,7 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { ChatMessage, Conversation } from '@/types/chat';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { chatService } from '@/lib/supabase/chat-service';
+import { supabase } from '@/lib/supabase/client';
+
+// Minimal shape for chat_messages rows used in realtime callbacks
+type ChatMessagesRow = {
+  id: string;
+  room_id: string;
+  content: string;
+  created_at: string;
+  sender_id: string;
+};
 
 // Extend the User type to include additional properties
 interface UserProfile {
@@ -35,7 +46,8 @@ interface UseChatReturn {
   searchUsers: (query: string) => Promise<ChatUser[]>;
   startDirectMessage: (otherUserId: string) => Promise<Conversation | null>;
   createRoom: (userIds: string[], isGroup?: boolean, name?: string) => Promise<Conversation | null>;
-  markMessagesAsRead: (messageIds: string[], userId: string) => Promise<void>;
+  markMessagesAsRead: (roomId: string, userId: string) => Promise<void>;
+  deleteConversation: (roomId: string) => Promise<void>;
 }
 
 export function useChat(): UseChatReturn {
@@ -51,6 +63,15 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<Error | null>(null);
   const subscriptionRef = useRef<(() => void) | null>(null);
   const initialMount = useRef(true);
+
+  // Helper to keep conversations sorted by most recent activity
+  const sortConversations = useCallback((arr: Conversation[]) => {
+    return [...arr].sort((a, b) => {
+      const aTime = Date.parse((a.last_message?.created_at as string) || a.updated_at);
+      const bTime = Date.parse((b.last_message?.created_at as string) || b.updated_at);
+      return bTime - aTime;
+    });
+  }, []);
 
 
   // Get current conversation details
@@ -69,7 +90,7 @@ export function useChat(): UseChatReturn {
     console.log('[useChat] Found conversation:', found ? found.id : 'not found');
     return found;
   }, [activeConversation, conversations]);
-  
+
   // Log when active conversation changes
   useEffect(() => {
     console.log('[useChat] Active conversation updated:', {
@@ -82,14 +103,19 @@ export function useChat(): UseChatReturn {
   // Fetch messages for a conversation
   const fetchMessages = useCallback(async (conversationId: string): Promise<ChatMessage[]> => {
     if (isLoadingMessages) return [];
+    if (!userId) return [];
     
     console.log('Fetching messages for conversation:', conversationId);
     setIsLoadingMessages(true);
     setError(null);
     
     try {
-      const conversationMessages = await chatService.getMessages(conversationId);
+      const conversationMessages = await chatService.getMessages(conversationId, userId);
       setMessages(conversationMessages);
+      // Mark all as read for this room upon fetching while viewing
+      await chatService.markMessagesAsRead(conversationId, userId);
+      // Reflect read state in conversations to clear any badge
+      setConversations(prev => prev.map(c => c.id === conversationId ? { ...c, unread_count: 0 } : c));
       return conversationMessages;
     } catch (err) {
       console.error('Error fetching messages:', err);
@@ -98,7 +124,7 @@ export function useChat(): UseChatReturn {
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [isLoadingMessages]);
+  }, [isLoadingMessages, userId]);
 
   // Set active conversation with proper state management and message loading
   const setActiveConversation = useCallback((conversationId: string | null) => {
@@ -134,53 +160,87 @@ export function useChat(): UseChatReturn {
   const fetchConversations = useCallback(async (): Promise<Conversation[]> => {
     if (!userId) return [];
     
-    console.log('Fetching conversations...');
+    // Fetch conversations for the current user
     setIsLoading(true);
     setError(null);
     
     try {
       const userConversations = await chatService.getConversations(userId);
-      setConversations(userConversations);
+      setConversations(sortConversations(userConversations));
       
-      // If there's a pending conversation ID in localStorage, set it as active
-      const pendingConversationId = localStorage.getItem('pendingConversationId');
-      if (pendingConversationId) {
-        const exists = userConversations.some(conv => conv.id === pendingConversationId);
-        if (exists) {
-          _setActiveConversation(pendingConversationId);
-          localStorage.removeItem('pendingConversationId');
+      // If there's a pending conversation ID in localStorage, set it as active (client only)
+      if (typeof window !== 'undefined') {
+        const pendingConversationId = window.localStorage.getItem('pendingConversationId');
+        if (pendingConversationId) {
+          const exists = userConversations.some(conv => conv.id === pendingConversationId);
+          if (exists) {
+            _setActiveConversation(pendingConversationId);
+            window.localStorage.removeItem('pendingConversationId');
+          }
         }
       }
       return userConversations;
     } catch (err) {
       const error = err as Error & { details?: string; hint?: string; code?: string };
-      console.error('Error fetching conversations:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
       setError(error);
       return [];
     } finally {
       setIsLoading(false);
     }
-  }, [userId]);
+  }, [userId, sortConversations]);
+
+  // Realtime: update conversation list items when any new message arrives (any room)
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`conv-list-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload: RealtimePostgresChangesPayload<ChatMessagesRow>) => {
+          const m = payload.new as ChatMessagesRow;
+          if (!m) return;
+
+          setConversations(prev => {
+            // Only update if we already know this room
+            const exists = prev.some(c => c.id === m.room_id);
+            if (!exists) return prev;
+            const updated = prev.map(c => {
+              if (c.id !== m.room_id) return c;
+              const isActiveRoom = c.id === activeConversation;
+              const fromSelf = m.sender_id === userId;
+              return {
+                ...c,
+                last_message: {
+                  id: m.id,
+                  content: m.content,
+                  created_at: m.created_at,
+                  user_id: m.sender_id,
+                },
+                updated_at: m.created_at,
+                unread_count: isActiveRoom || fromSelf ? 0 : (c.unread_count || 0) + 1,
+              } as Conversation;
+            });
+            return sortConversations(updated);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, activeConversation, sortConversations]);
 
   // Initial fetch of conversations when component mounts or userId changes
   useEffect(() => {
     if (!userId) return;
-    
-    // Only fetch on initial mount or when userId changes
-    if (initialMount.current || userId) {
-      if (initialMount.current) {
-        initialMount.current = false;
-      }
-      fetchConversations();
+    if (initialMount.current) {
+      initialMount.current = false;
     }
-  }, [userId, fetchConversations]); // Added fetchConversations to dependencies
-
-
+    fetchConversations();
+  }, [userId, fetchConversations]);
 
   // Send a message handler
   const handleSendMessage = useCallback(async (content: string, mediaUrls: string[] = []): Promise<ChatMessage | null> => {
@@ -243,7 +303,7 @@ export function useChat(): UseChatReturn {
         });
         
         console.log('Updated conversations list:', updated);
-        return updated;
+        return sortConversations(updated);
       });
       
       return newMessage;
@@ -252,7 +312,7 @@ export function useChat(): UseChatReturn {
       setError(error instanceof Error ? error : new Error('Failed to send message'));
       return null;
     }
-  }, [activeConversation, userId, user?.username, user?.avatar_url]);
+  }, [activeConversation, userId, user?.username, user?.avatar_url, sortConversations]);
 
   // Set up real-time subscription for new messages
   useEffect(() => {
@@ -275,13 +335,13 @@ export function useChat(): UseChatReturn {
         
         // Mark as read if the room is currently open
         if (activeConversation === newMessage.room_id && userId) {
-          chatService.markMessagesAsRead([newMessage.id], userId);
+          chatService.markMessagesAsRead(activeConversation, userId);
         }
       }
       
-      // Update the last message in the conversations list
-      setConversations(prev =>
-        prev.map(room => {
+      // Update the last message in the conversations list and resort
+      setConversations(prev => {
+        const updated = prev.map(room => {
           if (room.id === newMessage.room_id) {
             return {
               ...room,
@@ -299,24 +359,114 @@ export function useChat(): UseChatReturn {
             };
           }
           return room;
-        })
-      );
+        });
+        return sortConversations(updated);
+      });
+    };
+
+    const handleUpdatedMessage = (updatedMessage: ChatMessage) => {
+      // Update the message in-place if it's part of the active conversation
+      if (activeConversation === updatedMessage.room_id) {
+        setMessages(prev => prev.map(m => m.id === updatedMessage.id ? { ...m, ...updatedMessage } : m));
+      }
+
+      // If the updated message is the last message for the room, reflect the change in conversations
+      setConversations(prev => {
+        const mapped = prev.map(room => {
+          if (room.id !== updatedMessage.room_id) return room;
+          if (!room.last_message || room.last_message.id !== updatedMessage.id) return room;
+          return {
+            ...room,
+            last_message: {
+              ...room.last_message,
+              content: updatedMessage.content,
+              created_at: updatedMessage.created_at,
+              user_id: updatedMessage.user_id
+            },
+            updated_at: updatedMessage.updated_at || room.updated_at,
+          };
+        });
+        return sortConversations(mapped);
+      });
     };
     
-    // Set up the subscription
-    const unsubscribe = chatService.subscribeToNewMessages(activeConversation, handleNewMessage);
+    // Set up the message subscription
+    const unsubscribeMessages = chatService.subscribeToNewMessages(activeConversation, userId, {
+      onInsert: handleNewMessage,
+      onUpdate: handleUpdatedMessage,
+    });
     
-    // Store the unsubscribe function in the ref
-    subscriptionRef.current = unsubscribe;
+    // Subscribe to read-receipt updates and update messages in-place when others read
+    const unsubscribeReceipts = chatService.subscribeToReadReceipts(activeConversation, ({ user_id, last_read_at }) => {
+      if (!userId || user_id === userId || !last_read_at) return; // ignore own updates
+      const lastReadMs = new Date(last_read_at).getTime();
+      const participants: { id: string }[] = (currentConversation?.participants as { id: string }[]) || [];
+      setMessages(prev => prev.map(m => {
+        // Do not count reader's own messages
+        if (m.user_id === user_id) return m;
+        const msgMs = new Date(m.created_at).getTime();
+        if (msgMs > lastReadMs) return m;
+        const seenSet = new Set(m.seen_by_user_ids || []);
+        if (seenSet.has(user_id)) return m;
+        seenSet.add(user_id);
+        const totalOthers = participants.filter((p) => p.id !== m.user_id).length;
+        const newSeenCount = seenSet.size;
+        const seen_by_all = totalOthers > 0 ? newSeenCount === totalOthers : false;
+        return {
+          ...m,
+          seen_by_user_ids: Array.from(seenSet),
+          seen_by_count: newSeenCount,
+          seen_by_all,
+        };
+      }));
+    });
+
+    // Polling fallback to ensure near-realtime seen updates even if Realtime is limited by RLS
+    const pollInterval = setInterval(async () => {
+      try {
+        const states = await chatService.getParticipantsReadState(activeConversation);
+        const participants: { id: string }[] = (currentConversation?.participants as { id: string }[]) || [];
+        setMessages(prev => {
+          let changed = false;
+          let next = prev;
+          for (const { user_id, last_read_at } of states) {
+            if (!last_read_at || user_id === userId) continue;
+            const lastReadMs = new Date(last_read_at).getTime();
+            const updated = next.map(m => {
+              if (m.user_id === user_id) return m; // don't mark reader's own messages
+              const msgMs = new Date(m.created_at).getTime();
+              if (msgMs > lastReadMs) return m;
+              const seenSet = new Set(m.seen_by_user_ids || []);
+              if (seenSet.has(user_id)) return m;
+              seenSet.add(user_id);
+              const totalOthers = participants.filter((p) => p.id !== m.user_id).length;
+              const newSeenCount = seenSet.size;
+              const seen_by_all = totalOthers > 0 ? newSeenCount === totalOthers : false;
+              changed = true;
+              return { ...m, seen_by_user_ids: Array.from(seenSet), seen_by_count: newSeenCount, seen_by_all };
+            });
+            next = updated;
+          }
+          return changed ? next : prev;
+        });
+      } catch {}
+    }, 2000);
+    
+    // Store a combined unsubscribe function in the ref
+    subscriptionRef.current = () => {
+      unsubscribeMessages();
+      unsubscribeReceipts();
+    };
     
     // Clean up on unmount or when conversation changes
     return () => {
+      clearInterval(pollInterval);
       if (subscriptionRef.current) {
         subscriptionRef.current();
         subscriptionRef.current = null;
       }
     };
-  }, [activeConversation, userId]);
+  }, [activeConversation, userId, fetchMessages, currentConversation?.participants, sortConversations]);
 
   // Load conversations on mount and when userId changes
   useEffect(() => {
@@ -325,7 +475,7 @@ export function useChat(): UseChatReturn {
       
       try {
         const conversations = await chatService.getConversations(userId);
-        setConversations(conversations);
+        setConversations(sortConversations(conversations));
       } catch (error) {
         console.error('Failed to load conversations:', error);
         setError(error instanceof Error ? error : new Error('Failed to load conversations'));
@@ -333,7 +483,7 @@ export function useChat(): UseChatReturn {
     };
     
     loadData();
-  }, [userId]);
+  }, [userId, sortConversations]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -422,7 +572,7 @@ export function useChat(): UseChatReturn {
         console.log(`[useChat] Conversation ${conversation.id} exists in state:`, exists);
         const updated = exists ? prev : [conversation, ...prev];
         console.log('[useChat] Updated conversations:', updated);
-        return updated;
+        return sortConversations(updated);
       });
       
       // Set the active conversation
@@ -436,7 +586,23 @@ export function useChat(): UseChatReturn {
       setError(error as Error);
       return null;
     }
-  }, [userId, setActiveConversation]);
+  }, [userId, setActiveConversation, sortConversations]);
+
+  // Delete/leave a conversation for the current user
+  const deleteConversation = useCallback(async (roomId: string) => {
+    if (!roomId) return;
+    try {
+      await chatService.leaveConversation(roomId);
+      setConversations(prev => prev.filter(c => c.id !== roomId));
+      if (activeConversation === roomId) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('[useChat] Failed to delete conversation:', err);
+      setError(err as Error);
+    }
+  }, [activeConversation, setActiveConversation]);
 
   return {
     conversations,
@@ -452,11 +618,12 @@ export function useChat(): UseChatReturn {
     fetchMessages,
     sendMessage: handleSendMessage,
     createRoom: chatService.createRoom,
-    markMessagesAsRead: async (messageIds: string[], userId: string) => {
-      await chatService.markMessagesAsRead(messageIds, userId);
+    markMessagesAsRead: async (roomId: string, userId: string) => {
+      await chatService.markMessagesAsRead(roomId, userId);
     },
     setActiveConversation,
     searchUsers,
     startDirectMessage,
+    deleteConversation,
   };
 }
