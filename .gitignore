@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# personal dev notes / AI tooling config
+rules.md
 
 # vercel
 .vercel
